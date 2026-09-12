@@ -96,8 +96,12 @@ wait. The AI request aborts when the pane closes. Assume a recording is in progr
 - **Verify in the running app, not just the compiler.** `npx tsc -b` passing means nothing
   about whether a pane works. Launch the app with `--remote-debugging-port`, drive the real
   UI over CDP, and read the state back. Every feature in this repo was checked that way.
-- **Clean up test data.** Beats, providers and sources created while testing go in the
-  user's real projects. Remove them and say so.
+- **Never test against the user's real project.** Make a scratch project in a temp folder
+  and work there. This rule was written after a test typed over the user's saved code
+  snippet and then deleted it during cleanup: the "+ new" click silently missed, so the
+  edit landed in the snippet that was already open. There are no backups of `project.json`
+  and no shadow copies on this machine — data lost there is lost. If you do touch a real
+  project, remove what you added and say so explicitly.
 - **Report honestly.** If something is untested, say which part. If a limit is real —
   approximate timestamps, a log that is not persisted — write it down rather than letting
   it be discovered mid-recording.
