@@ -13,7 +13,8 @@
     "electron:dev": "cross-env CS_DEV=1 electron .",
     "desktop": "npm run build && electron .",
     "dist": "npm run build && electron-builder --win --publish never",
-    "release": "npm run build && electron-builder --win --publish always"
+    "release": "npm run build && electron-builder --win --publish always",
+    "icon": "node scripts/make-icon.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "latest",
@@ -70,13 +71,19 @@
           ]
         }
       ],
-      "artifactName": "ContentStudio-Setup-${version}.${ext}"
+      "artifactName": "ContentStudio-Setup-${version}.${ext}",
+      "icon": "build/icon.ico"
     },
     "nsis": {
       "oneClick": false,
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
-      "shortcutName": "Content Studio"
+      "shortcutName": "Content Studio",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "installerHeaderIcon": "build/icon.ico",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
     },
     "publish": [
       {

@@ -7,6 +7,12 @@ node_modules/
 # Build output
 dist/
 build/
+# except the icon electron-builder needs when it packages on CI
+!build/
+build/*
+!build/icon.svg
+!build/icon.ico
+!build/icon.png
 *.tsbuildinfo
 
 # Secrets and machine-specific settings
