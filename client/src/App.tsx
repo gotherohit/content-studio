@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  Columns2, Columns3, Grid2x2, Maximize2, Minus, Moon, PanelLeftClose, PanelLeftOpen,
-  Paperclip, Plus, Presentation, Square, SquareSplitHorizontal, SquareSplitVertical, Sun, X,
+  ChevronLeft, ChevronRight, Columns2, Columns3, EyeOff, Grid2x2, Maximize2, Minus, Moon, PanelLeftClose,
+  PanelLeftOpen, Paperclip, Plus, Presentation, Square, SquareSplitHorizontal, SquareSplitVertical, Sun, X,
 } from "lucide-react";
 import { viewerForExt } from "./types";
-import type { Highlight, Layout, LayoutPreset, PaneConfig, PaneKind, Project, ProjectSummary, Source } from "./types";
+import type { Beat, Highlight, Layout, LayoutPreset, PaneConfig, PaneKind, PaneView, Project, ProjectSummary, Source, Stage } from "./types";
 import { api, type AppConfig } from "./api";
 import { UpdateBanner } from "./components/UpdateBanner";
 import { Sidebar } from "./components/Sidebar";
@@ -67,6 +67,7 @@ function normalize(p: Project): Project {
         typeof x === "string" ? { kind: x as PaneKind } : x,
       ),
     },
+    beats: p.beats ?? [],
     settings: { viewMode: "original", ...(p.settings ?? {}), jupyterUrl: p.settings?.jupyterUrl ?? "http://localhost:8888" },
   };
 }
@@ -82,6 +83,13 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [present, setPresent] = useState(false);
+  const [paneViews, setPaneViews] = useState<Record<number, PaneView>>({});
+  /** Which beat was applied last, so Present mode knows where it is in the running order. */
+  const [beatIndex, setBeatIndex] = useState(-1);
+  /** The beat strip is inside the window, so anything capturing the window records it. */
+  const [showHud, setShowHud] = useState(lsGet("hud", "1") === "1");
+  /** Read by the global key handler, which is registered before the beat helpers exist. */
+  const goToBeatRef = useRef<(i: number) => void>(() => {});
   const [showSettings, setShowSettings] = useState(false);
   const [showNewProject, setShowNewProject] = useState(false);
   const [collapsed, setCollapsed] = useState(lsGet("collapsed", "0") === "1");
@@ -97,6 +105,7 @@ export default function App() {
 
   const source = project?.sources.find((s) => s.id === activeSourceId) ?? null;
   const layout = project?.layout ?? DEFAULT_LAYOUT;
+  const beats = project?.beats ?? [];
 
   const refreshList = useCallback(() => api.listProjects().then(setProjects), []);
 
@@ -198,10 +207,17 @@ export default function App() {
         if (e.key === "b") { setCollapsed((v) => !v); e.preventDefault(); }
       }
       if (e.key === "Escape" && present && !document.fullscreenElement) setPresent(false);
+      // While presenting, one key is the whole interface: the next beat.
+      if (present && !typing && beats.length) {
+        if (e.key === "ArrowRight" || e.key === "PageDown" || e.key === " ") { goToBeatRef.current(Math.min(beats.length - 1, beatIndex + 1)); e.preventDefault(); }
+        if (e.key === "ArrowLeft" || e.key === "PageUp") { goToBeatRef.current(Math.max(0, beatIndex - 1)); e.preventDefault(); }
+        // Screen capture takes the whole window, so the strip has to be easy to banish.
+        if (e.key === "h") { setShowHud((v) => { lsSet("hud", v ? "0" : "1"); return !v; }); e.preventDefault(); }
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [present]);
+  }, [present, beats.length, beatIndex]);
 
   // ---- actions
   async function newProject(title: string, dir: string) {
@@ -330,6 +346,102 @@ export default function App() {
   const setLayout = useCallback((fn: (l: Layout) => Layout) =>
     mutate((p) => ({ ...p, layout: fn({ ...DEFAULT_LAYOUT, ...(p.layout ?? {}) }) })), [mutate]);
 
+  // ---- beats
+  //
+  // A beat is a step in the argument; its stage is the arrangement that serves it. The
+  // stage is captured from whatever is on screen rather than filled in on a form, so
+  // building one is: get it looking right, then save it.
+
+  /** Everything about the current arrangement that can be put back later. */
+  const captureStage = useCallback((): Stage => ({
+    preset: layout.preset,
+    panes: layout.panes.map((x) => ({ ...x })),
+    views: { ...paneViews },
+    split: layout.split,
+    rowSplit: layout.rowSplit,
+    activeSourceId,
+    highlightId: selectedHl,
+    viewMode: project?.settings.viewMode ?? "original",
+    embedUrl: project?.settings.embedUrl,
+    browserUrl: project?.settings.browserUrl,
+  }), [layout, paneViews, activeSourceId, selectedHl, project?.settings]);
+
+  /**
+   * Put a stage back on screen. References that have gone — a deleted source, a highlight
+   * that is no longer there — are reported rather than silently ignored, because finding
+   * out mid-take that a beat shows the wrong thing is the failure worth avoiding.
+   */
+  const applyStage = useCallback((stage: Stage) => {
+    const missing: string[] = [];
+    const liveSource = stage.activeSourceId && project?.sources.some((s) => s.id === stage.activeSourceId)
+      ? stage.activeSourceId
+      : (stage.activeSourceId ? (missing.push("its source"), null) : null);
+
+    setLayout(() => ({
+      preset: stage.preset,
+      // a pinned source that has been removed falls back to following the sidebar
+      panes: stage.panes.map((x) => ({
+        ...x,
+        sourceId: x.sourceId && project?.sources.some((s) => s.id === x.sourceId) ? x.sourceId : null,
+      })),
+      split: stage.split,
+      rowSplit: stage.rowSplit,
+    }));
+    setPaneViews(stage.views ?? {});
+    setActiveSourceId(liveSource);
+
+    const hl = liveSource && stage.highlightId
+      ? project?.sources.find((s) => s.id === liveSource)?.highlights.some((h) => h.id === stage.highlightId)
+      : false;
+    if (stage.highlightId && !hl) missing.push("its highlight");
+    setSelectedHl(hl ? stage.highlightId : null);
+    if (hl) setScrollNonce((n) => n + 1);
+
+    mutate((p) => ({
+      ...p,
+      settings: {
+        ...p.settings,
+        viewMode: stage.viewMode,
+        embedUrl: stage.embedUrl ?? p.settings.embedUrl,
+        browserUrl: stage.browserUrl ?? p.settings.browserUrl,
+      },
+    }));
+    setError(missing.length ? `This beat could not restore ${missing.join(" or ")} — it may have been removed.` : null);
+  }, [project, setLayout, mutate]);
+
+  const goToBeat = useCallback((i: number) => {
+    const list = project?.beats ?? [];
+    if (i < 0 || i >= list.length) return;
+    setBeatIndex(i);
+    applyStage(list[i].stage);
+  }, [project?.beats, applyStage]);
+  goToBeatRef.current = goToBeat;
+
+  function captureBeat() {
+    const beat: Beat = {
+      id: Math.random().toString(36).slice(2, 10),
+      point: "",
+      stage: captureStage(),
+      createdAt: new Date().toISOString(),
+    };
+    mutate((p) => ({ ...p, beats: [...(p.beats ?? []), beat] }));
+    setBeatIndex((project?.beats ?? []).length);
+  }
+
+  const editBeat = (id: string, fn: (b: Beat) => Beat) =>
+    mutate((p) => ({ ...p, beats: (p.beats ?? []).map((b) => (b.id === id ? fn(b) : b)) }));
+
+  function moveBeat(from: number, to: number) {
+    mutate((p) => {
+      const list = [...(p.beats ?? [])];
+      if (to < 0 || to >= list.length) return p;
+      const [moved] = list.splice(from, 1);
+      list.splice(to, 0, moved);
+      return { ...p, beats: list };
+    });
+    setBeatIndex(to);
+  }
+
   function setPreset(id: LayoutPreset) {
     const count = PRESETS.find((x) => x.id === id)!.count;
     setLayout((l) => {
@@ -399,6 +511,8 @@ export default function App() {
             onRefresh={() => paneSource && refreshSource(paneSource)}
             scrollToId={paneSource && paneSource.id === activeSourceId ? selectedHl : null}
             scrollNonce={scrollNonce}
+            view={paneViews[i] ?? {}}
+            onView={(v) => setPaneViews((m) => ({ ...m, [i]: v }))}
             fontScale={fontScale}
             busy={loading}
             config={config}
@@ -454,6 +568,13 @@ export default function App() {
           onOpenSource={(id) => { setActiveSourceId(id); setSelectedHl(null); }}
           onRemoveSource={(id) => { mutate((p) => ({ ...p, sources: p.sources.filter((s) => s.id !== id) })); if (activeSourceId === id) setActiveSourceId(null); }}
           onSettings={() => setShowSettings(true)}
+          beatIndex={beatIndex}
+          onCaptureBeat={captureBeat}
+          onGoToBeat={goToBeat}
+          onEditBeat={editBeat}
+          onMoveBeat={moveBeat}
+          onRemoveBeat={(id) => { mutate((p) => ({ ...p, beats: (p.beats ?? []).filter((b) => b.id !== id) })); setBeatIndex(-1); }}
+          captureStage={captureStage}
           onRevealFolder={() => project?.dir && api.reveal(project.dir).catch((e) => setError(e.message))}
         />
       )}
@@ -525,6 +646,16 @@ export default function App() {
           {hasRow && <div className="split-handle row" onPointerDown={(e) => startDrag("row", e)} title="Drag to resize" />}
           {dragging && <div className="drag-shield" />}
         </main>
+
+        {present && showHud && beats.length > 0 && (
+          <div className="beat-hud">
+            <button className="icon-btn" title="Previous beat (←)" disabled={beatIndex <= 0} onClick={() => goToBeat(beatIndex - 1)}><ChevronLeft size={15} /></button>
+            <span className="beat-hud-no">{beatIndex < 0 ? "—" : beatIndex + 1}/{beats.length}</span>
+            <span className="beat-hud-point ellipsis">{beats[beatIndex]?.point || "no point written"}</span>
+            <button className="icon-btn" title="Next beat (→ or Space)" disabled={beatIndex >= beats.length - 1} onClick={() => goToBeat(beatIndex + 1)}><ChevronRight size={15} /></button>
+            <button className="icon-btn" title="Hide this strip (h) — it is inside the window, so a screen capture records it" onClick={() => { setShowHud(false); lsSet("hud", "0"); }}><EyeOff size={14} /></button>
+          </div>
+        )}
 
         {present && (
           <button className="exit-present" onClick={() => setPresent(false)} title="Exit present mode (Esc)">

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, ExternalLink, Maximize, Play, RefreshCw, Zap, ZapOff } from "lucide-react";
-import type { Highlight, Source } from "../types";
+import type { Highlight, PaneView, Source } from "../types";
 import type { AppConfig } from "../api";
 import { Reader } from "./Reader";
 import { OriginalView } from "./OriginalView";
@@ -22,6 +22,9 @@ interface Props {
   onRefresh: () => void;
   scrollToId: string | null;
   scrollNonce: number;
+  /** Paging state, held by the app so a stage can capture and restore it. */
+  view: PaneView;
+  onView: (v: PaneView) => void;
   fontScale: number;
   busy: boolean;
   config: AppConfig | null;
@@ -31,8 +34,11 @@ interface Props {
 const SLIDEABLE = new Set(["markdown", "pdf", "deck"]);
 
 export function SourcePane(p: Props) {
-  const [slideshow, setSlideshow] = useState(false);
-  const [slideIndex, setSlideIndex] = useState(0);
+  const slideshow = Boolean(p.view.slideshow);
+  const slideIndex = p.view.slideIndex ?? 0;
+  const setSlideshow = (v: boolean) => p.onView({ ...p.view, slideshow: v });
+  const setSlideIndex = (v: number | ((i: number) => number)) =>
+    p.onView({ ...p.view, slideIndex: typeof v === "function" ? v(slideIndex) : v });
   const [slideCount, setSlideCount] = useState(1);
   const stageRef = useRef<HTMLDivElement>(null);
 

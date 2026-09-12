@@ -74,6 +74,49 @@ export interface Layout {
   rowSplit: number; // % height of the top row (1+2, 2+1, 4)
 }
 
+/** What a Source pane is doing beyond which source it shows: paging a deck, say. */
+export interface PaneView {
+  slideshow?: boolean;
+  slideIndex?: number;
+}
+
+/**
+ * A saved arrangement of the workspace.
+ *
+ * A stage stores references, never copies: the source it names, the highlight it scrolls
+ * to and the notes it shows are the live ones, so improving your material improves every
+ * stage that points at it. Only the arrangement is frozen.
+ */
+export interface Stage {
+  preset: LayoutPreset;
+  panes: PaneConfig[];
+  views: Record<number, PaneView>;
+  split: number;
+  rowSplit: number;
+  activeSourceId: string | null;
+  /** Scrolled into view and flashed when the stage is applied. */
+  highlightId: string | null;
+  viewMode: "original" | "reader";
+  embedUrl?: string;
+  browserUrl?: string;
+}
+
+/**
+ * One step in the argument, and the stage that serves it.
+ *
+ * Beats are what turns a project from a pile of research into a runnable show: in Present
+ * mode one key moves to the next, so while recording the only job left is talking.
+ */
+export interface Beat {
+  id: string;
+  /** One line: the point this segment makes. Shown to the presenter, never to the camera. */
+  point: string;
+  /** Script or bullets, optional. */
+  note?: string;
+  stage: Stage;
+  createdAt: string;
+}
+
 export interface Project {
   id: string;
   /** Absolute folder holding this project's sources, notes and scratch files. */
@@ -88,6 +131,7 @@ export interface Project {
   chat: ChatMessage[];
   slides: string;
   layout: Layout;
+  beats: Beat[];
   settings: { jupyterUrl: string; viewMode?: "original" | "reader"; embedUrl?: string; browserUrl?: string };
 }
 

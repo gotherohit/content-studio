@@ -95,6 +95,21 @@ PowerPoint is the only thing that renders `.pptx` faithfully, so when it is inst
 
 Without PowerPoint, LibreOffice is used to convert the deck to PDF. With neither, export to PDF yourself; PDFs get the same slideshow.
 
+## Beats
+
+A project is a pile of research; a video is a sequence. **Beats** are the sequence.
+
+A beat is one step in your argument, and the **stage** that serves it: which panes, at what sizes, showing which source, scrolled where, with which highlight in view. You build one by arranging the screen the way you want it and pressing the camera in the **Beats** section — there is no form to fill in. Write the point in one line so you know what the beat is for.
+
+In **Present** mode, **→** (or Space) applies the next beat and **←** the previous one. That is the whole interface while recording: the panes rearrange themselves and the right highlight scrolls into view, so the only job left is talking.
+
+Things worth knowing:
+
+* **A stage stores references, not copies.** Improve a note or refine a drawing and every beat pointing at it shows the better version. Only the arrangement is frozen.
+* **What you do inside a beat is not saved over it.** Scroll away, run a cell, make a mess — the beat still holds what you captured. Re-capture only when you ask for it, with the camera on that row.
+* **A broken reference is loud.** If a beat's source or highlight has been deleted, it restores everything it still can and says what it could not, rather than quietly showing the wrong thing.
+* **The beat strip is inside the window**, so screen-capture software records it. Press **h** to hide it; it stays hidden until you press **h** again.
+
 ## Layout
 
 Everything is a **pane**. Pick 1 to 4 panes from the layout buttons in the top bar, then choose what each shows from its header dropdown. Drag the gap between panes to resize. The arrangement is saved with the project.
@@ -145,7 +160,9 @@ Clicks, right-clicks, scrolling and typing in the pane are forwarded to the real
 | `Alt+P` / `Esc` | Present mode |
 | `Alt+B` | Show or hide the sidebar |
 | Drag between panes | Resize columns and rows |
-| `→` `←` `Space` | Navigate slides |
+| `→` `←` `Space` | Next or previous beat, in Present mode |
+| `h` | Hide or show the beat strip |
+| `→` `←` `Space` | Navigate slides, when not presenting |
 | `Ctrl+Enter` | Run the current code snippet |
 
 ## Models and keys

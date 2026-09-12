@@ -1,9 +1,9 @@
 import { useState } from "react";
 import {
-  ChevronDown, ChevronRight, Clapperboard, FileCode2, FileText, FolderOpen,
+  ArrowDown, ArrowUp, Camera, ChevronDown, ChevronRight, Clapperboard, FileCode2, FileText, FolderOpen,
   Image, Plus, Presentation, Settings, Table2, Trash2, X,
 } from "lucide-react";
-import type { Project, ProjectSummary } from "../types";
+import type { Beat, Project, ProjectSummary } from "../types";
 
 interface Props {
   projects: ProjectSummary[];
@@ -17,6 +17,13 @@ interface Props {
   onRemoveSource: (id: string) => void;
   onSettings: () => void;
   onRevealFolder: () => void;
+  beatIndex: number;
+  onCaptureBeat: () => void;
+  onGoToBeat: (i: number) => void;
+  onEditBeat: (id: string, fn: (b: Beat) => Beat) => void;
+  onMoveBeat: (from: number, to: number) => void;
+  onRemoveBeat: (id: string) => void;
+  captureStage: () => Beat["stage"];
 }
 
 const lsGet = (k: string, d: string) => { try { return localStorage.getItem(k) ?? d; } catch { return d; } };
@@ -50,6 +57,37 @@ function Section({ id, title, count, actions, children }: {
         <span className="row">{actions}</span>
       </div>
       {open && <div className="section-items">{children}</div>}
+    </div>
+  );
+}
+
+/**
+ * One beat. The point is editable in place, because it is written while arranging the
+ * screen rather than in a separate step, and re-capture replaces the arrangement without
+ * disturbing the text.
+ */
+function BeatRow({ beat, index, active, last, onGo, onPoint, onRecapture, onMove, onRemove }: {
+  beat: Beat; index: number; active: boolean; last: boolean;
+  onGo: () => void;
+  onPoint: (point: string) => void;
+  onRecapture: () => void;
+  onMove: (delta: -1 | 1) => void;
+  onRemove: () => void;
+}) {
+  return (
+    <div className={`list-item beat-row ${active ? "active" : ""}`} onClick={onGo}>
+      <span className="beat-no">{index + 1}</span>
+      <input
+        className="beat-point grow"
+        value={beat.point}
+        placeholder="The point this makes…"
+        onClick={(e) => e.stopPropagation()}
+        onChange={(e) => onPoint(e.target.value)}
+      />
+      <button className="icon-btn hover-only" title="Move up" disabled={index === 0} onClick={(e) => { e.stopPropagation(); onMove(-1); }}><ArrowUp size={12} /></button>
+      <button className="icon-btn hover-only" title="Move down" disabled={last} onClick={(e) => { e.stopPropagation(); onMove(1); }}><ArrowDown size={12} /></button>
+      <button className="icon-btn hover-only" title="Replace this beat's arrangement with what is on screen" onClick={(e) => { e.stopPropagation(); onRecapture(); }}><Camera size={12} /></button>
+      <button className="icon-btn danger hover-only" title="Delete beat" onClick={(e) => { e.stopPropagation(); onRemove(); }}><X size={12} /></button>
     </div>
   );
 }
@@ -104,6 +142,38 @@ export function Sidebar(p: Props) {
               </div>
             ))}
             {!p.project.sources.length && <div className="panel-empty">No sources yet. Paste a URL or drop a file.</div>}
+          </Section>
+
+          <Section
+            id="beats"
+            title="Beats"
+            count={p.project.beats?.length ?? 0}
+            actions={
+              <button className="icon-btn" title="Save what is on screen as a beat" onClick={p.onCaptureBeat}>
+                <Camera size={15} />
+              </button>
+            }
+          >
+            {(p.project.beats ?? []).map((b, i) => (
+              <BeatRow
+                key={b.id}
+                beat={b}
+                index={i}
+                active={p.beatIndex === i}
+                last={i === (p.project?.beats?.length ?? 0) - 1}
+                onGo={() => p.onGoToBeat(i)}
+                onPoint={(point) => p.onEditBeat(b.id, (x) => ({ ...x, point }))}
+                onRecapture={() => p.onEditBeat(b.id, (x) => ({ ...x, stage: p.captureStage() }))}
+                onMove={(delta) => p.onMoveBeat(i, i + delta)}
+                onRemove={() => p.onRemoveBeat(b.id)}
+              />
+            ))}
+            {!(p.project.beats ?? []).length && (
+              <div className="panel-empty">
+                Arrange the panes for one point you want to make, then press the camera to save it as a beat. In Present
+                mode, → moves to the next one.
+              </div>
+            )}
           </Section>
         </>
       )}
