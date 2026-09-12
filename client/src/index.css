@@ -645,3 +645,14 @@ mark.hl:hover { filter: brightness(0.94); }
 .add-provider .field input { width: 100%; }
 
 .block { display: block; }
+
+.key-storage {
+  display: flex; align-items: center; gap: 7px;
+  padding: 7px 10px; border-radius: 8px; font-size: 12px;
+  border: 1px solid var(--border);
+}
+.key-storage svg { flex: none; }
+.key-storage.secure { color: var(--text-2); }
+.key-storage.secure svg { color: var(--ok, #22a06b); }
+.key-storage.plain svg { color: var(--warn, #d08700); }
+.ghost.small.warn { color: var(--warn, #d08700); }

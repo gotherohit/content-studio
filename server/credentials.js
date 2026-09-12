@@ -1,13 +1,19 @@
 // API keys and the models they unlock.
 //
 // Keys live in ~/.content-studio/credentials.json — their own file, beside the project
-// index but never in it, and never anywhere inside the codebase. The file is written
-// with owner-only permissions, and a key that goes in never comes back out: the rest of
-// the app asks this module to make a request, or asks whether a key exists, and gets a
-// masked hint at most. That way a key cannot leak through the UI, a screenshot, a
-// recording, or a commit.
+// index but never in it, and never anywhere inside the codebase. A key that goes in
+// never comes back out: the rest of the app asks this module to make a request, or asks
+// whether a key exists, and gets a masked hint at most. That way a key cannot leak
+// through the UI, a screenshot, a recording, or a commit.
+//
+// On the desktop each key is also encrypted at rest with the operating system's own
+// facility — DPAPI on Windows, via Electron's safeStorage — so the ciphertext is bound
+// to this Windows account. Someone who copies the file to another machine, or reads it
+// from another account, gets nothing. Without the desktop shell there is nothing to
+// encrypt with, and the file falls back to owner-only plaintext; `secure` says which.
 import fs from "node:fs/promises";
 import path from "node:path";
+import { createVault } from "./vault.js";
 
 /** What a provider speaks. Everything in the wild is one of these two shapes. */
 export const KINDS = ["anthropic", "openai"];
@@ -34,23 +40,56 @@ const safeId = (id) => typeof id === "string" && /^[a-z0-9][a-z0-9_-]{0,40}$/i.t
 /** A key is shown as a hint, never in full, and only enough of it to recognise. */
 const hint = (key) => (key && key.length > 8 ? `…${key.slice(-4)}` : key ? "…" : "");
 
-export function createCredentials({ appDirFn }) {
+export function createCredentials({ appDirFn, vault = createVault() }) {
   const file = () => path.join(appDirFn(), "credentials.json");
   let store = { providers: [], defaultModel: null };
+  let secure = false;
 
+  /**
+   * A key is written as `apiKeyEnc` when it could be encrypted and `apiKey` when it could
+   * not, so the file says what it holds rather than relying on a flag that a hand edit
+   * could desynchronise from the data.
+   */
   async function persist() {
-    // 0o600: readable by this user only. Windows ignores the mode, and its own ACL on a
-    // profile folder already limits it to the account that owns it.
-    await fs.writeFile(file(), JSON.stringify(store, null, 2) + "\n", { mode: 0o600 });
+    secure = await vault.available();
+    const providers = [];
+    for (const p of store.providers) {
+      const { apiKey, ...rest } = p;
+      if (!apiKey) { providers.push(rest); continue; }
+      const sealed = await vault.encrypt(apiKey);
+      providers.push(sealed ? { ...rest, apiKeyEnc: sealed } : { ...rest, apiKey });
+    }
+    const body = { encryption: secure ? "os" : "none", providers, defaultModel: store.defaultModel };
+    // 0o600: this user only. Windows ignores the mode, but its own ACL on a profile
+    // folder already limits the file to the account that owns it.
+    await fs.writeFile(file(), JSON.stringify(body, null, 2) + "\n", { mode: 0o600 });
     await fs.chmod(file(), 0o600).catch(() => {});
   }
 
   async function load() {
-    try {
-      const raw = JSON.parse(await fs.readFile(file(), "utf8"));
-      store = { providers: Array.isArray(raw.providers) ? raw.providers : [], defaultModel: raw.defaultModel ?? null };
-    } catch { /* first run */ }
+    secure = await vault.available();
+    let raw = null;
+    try { raw = JSON.parse(await fs.readFile(file(), "utf8")); } catch { /* first run */ }
+
+    const providers = [];
+    let rewrite = false;
+    for (const p of Array.isArray(raw?.providers) ? raw.providers : []) {
+      const { apiKeyEnc, apiKey, ...rest } = p;
+      if (apiKeyEnc) {
+        const opened = await vault.decrypt(apiKeyEnc);
+        // A blob this account cannot open is kept, not dropped: the provider simply has
+        // no key until one is pasted again, and nothing vanishes from the file silently.
+        providers.push(opened ? { ...rest, apiKey: opened } : { ...rest, apiKeyEnc, unreadable: true });
+        continue;
+      }
+      // A key written before encryption was available gets sealed on the way through.
+      if (apiKey && secure) rewrite = true;
+      providers.push(apiKey ? { ...rest, apiKey } : rest);
+    }
+
+    store = { providers, defaultModel: raw?.defaultModel ?? null };
     await adoptEnv();
+    if (rewrite) await persist();
     return store;
   }
 
@@ -76,7 +115,9 @@ export function createCredentials({ appDirFn }) {
       id: p.id, label: p.label, kind: p.kind, baseUrl: p.baseUrl,
       models: p.models ?? [], keyless: Boolean(p.keyless),
       hasKey: Boolean(p.apiKey), keyHint: hint(p.apiKey), fromEnv: Boolean(p.fromEnv),
+      unreadable: Boolean(p.unreadable),
     })),
+    secure,
     defaultModel: store.defaultModel,
     presets: PRESETS.map(({ keyUrl, ...p }) => ({ ...p, keyUrl })),
   });
@@ -101,6 +142,10 @@ export function createCredentials({ appDirFn }) {
       apiKey: patch.apiKey !== undefined && patch.apiKey !== "" ? patch.apiKey : existing?.apiKey,
       // once edited here, the stored value is the real one
       fromEnv: patch.apiKey ? false : existing?.fromEnv,
+      unreadable: patch.apiKey ? false : existing?.unreadable,
+      // A key sealed for another account must survive an edit made here — otherwise
+      // renaming a provider from a session that cannot read it would destroy it.
+      apiKeyEnc: patch.apiKey ? undefined : existing?.apiKeyEnc,
     };
     if (!next.baseUrl) throw new Error("A provider needs a base URL");
 

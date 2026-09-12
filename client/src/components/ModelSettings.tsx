@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Check, ExternalLink, Key, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { Check, ExternalLink, Key, Lock, Plus, RefreshCw, Trash2, TriangleAlert, Unlock } from "lucide-react";
 import { api, type AiProviders, type Provider, type ProviderPreset } from "../api";
 import { desktop } from "../desktop";
 
@@ -64,6 +64,13 @@ export function ModelSettings() {
         Any Anthropic- or OpenAI-compatible endpoint works — a hosted provider, a gateway, or a model running on this
         machine. Keys are kept in <code>~/.content-studio/credentials.json</code>, outside the codebase, and are never
         shown again once saved.
+      </p>
+
+      <p className={state.secure ? "key-storage secure" : "key-storage plain"}>
+        {state.secure ? <Lock size={13} /> : <Unlock size={13} />}
+        {state.secure
+          ? "Keys are encrypted with your Windows account, so the file is unreadable from any other account or machine."
+          : "Keys are stored as text in a file only your account can read. Run the desktop app to have Windows encrypt them as well."}
       </p>
 
       {state.providers.length > 0 && (
@@ -207,6 +214,10 @@ function ProviderRow({ provider, inUse, busy, onKey, onRefresh, onRemove }: {
           </div>
         ) : provider.keyless ? (
           <span className="muted small">none needed</span>
+        ) : provider.unreadable ? (
+          <button className="ghost small warn" onClick={() => setReplacing(true)} title="Paste the key again">
+            <TriangleAlert size={12} /> paste it again
+          </button>
         ) : provider.hasKey ? (
           <button className="ghost small" onClick={() => setReplacing(true)} title="Replace this key">
             <Key size={12} /> {provider.keyHint}{provider.fromEnv ? " (from .env)" : ""}

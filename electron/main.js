@@ -5,7 +5,7 @@
 // folder picker. Electron removes the fight rather than working around it. The Express
 // server is unchanged and still runs on loopback; this process starts it, waits for it,
 // and shows it in a window whose panes may host real Chromium views.
-import { app, BrowserWindow, dialog, ipcMain, session, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, safeStorage, session, shell } from "electron";
 import { fork } from "node:child_process";
 import net from "node:net";
 import path from "node:path";
@@ -44,6 +44,7 @@ async function startServer() {
     env: { ...process.env, API_PORT: String(port), ELECTRON_RUN_AS_NODE: "1" },
     stdio: ["ignore", "pipe", "pipe", "ipc"],
   });
+  serveVault(server);
   server.stdout?.on("data", (b) => process.stdout.write(`[server] ${b}`));
   server.stderr?.on("data", (b) => process.stderr.write(`[server] ${b}`));
   server.on("exit", (code) => {
@@ -61,6 +62,29 @@ async function startServer() {
     } catch { /* still coming up */ }
   }
   throw new Error("The studio server did not start in time");
+}
+
+/**
+ * The server keeps API keys on disk and asks this process to encrypt them, because
+ * safeStorage — DPAPI on Windows — is only reachable here. The ciphertext is tied to the
+ * logged-in account, so another account on the same machine cannot read the keys even
+ * with the file in hand. Plaintext crosses this channel and nothing else: never a
+ * filesystem path, never a command.
+ */
+function serveVault(child) {
+  child.on("message", (msg) => {
+    if (msg?.type !== "vault") return;
+    const reply = (out) => { try { child.send({ type: "vault:result", id: msg.id, ...out }); } catch { /* server gone */ } };
+    try {
+      if (msg.op === "available") return reply({ value: safeStorage.isEncryptionAvailable() });
+      if (!safeStorage.isEncryptionAvailable()) return reply({ error: "encryption is not available" });
+      if (msg.op === "encrypt") return reply({ value: safeStorage.encryptString(String(msg.value)).toString("base64") });
+      if (msg.op === "decrypt") return reply({ value: safeStorage.decryptString(Buffer.from(String(msg.value), "base64")) });
+      reply({ error: `unknown vault operation: ${msg.op}` });
+    } catch (e) {
+      reply({ error: e.message });
+    }
+  });
 }
 
 function createWindow() {

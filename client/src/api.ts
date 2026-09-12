@@ -47,6 +47,8 @@ export type ModelRef = string;
 export interface Provider {
   id: string; label: string; kind: "anthropic" | "openai"; baseUrl: string;
   models: string[]; keyless: boolean; hasKey: boolean; keyHint: string; fromEnv: boolean;
+  /** Its stored key was encrypted for a different account or machine and cannot be read. */
+  unreadable: boolean;
 }
 export interface ProviderPreset {
   id: string; label: string; kind: "anthropic" | "openai"; baseUrl: string;
@@ -55,7 +57,13 @@ export interface ProviderPreset {
 export interface ProviderPatch {
   label: string; kind: "anthropic" | "openai"; baseUrl: string; models: string[]; keyless: boolean; apiKey: string;
 }
-export interface AiProviders { providers: Provider[]; defaultModel: ModelRef | null; presets: ProviderPreset[] }
+export interface AiProviders {
+  providers: Provider[];
+  defaultModel: ModelRef | null;
+  presets: ProviderPreset[];
+  /** Whether stored keys are encrypted by the operating system rather than kept as text. */
+  secure: boolean;
+}
 export interface AiStatus {
   configured: boolean;
   model: ModelRef | null;

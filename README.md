@@ -155,10 +155,13 @@ After a provider is added, the refresh button asks it what it can run, so model 
 `~/.content-studio/credentials.json`, written owner-only. That is:
 
 * **outside the codebase**, so a key cannot be committed or pushed. It is not in `.env` and not in any project folder.
+* **encrypted at rest.** On the desktop each key is sealed with the operating system's own facility — DPAPI on Windows, through Electron's `safeStorage` — so the ciphertext is bound to your Windows account. Copy the file to another machine, or read it from another account, and the keys are unusable. Settings says which state you are in: a padlock when they are encrypted, an open padlock when they are not.
 * **write-only from the app's point of view.** A key is sent once. The server never sends it back — the UI sees `hasKey` and the last four characters, nothing more — so it cannot appear in a screenshot or a recording of the settings screen.
 * **scrubbed out of errors.** If a provider echoes a key in a failure message, it is replaced before the message is shown.
 
-Delete the file and the app simply has no models again; nothing else is affected.
+Only the desktop app can encrypt, because `safeStorage` lives in the Electron main process; the server asks it over the channel it is already forked with, and holds no encryption key of its own. Run the server on its own with `npm run dev` and there is nothing to borrow: keys already sealed show as unreadable rather than being overwritten, and a key added there is written as text until the desktop app seals it.
+
+A key that cannot be decrypted is **kept, not discarded** — the provider simply shows *paste it again* until you do. Delete the whole file and the app has no models again; nothing else is affected.
 
 ## Config (`.env`)
 
