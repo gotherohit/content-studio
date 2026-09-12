@@ -2,13 +2,15 @@ import { useEffect, useRef, useState } from "react";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
 import type { ChatMessage, Source } from "../types";
-import { api } from "../api";
+import { api, type AiStatus } from "../api";
 
 interface Props {
   chat: ChatMessage[];
   onChange: (c: ChatMessage[]) => void;
   source: Source | null;
   allSources: Source[];
+  /** Opens Content Studio settings on the models section. */
+  onOpenSettings: () => void;
 }
 
 const QUICK = [
@@ -19,14 +21,20 @@ const QUICK = [
   ["Highlights → script", "Using my highlights and comments, draft a 2-minute spoken script segment in my own analytical voice."],
 ];
 
-export function AiPanel({ chat, onChange, source, allSources }: Props) {
+export function AiPanel({ chat, onChange, source, allSources, onOpenSettings }: Props) {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
-  const [status, setStatus] = useState<{ configured: boolean; model: string } | null>(null);
+  const [status, setStatus] = useState<AiStatus | null>(null);
+  const [model, setModel] = useState<string | null>(null);
   const [scope, setScope] = useState<"current" | "all">("current");
   const endRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => { api.aiStatus().then(setStatus).catch(() => setStatus({ configured: false, model: "?" })); }, []);
+  const refreshStatus = () =>
+    api.aiStatus()
+      .then((s) => { setStatus(s); setModel((m) => m ?? s.model); })
+      .catch(() => setStatus({ configured: false, model: null, models: [] }));
+
+  useEffect(() => { refreshStatus(); }, []);
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [chat]);
 
   function buildContext(): string {
@@ -50,7 +58,7 @@ export function AiPanel({ chat, onChange, source, allSources }: Props) {
       await api.ai(next.slice(0, -1), buildContext(), (d) => {
         acc += d;
         onChange([...next.slice(0, -1), { role: "assistant", content: acc }]);
-      });
+      }, model);
     } catch (e) {
       onChange([...next.slice(0, -1), { role: "assistant", content: `${acc}\n\n**Error:** ${(e as Error).message}` }]);
     } finally {
@@ -61,9 +69,15 @@ export function AiPanel({ chat, onChange, source, allSources }: Props) {
   return (
     <div className="panel-body ai">
       <div className="row between wrap">
-        <span className="muted small">
-          {status ? (status.configured ? `model: ${status.model}` : "No API key: set ANTHROPIC_API_KEY in .env or run `ant auth login`") : "…"}
-        </span>
+        {status?.models.length ? (
+          <select value={model ?? ""} onChange={(e) => setModel(e.target.value)} title="Which model answers">
+            {status.models.map((m) => <option key={m.ref} value={m.ref}>{m.provider} — {m.model}</option>)}
+          </select>
+        ) : (
+          <button className="ghost small" onClick={onOpenSettings}>
+            {status ? "No model set up — add a provider and key" : "…"}
+          </button>
+        )}
         <select value={scope} onChange={(e) => setScope(e.target.value as "current" | "all")}>
           <option value="current">context: current source</option>
           <option value="all">context: all sources</option>

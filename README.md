@@ -142,16 +142,35 @@ Clicks, right-clicks, scrolling and typing in the pane are forwarded to the real
 | `→` `←` `Space` | Navigate slides |
 | `Ctrl+Enter` | Run the current code snippet |
 
+## Models and keys
+
+**Settings → Models and keys.** Nothing about the AI pane is configured by editing files.
+
+Any **Anthropic-compatible** (`/v1/messages`) or **OpenAI-compatible** (`/chat/completions`) endpoint works, which in practice is everything: Anthropic, OpenAI, OpenRouter, DeepSeek, Groq, Together, Google Gemini and xAI are one click and a paste, Ollama and LM Studio need no key at all, and **Something else** takes a base URL for a gateway or a self-hosted model. Add several and switch between them from the dropdown in the AI pane itself.
+
+After a provider is added, the refresh button asks it what it can run, so model names never have to be typed — and it is also the cheapest proof that a key works.
+
+### Where keys are kept
+
+`~/.content-studio/credentials.json`, written owner-only. That is:
+
+* **outside the codebase**, so a key cannot be committed or pushed. It is not in `.env` and not in any project folder.
+* **write-only from the app's point of view.** A key is sent once. The server never sends it back — the UI sees `hasKey` and the last four characters, nothing more — so it cannot appear in a screenshot or a recording of the settings screen.
+* **scrubbed out of errors.** If a provider echoes a key in a failure message, it is replaced before the message is shown.
+
+Delete the file and the app simply has no models again; nothing else is affected.
+
 ## Config (`.env`)
+
+Optional, and nothing in it is needed to use the app.
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | | Needed for the AI pane |
-| `ANTHROPIC_MODEL` | `claude-opus-5` | Model used by the AI pane |
 | `API_PORT` | `4700` | API and proxy port |
 | `HOST` | `127.0.0.1` | Bind address. Changing it exposes a shell and desktop control to your network. |
 | `JUPYTER_PORT` | `8890` | Port for the managed JupyterLab |
 | `RS_SHELL` | `powershell.exe` | Shell used by the Terminal pane |
+| `ANTHROPIC_API_KEY` | | Only read once, to carry an older setup over into Settings |
 
 `~/.content-studio/config.json` is the index of where each project folder is. Delete a project folder by hand and the index repairs itself on the next refresh.
 

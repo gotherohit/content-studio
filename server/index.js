@@ -6,7 +6,8 @@ import path from "node:path";
 import http from "node:http";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
-import Anthropic from "@anthropic-ai/sdk";
+import { createCredentials } from "./credentials.js";
+import { streamChat, listModels } from "./ai.js";
 import { createConfig } from "./config.js";
 import { createSiteProxy } from "./site.js";
 import { attachTerminal } from "./terminal.js";
@@ -20,10 +21,11 @@ import { createBrowser } from "./browser.js";
 const here = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(here, "..");
 const PORT = Number(process.env.API_PORT || 4700);
-const MODEL = process.env.ANTHROPIC_MODEL || "claude-opus-5";
 
 const config = createConfig(ROOT);
 await config.load();
+const credentials = createCredentials({ appDirFn: () => config.appDir() });
+await credentials.load();
 const site = createSiteProxy({ cacheDirFn: () => path.join(config.cacheDir(), "sites"), port: PORT });
 const jupyter = createJupyter();
 const input = createInput();
@@ -73,7 +75,7 @@ app.get("/api/config", async (_req, res) => {
   const cfg = config.get();
   res.json({
     appDir: cfg.appDir,
-    apiPort: PORT, root: ROOT, model: MODEL,
+    apiPort: PORT, root: ROOT,
     canControlWindows: input.available(),
     browser: await browser.detect(),
     powerPoint: await hasPowerPoint(),
@@ -362,37 +364,90 @@ app.post("/api/jupyter/install", (_req, res) => {
 });
 
 // ---------- AI ----------
-let anthropic = null;
-const getClient = () => (anthropic ??= new Anthropic());
+//
+// Any Anthropic- or OpenAI-compatible endpoint can be pointed at from Settings. Keys are
+// held in ~/.content-studio/credentials.json and never travel back to the browser.
+const DEFAULT_SYSTEM =
+  "You are a research assistant for a YouTube creator who explains news and blog posts and adds their own analysis. " +
+  "Be concrete, cite what in the source you rely on, flag claims that need verification, and suggest angles, " +
+  "counterpoints and examples the creator could show on screen.";
 
 app.get("/api/ai/status", (_req, res) => {
-  res.json({ configured: Boolean(process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN), model: MODEL });
+  const { providers, defaultModel } = credentials.list();
+  res.json({
+    configured: credentials.configured(),
+    model: defaultModel,
+    models: providers.flatMap((p) => (p.hasKey || p.keyless ? p.models.map((m) => ({ ref: `${p.id}/${m}`, provider: p.label, model: m })) : [])),
+  });
+});
+
+app.get("/api/ai/providers", (_req, res) => res.json(credentials.list()));
+
+app.put("/api/ai/providers/:id", async (req, res) => {
+  try {
+    res.json(await credentials.save(req.params.id, req.body || {}));
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+app.delete("/api/ai/providers/:id", async (req, res) => res.json(await credentials.remove(req.params.id)));
+
+app.put("/api/ai/default-model", async (req, res) => {
+  try {
+    res.json(await credentials.setDefaultModel(req.body?.model ?? null));
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+/** What can this provider actually run? Also the cheapest proof that a key works. */
+app.post("/api/ai/providers/:id/models", async (req, res) => {
+  const provider = credentials.find(req.params.id);
+  if (!provider) return res.status(404).json({ error: "No such provider" });
+  try {
+    res.json({ models: await listModels({ ...provider, apiKey: req.body?.apiKey || provider.apiKey }) });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
 });
 
 app.post("/api/ai", async (req, res) => {
-  const { messages = [], context = "", system = "" } = req.body || {};
+  const { messages = [], context = "", system = "", model = null } = req.body || {};
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
   res.flushHeaders();
-  const send = (obj) => res.write(`data: ${JSON.stringify(obj)}\n\n`);
+  const send = (obj) => res.write(`data: ${JSON.stringify(obj)}
+
+`);
+
+  const picked = credentials.resolve(model);
+  if (!picked) {
+    send({ error: "No model is set up yet. Open Settings and add a provider and key." });
+    return res.end();
+  }
+
+  // If the creator closes the pane or asks something else, stop paying for the old answer.
+  const abort = new AbortController();
+  res.on("close", () => abort.abort());
+
   try {
-    const systemPrompt =
-      (system ||
-        "You are a research assistant for a YouTube creator who explains news and blog posts and adds their own analysis. Be concrete, cite what in the source you rely on, flag claims that need verification, and suggest angles, counterpoints and examples the creator could show on screen.") +
-      (context ? `\n\n<source_material>\n${context}\n</source_material>` : "");
-    const stream = getClient().messages.stream({
-      model: MODEL,
-      max_tokens: 16000,
-      system: [{ type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } }],
-      messages: messages.map((m) => ({ role: m.role, content: m.content })),
+    const systemPrompt = (system || DEFAULT_SYSTEM) + (context ? `
+
+<source_material>
+${context}
+</source_material>` : "");
+    const final = await streamChat({
+      provider: picked.provider,
+      model: picked.model,
+      system: systemPrompt,
+      messages,
+      onText: (text) => send({ text }),
+      signal: abort.signal,
     });
-    for await (const event of stream) {
-      if (event.type === "content_block_delta" && event.delta.type === "text_delta") send({ text: event.delta.text });
-    }
-    const final = await stream.finalMessage();
-    send({ done: true, stopReason: final.stop_reason, usage: final.usage });
+    send({ done: true, model: picked.ref, ...final });
   } catch (e) {
-    send({ error: e.message });
+    if (!abort.signal.aborted) send({ error: e.message });
   }
   res.end();
 });
@@ -428,6 +483,6 @@ server.on("upgrade", (req, socket, head) => {
   if (!site.handleUpgrade(req, socket, head)) socket.destroy();
 });
 server.listen(PORT, HOST, () => {
-  console.log(`API on http://localhost:${PORT}  app data: ${config.appDir()}  (model: ${MODEL})`);
+  console.log(`API on http://localhost:${PORT}  app data: ${config.appDir()}  (model: ${credentials.list().defaultModel ?? "none configured"})`);
   if (!isLoopback(HOST)) console.warn(`WARNING: HOST=${HOST} exposes a shell and desktop control to your network.`);
 });

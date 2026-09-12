@@ -612,3 +612,36 @@ mark.hl:hover { filter: brightness(0.94); }
   padding: 9px 12px; border: 1px solid var(--border); border-radius: 10px;
   background: var(--panel); box-shadow: 0 10px 30px rgb(0 0 0 / 35%); font-size: 13px;
 }
+
+/* ---------- settings: models and keys ---------- */
+.modal.wide { width: min(760px, 94vw); }
+
+.tab-bar { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin: 2px 0 4px; }
+.tab {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 7px 11px; border: 0; border-bottom: 2px solid transparent;
+  background: none; color: var(--text-2); font-size: 12.5px; font-weight: 600; cursor: pointer;
+}
+.tab:hover { color: var(--text); }
+.tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+.model-settings { display: flex; flex-direction: column; gap: 12px; }
+
+.provider-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.provider-table th {
+  text-align: left; font-size: 11px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.04em; color: var(--text-2); padding: 0 8px 5px; border-bottom: 1px solid var(--border);
+}
+.provider-table td { padding: 7px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.provider-table td:first-child { max-width: 230px; }
+.provider-table td.row { gap: 2px; justify-content: flex-end; }
+.provider-table tr.in-use td:first-child { box-shadow: inset 2px 0 0 var(--accent); }
+.provider-table input { font-family: var(--mono); font-size: 12px; width: 150px; }
+
+.add-provider {
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 12px; border: 1px solid var(--border); border-radius: 9px; background: var(--panel-2, var(--panel));
+}
+.add-provider .field input { width: 100%; }
+
+.block { display: block; }

@@ -53,3 +53,6 @@ coverage/
 
 # packaged installers
 release/
+
+# API keys never live in the repo; they are in ~/.content-studio/credentials.json
+credentials.json

@@ -36,8 +36,30 @@ async function sse(url: string, body: unknown, onText: (t: string) => void): Pro
 }
 
 export interface AppConfig {
-  appDir?: string; apiPort: number; root?: string; model?: string;
+  appDir?: string; apiPort: number; root?: string;
   canControlWindows?: boolean; powerPoint?: boolean; libreOffice?: boolean;
+}
+
+/** A model, addressed as "<provider>/<model>". Model ids may contain slashes of their own. */
+export type ModelRef = string;
+
+/** What the server will say about a provider. Never the key itself. */
+export interface Provider {
+  id: string; label: string; kind: "anthropic" | "openai"; baseUrl: string;
+  models: string[]; keyless: boolean; hasKey: boolean; keyHint: string; fromEnv: boolean;
+}
+export interface ProviderPreset {
+  id: string; label: string; kind: "anthropic" | "openai"; baseUrl: string;
+  models: string[]; keyless?: boolean; keyUrl?: string;
+}
+export interface ProviderPatch {
+  label: string; kind: "anthropic" | "openai"; baseUrl: string; models: string[]; keyless: boolean; apiKey: string;
+}
+export interface AiProviders { providers: Provider[]; defaultModel: ModelRef | null; presets: ProviderPreset[] }
+export interface AiStatus {
+  configured: boolean;
+  model: ModelRef | null;
+  models: { ref: ModelRef; provider: string; model: string }[];
 }
 export interface SiteProbe { status: number; statusText: string; contentType: string; location: string | null; body: string }
 export interface InputTarget { id: string | number; title: string; x: number; y: number; w: number; h: number; cx?: number; cy?: number; cw?: number; ch?: number }
@@ -101,14 +123,24 @@ export const api = {
   jupyterStart: (projectId: string) => fetch("/api/jupyter/start", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ projectId }) }).then((r) => j<JupyterStatus>(r)),
   jupyterStop: () => fetch("/api/jupyter/stop", { method: "POST" }).then((r) => j<JupyterStatus>(r)),
   jupyterInstall: (onText: (t: string) => void) => sse("/api/jupyter/install", {}, onText),
-  aiStatus: () => fetch("/api/ai/status").then((r) => j<{ configured: boolean; model: string }>(r)),
+  aiStatus: () => fetch("/api/ai/status").then((r) => j<AiStatus>(r)),
+  aiProviders: () => fetch("/api/ai/providers").then((r) => j<AiProviders>(r)),
+  saveProvider: (id: string, patch: Partial<ProviderPatch>) =>
+    fetch(`/api/ai/providers/${encodeURIComponent(id)}`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(patch) }).then((r) => j<AiProviders>(r)),
+  removeProvider: (id: string) => fetch(`/api/ai/providers/${encodeURIComponent(id)}`, { method: "DELETE" }).then((r) => j<AiProviders>(r)),
+  setDefaultModel: (model: string | null) =>
+    fetch("/api/ai/default-model", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ model }) }).then((r) => j<AiProviders>(r)),
+  /** Also the cheapest way to prove a key works. */
+  providerModels: (id: string, apiKey?: string) =>
+    fetch(`/api/ai/providers/${encodeURIComponent(id)}/models`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ apiKey }) }).then((r) => j<{ models: string[] }>(r)),
   /** Streams assistant text; resolves with the full text. */
   ai: async (
     messages: { role: "user" | "assistant"; content: string }[],
     context: string,
     onDelta: (text: string) => void,
+    model?: string | null,
   ): Promise<string> => {
-    const r = await fetch("/api/ai", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ messages, context }) });
+    const r = await fetch("/api/ai", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ messages, context, model }) });
     const reader = r.body!.getReader();
     const dec = new TextDecoder();
     let buf = "", full = "";

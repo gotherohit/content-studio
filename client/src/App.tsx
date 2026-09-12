@@ -20,7 +20,7 @@ import { TerminalPane } from "./components/TerminalPane";
 import { JupyterPane } from "./components/JupyterPane";
 import { SlidesPane } from "./components/SlidesPane";
 import { WindowPane } from "./components/WindowPane";
-import { ProjectDialog } from "./components/ProjectDialog";
+import { SettingsDialog } from "./components/SettingsDialog";
 import { NewProjectDialog } from "./components/NewProjectDialog";
 
 const KINDS: { id: PaneKind; label: string }[] = [
@@ -417,7 +417,7 @@ export default function App() {
           />
         );
       case "notes": return <NotesPanel value={project.notes} onChange={(notes) => mutate((p) => ({ ...p, notes }))} />;
-      case "ai": return <AiPanel chat={project.chat} onChange={(chat) => mutate((p) => ({ ...p, chat }))} source={source} allSources={project.sources} />;
+      case "ai": return <AiPanel chat={project.chat} onChange={(chat) => mutate((p) => ({ ...p, chat }))} source={source} allSources={project.sources} onOpenSettings={() => setShowSettings(true)} />;
       case "code": return <CodePanel projectId={project.id} snippets={project.snippets} onChange={(snippets) => mutate((p) => ({ ...p, snippets }))} />;
       case "canvas": return <CanvasPanel key={project.id} canvas={project.canvas} onChange={(canvas) => mutate((p) => ({ ...p, canvas }))} dark={dark} />;
       case "terminal": return <TerminalPane key={`term-${i}-${project.id}`} dark={dark} projectId={project.id} />;
@@ -544,7 +544,7 @@ export default function App() {
       )}
 
       {showSettings && (
-        <ProjectDialog
+        <SettingsDialog
           project={project}
           onClose={() => setShowSettings(false)}
           onProjectMoved={(dir) => { setProject((p) => (p ? { ...p, dir } : p)); refreshList(); }}
