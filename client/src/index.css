@@ -656,3 +656,21 @@ mark.hl:hover { filter: brightness(0.94); }
 .key-storage.secure svg { color: var(--ok, #22a06b); }
 .key-storage.plain svg { color: var(--warn, #d08700); }
 .ghost.small.warn { color: var(--warn, #d08700); }
+
+/* ---------- updates ---------- */
+.update-state {
+  display: flex; align-items: center; gap: 8px;
+  padding: 9px 11px; border: 1px solid var(--border); border-radius: 8px; font-size: 12.5px;
+}
+.update-state svg { flex: none; }
+.update-state.ready svg, .update-state.current svg { color: var(--ok, #22a06b); }
+.update-state.error svg, .update-state.unsupported svg { color: var(--warn, #d08700); }
+.update-state.downloading svg, .update-state.checking svg { color: var(--accent); }
+
+.progress { height: 5px; border-radius: 3px; background: var(--border); overflow: hidden; }
+.progress .bar { height: 100%; background: var(--accent); transition: width 200ms ease; }
+
+.spin { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.button-like { display: inline-flex; align-items: center; gap: 6px; }

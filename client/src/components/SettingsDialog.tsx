@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
-import { FolderOpen, Settings, Sparkles, X } from "lucide-react";
+import { Download, FolderOpen, Settings, Sparkles, X } from "lucide-react";
 import { api } from "../api";
 import type { Project } from "../types";
 import { FolderField } from "./FolderField";
 import { ModelSettings } from "./ModelSettings";
+import { UpdateSettings } from "./UpdateSettings";
 
 interface Props {
   project: Project | null;
@@ -14,7 +15,7 @@ interface Props {
   initialTab?: Tab;
 }
 
-type Tab = "models" | "folders";
+type Tab = "models" | "folders" | "updates";
 
 /**
  * Content Studio's own settings, as opposed to a project's.
@@ -44,13 +45,16 @@ export function SettingsDialog({ project, onClose, onProjectMoved, onOpenedFolde
           <button className={tab === "folders" ? "tab active" : "tab"} onClick={() => setTab("folders")}>
             <FolderOpen size={13} /> Project folders
           </button>
+          <button className={tab === "updates" ? "tab active" : "tab"} onClick={() => setTab("updates")}>
+            <Download size={13} /> Updates
+          </button>
         </div>
 
-        {tab === "models" ? (
-          <ModelSettings />
-        ) : (
+        {tab === "models" && <ModelSettings />}
+        {tab === "folders" && (
           <FolderSettings project={project} onProjectMoved={onProjectMoved} onOpenedFolder={onOpenedFolder} />
         )}
+        {tab === "updates" && <UpdateSettings />}
 
         <div className="row" style={{ justifyContent: "flex-end" }}>
           <button className="ghost" onClick={onClose}>Close</button>

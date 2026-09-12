@@ -6,7 +6,13 @@ It ships as a Windows desktop app. Nothing is stored inside this codebase.
 
 ## Install
 
-Download the latest `ContentStudio-Setup-<version>.exe` from [Releases](https://github.com/gotherohit/content-studio/releases) and run it. The installer is unsigned, so Windows will show a SmartScreen warning the first time: choose **More info → Run anyway**. After that the app updates itself — a new release is downloaded in the background and applied when you say so.
+Download the latest `ContentStudio-Setup-<version>.exe` from [Releases](https://github.com/gotherohit/content-studio/releases) and run it. The installer is unsigned, so Windows will show a SmartScreen warning the first time: choose **More info → Run anyway**.
+
+### Updates
+
+**Settings → Updates** shows the version you are running, and **Check for updates** asks GitHub straight away — no waiting for the periodic check when a fix has just been pushed. It also checks at launch and every six hours.
+
+A new version downloads in the background with the progress visible, then stops and waits: it is installed when you click **Restart and install**, or on the next launch if you simply quit. Nothing ever restarts the app mid-recording. If there is nothing new, it says so rather than leaving you guessing.
 
 ## Run from source
 

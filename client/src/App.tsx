@@ -441,7 +441,7 @@ export default function App() {
 
   return (
     <div className={`app ${present ? "present" : ""} ${collapsed ? "collapsed" : ""}`}>
-      <UpdateBanner />
+      <UpdateBanner onOpenSettings={() => setShowSettings(true)} />
       {!present && !collapsed && (
         <Sidebar
           projects={projects}

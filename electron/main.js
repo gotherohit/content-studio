@@ -136,13 +136,58 @@ function configureWebviews() {
   });
 }
 
+/**
+ * Updates, and what the app can say about them.
+ *
+ * One state object describes the whole business, so a banner and a settings panel cannot
+ * disagree about it. Checks happen on launch and every six hours, but the point of
+ * holding the state here is that the creator can ask at any moment and watch the answer
+ * arrive — waiting six hours to find out whether a fix landed is not a feature.
+ *
+ * Nothing is ever applied without being asked for: a new version downloads in the
+ * background and then waits, because restarting in the middle of a recording would be
+ * worse than being a version behind.
+ */
+let update = { state: app.isPackaged ? "idle" : "unsupported", version: null, percent: 0, message: null };
+
+function setUpdate(patch) {
+  update = { ...update, ...patch };
+  win?.webContents.send("update:state", update);
+}
+
 function wireUpdates() {
-  if (DEV) return;
+  if (!app.isPackaged) {
+    setUpdate({ message: "Updates arrive in the installed app. This copy is running from source." });
+    return;
+  }
   autoUpdater.autoDownload = true;
-  autoUpdater.on("update-downloaded", (info) => win?.webContents.send("update:ready", info?.version ?? ""));
-  autoUpdater.on("error", (e) => console.error("update check failed:", e?.message));
-  autoUpdater.checkForUpdates().catch(() => {});
-  setInterval(() => autoUpdater.checkForUpdates().catch(() => {}), 6 * 60 * 60 * 1000);
+  autoUpdater.autoInstallOnAppQuit = true;
+
+  autoUpdater.on("checking-for-update", () => setUpdate({ state: "checking", message: null }));
+  autoUpdater.on("update-available", (info) => setUpdate({ state: "downloading", version: info?.version ?? null, percent: 0 }));
+  autoUpdater.on("update-not-available", () => setUpdate({ state: "current", version: app.getVersion(), percent: 0 }));
+  autoUpdater.on("download-progress", (p) => setUpdate({ state: "downloading", percent: Math.round(p?.percent ?? 0) }));
+  autoUpdater.on("update-downloaded", (info) => setUpdate({ state: "ready", version: info?.version ?? null, percent: 100 }));
+  autoUpdater.on("error", (e) => {
+    console.error("update check failed:", e?.message);
+    setUpdate({ state: "error", message: e?.message ?? "The update check failed" });
+  });
+
+  check();
+  setInterval(check, 6 * 60 * 60 * 1000);
+}
+
+/** A check the creator asked for, or the periodic one. Either way, never throws. */
+async function check() {
+  if (!app.isPackaged) return update;
+  // A downloaded update is already the answer; checking again would only undo the state.
+  if (update.state === "ready") return update;
+  try {
+    await autoUpdater.checkForUpdates();
+  } catch (e) {
+    setUpdate({ state: "error", message: e?.message ?? "The update check failed" });
+  }
+  return update;
 }
 
 ipcMain.handle("studio:info", () => ({ port, version: app.getVersion(), partition: PARTITION, dev: DEV }));
@@ -153,6 +198,8 @@ ipcMain.handle("studio:pickFolder", async (_e, title) => {
   });
   return r.canceled ? null : r.filePaths[0];
 });
+ipcMain.handle("studio:updateState", () => update);
+ipcMain.handle("studio:checkForUpdates", () => check());
 ipcMain.handle("studio:installUpdate", () => { app.isQuitting = true; autoUpdater.quitAndInstall(); });
 ipcMain.handle("studio:openExternal", (_e, url) => shell.openExternal(url));
 
