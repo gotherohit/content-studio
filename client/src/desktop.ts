@@ -20,6 +20,22 @@ export interface UpdateInfo {
   message: string | null;
 }
 
+/** What the presenter window is told. It holds no project state of its own. */
+export interface PresenterState {
+  projectTitle: string;
+  beats: { point: string }[];
+  index: number;
+  presenting: boolean;
+}
+
+export type PresenterCommand =
+  /** Sent when the presenter window mounts: it has missed anything published before then. */
+  | { type: "sync" }
+  | { type: "next" }
+  | { type: "prev" }
+  | { type: "goto"; index: number }
+  | { type: "present"; on: boolean };
+
 export interface StudioBridge {
   isDesktop: true;
   info(): Promise<{ port: number; version: string; partition: string; dev: boolean }>;
@@ -31,7 +47,20 @@ export interface StudioBridge {
   /** @returns a function that stops listening. */
   onUpdateState(fn: (info: UpdateInfo) => void): () => void;
   onPanePopup(fn: (url: string) => void): void;
+
+  openPresenter(): Promise<boolean>;
+  closePresenter(): Promise<boolean>;
+  presenterOpen(): Promise<boolean>;
+  publishPresenterState(state: PresenterState): void;
+  onPresenterState(fn: (state: PresenterState) => void): () => void;
+  sendPresenterCommand(cmd: PresenterCommand): void;
+  onPresenterCommand(fn: (cmd: PresenterCommand) => void): () => void;
+  onPresenterClosed(fn: () => void): () => void;
 }
+
+/** True in the second window, which renders the presenter view instead of the studio. */
+export const isPresenterWindow =
+  typeof location !== "undefined" && new URLSearchParams(location.search).has("presenter");
 
 declare global {
   interface Window { studio?: StudioBridge }

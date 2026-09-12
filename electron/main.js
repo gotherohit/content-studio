@@ -5,7 +5,7 @@
 // folder picker. Electron removes the fight rather than working around it. The Express
 // server is unchanged and still runs on loopback; this process starts it, waits for it,
 // and shows it in a window whose panes may host real Chromium views.
-import { app, BrowserWindow, dialog, ipcMain, safeStorage, session, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, safeStorage, screen, session, shell } from "electron";
 import { fork } from "node:child_process";
 import net from "node:net";
 import path from "node:path";
@@ -20,6 +20,7 @@ const DEV = !app.isPackaged && process.env.CS_DEV === "1";
 const PARTITION = "persist:studio";
 
 let win = null;
+let presenter = null;
 let server = null;
 let port = 0;
 
@@ -62,6 +63,54 @@ async function startServer() {
     } catch { /* still coming up */ }
   }
   throw new Error("The studio server did not start in time");
+}
+
+/**
+ * The presenter's own window.
+ *
+ * The studio window is what screen-capture software records, so nothing meant only for
+ * the creator can live inside it. This is a second, small, always-on-top window for the
+ * other monitor: which beat is running, the point it makes, what comes next, and the
+ * clock. It holds no project state of its own — the studio window is the source of truth
+ * and this relays commands back to it.
+ */
+function openPresenter() {
+  if (presenter && !presenter.isDestroyed()) {
+    presenter.show();
+    presenter.focus();
+    return true;
+  }
+  presenter = new BrowserWindow({
+    width: 560,
+    height: 320,
+    minWidth: 360,
+    minHeight: 200,
+    title: "Content Studio — presenter",
+    alwaysOnTop: true,
+    skipTaskbar: false,
+    backgroundColor: "#0b0d12",
+    autoHideMenuBar: true,
+    webPreferences: {
+      preload: path.join(here, "preload.cjs"),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+  // above full-screen apps too, or it would vanish the moment the studio goes full screen
+  presenter.setAlwaysOnTop(true, "screen-saver");
+  presenter.on("closed", () => {
+    presenter = null;
+    win?.webContents.send("presenter:closed");
+  });
+  presenter.loadURL(DEV ? "http://127.0.0.1:5173/?presenter=1" : `http://127.0.0.1:${port}/?presenter=1`);
+
+  // Put it on a different display than the studio window when there is one.
+  const others = screen.getAllDisplays().filter((d) => d.id !== screen.getDisplayMatching(win.getBounds()).id);
+  if (others.length) {
+    const { x, y, width } = others[0].workArea;
+    presenter.setPosition(Math.round(x + width / 2 - 280), Math.round(y + 60));
+  }
+  return true;
 }
 
 /**
@@ -198,6 +247,16 @@ ipcMain.handle("studio:pickFolder", async (_e, title) => {
   });
   return r.canceled ? null : r.filePaths[0];
 });
+ipcMain.handle("studio:openPresenter", () => openPresenter());
+ipcMain.handle("studio:closePresenter", () => { presenter?.close(); return false; });
+ipcMain.handle("studio:presenterOpen", () => Boolean(presenter && !presenter.isDestroyed()));
+// The studio window publishes; the presenter window subscribes.
+ipcMain.on("presenter:state", (_e, state) => {
+  if (presenter && !presenter.isDestroyed()) presenter.webContents.send("presenter:state", state);
+});
+// The presenter window asks; the studio window acts.
+ipcMain.on("presenter:command", (_e, cmd) => win?.webContents.send("presenter:command", cmd));
+
 ipcMain.handle("studio:updateState", () => update);
 ipcMain.handle("studio:checkForUpdates", () => check());
 ipcMain.handle("studio:installUpdate", () => { app.isQuitting = true; autoUpdater.quitAndInstall(); });
@@ -221,6 +280,6 @@ if (!app.requestSingleInstanceLock()) {
     app.on("activate", () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
   });
 
-  app.on("before-quit", () => { app.isQuitting = true; try { server?.kill(); } catch { /* gone */ } });
+  app.on("before-quit", () => { app.isQuitting = true; try { presenter?.destroy(); } catch { /* gone */ } try { server?.kill(); } catch { /* gone */ } });
   app.on("window-all-closed", () => app.quit());
 }

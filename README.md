@@ -108,7 +108,26 @@ Things worth knowing:
 * **A stage stores references, not copies.** Improve a note or refine a drawing and every beat pointing at it shows the better version. Only the arrangement is frozen.
 * **What you do inside a beat is not saved over it.** Scroll away, run a cell, make a mess — the beat still holds what you captured. Re-capture only when you ask for it, with the camera on that row.
 * **A broken reference is loud.** If a beat's source or highlight has been deleted, it restores everything it still can and says what it could not, rather than quietly showing the wrong thing.
-* **The beat strip is inside the window**, so screen-capture software records it. Press **h** to hide it; it stays hidden until you press **h** again.
+* **The beat strip is inside the window**, so screen-capture software records it. Press **h** to hide it; it stays hidden until you press **h** again. Better, use the presenter window below.
+
+### The presenter window
+
+**Presenter** in the toolbar opens a second, small, always-on-top window — put it on your other monitor. Since OBS (or anything else) captures the *studio* window, this one is never in shot, which is the whole point of it.
+
+It shows the beat you are on, its point in large type, what comes next, and a clock. **→** and **←** work here as well as in the studio, so you can drive the running order from either.
+
+**Start clock** does more than time you: every beat change while it runs is logged with its elapsed time, and **Redo** (or **f**) marks a moment to fix later. Stop, then **Copy log**, and you have this:
+
+```
+0:00 Hook: seven labs distilled Claude
+0:38 What distillation legitimately is
+2:10 — redo from here
+2:24 Where it crosses the line
+```
+
+Chapters and an edit map, from the take you just did. Start the clock when you start recording; the two agree to within a second or so. Exact timecodes need OBS itself to be driven by the app, which is not built yet.
+
+The log lives in the presenter window and is not saved — copy it before closing.
 
 ## Layout
 

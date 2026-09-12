@@ -15,4 +15,28 @@ contextBridge.exposeInMainWorld("studio", {
     return () => ipcRenderer.removeListener("update:state", relay);
   },
   onPanePopup: (fn) => ipcRenderer.on("pane:popup", (_e, url) => fn(url)),
+
+  // The presenter window: a second window for the other monitor, outside any capture.
+  openPresenter: () => ipcRenderer.invoke("studio:openPresenter"),
+  closePresenter: () => ipcRenderer.invoke("studio:closePresenter"),
+  presenterOpen: () => ipcRenderer.invoke("studio:presenterOpen"),
+  /** Studio window -> presenter window. */
+  publishPresenterState: (state) => ipcRenderer.send("presenter:state", state),
+  onPresenterState: (fn) => {
+    const relay = (_e, s) => fn(s);
+    ipcRenderer.on("presenter:state", relay);
+    return () => ipcRenderer.removeListener("presenter:state", relay);
+  },
+  /** Presenter window -> studio window. */
+  sendPresenterCommand: (cmd) => ipcRenderer.send("presenter:command", cmd),
+  onPresenterCommand: (fn) => {
+    const relay = (_e, c) => fn(c);
+    ipcRenderer.on("presenter:command", relay);
+    return () => ipcRenderer.removeListener("presenter:command", relay);
+  },
+  onPresenterClosed: (fn) => {
+    const relay = () => fn();
+    ipcRenderer.on("presenter:closed", relay);
+    return () => ipcRenderer.removeListener("presenter:closed", relay);
+  },
 });

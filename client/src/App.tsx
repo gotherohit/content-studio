@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  ChevronLeft, ChevronRight, Columns2, Columns3, EyeOff, Grid2x2, Maximize2, Minus, Moon, PanelLeftClose,
+  ChevronLeft, ChevronRight, Columns2, Columns3, EyeOff, Grid2x2, Maximize2, Minus, MonitorPlay, Moon, PanelLeftClose,
   PanelLeftOpen, Paperclip, Plus, Presentation, Square, SquareSplitHorizontal, SquareSplitVertical, Sun, X,
 } from "lucide-react";
 import { viewerForExt } from "./types";
+import { desktop } from "./desktop";
 import type { Beat, Highlight, Layout, LayoutPreset, PaneConfig, PaneKind, PaneView, Project, ProjectSummary, Source, Stage } from "./types";
 import { api, type AppConfig } from "./api";
 import { UpdateBanner } from "./components/UpdateBanner";
@@ -88,6 +89,8 @@ export default function App() {
   const [beatIndex, setBeatIndex] = useState(-1);
   /** The beat strip is inside the window, so anything capturing the window records it. */
   const [showHud, setShowHud] = useState(lsGet("hud", "1") === "1");
+  const [presenterOpen, setPresenterOpen] = useState(false);
+  const presenterStateRef = useRef<() => void>(() => {});
   /** Read by the global key handler, which is registered before the beat helpers exist. */
   const goToBeatRef = useRef<(i: number) => void>(() => {});
   const [showSettings, setShowSettings] = useState(false);
@@ -106,6 +109,11 @@ export default function App() {
   const source = project?.sources.find((s) => s.id === activeSourceId) ?? null;
   const layout = project?.layout ?? DEFAULT_LAYOUT;
   const beats = project?.beats ?? [];
+  // The presenter window's commands arrive outside React's render flow.
+  const beatsRef = useRef(beats);
+  const beatIndexRef = useRef(beatIndex);
+  beatsRef.current = beats;
+  beatIndexRef.current = beatIndex;
 
   const refreshList = useCallback(() => api.listProjects().then(setProjects), []);
 
@@ -417,6 +425,38 @@ export default function App() {
   }, [project?.beats, applyStage]);
   goToBeatRef.current = goToBeat;
 
+  // ---- the presenter window
+  //
+  // It is a second window on the other monitor, outside whatever is capturing the studio.
+  // The studio stays the source of truth: it publishes which beat is running, and acts on
+  // what the presenter window asks for.
+  useEffect(() => {
+    if (!desktop) return;
+    desktop.presenterOpen().then(setPresenterOpen).catch(() => {});
+    const offClosed = desktop.onPresenterClosed(() => setPresenterOpen(false));
+    const offCmd = desktop.onPresenterCommand((cmd) => {
+      if (cmd.type === "next") goToBeatRef.current(Math.min(beatsRef.current.length - 1, beatIndexRef.current + 1));
+      if (cmd.type === "prev") goToBeatRef.current(Math.max(0, beatIndexRef.current - 1));
+      if (cmd.type === "goto") goToBeatRef.current(cmd.index);
+      if (cmd.type === "present") setPresent(cmd.on);
+      // The window has just mounted and missed whatever was published before it existed.
+      if (cmd.type === "sync") presenterStateRef.current();
+    });
+    return () => { offClosed(); offCmd(); };
+  }, []);
+
+  const publishPresenter = useCallback(() => {
+    desktop?.publishPresenterState({
+      projectTitle: project?.title ?? "",
+      beats: beats.map((b) => ({ point: b.point })),
+      index: beatIndex,
+      presenting: present,
+    });
+  }, [project?.title, beats, beatIndex, present]);
+  presenterStateRef.current = publishPresenter;
+
+  useEffect(() => { if (presenterOpen) publishPresenter(); }, [presenterOpen, publishPresenter]);
+
   function captureBeat() {
     const beat: Beat = {
       id: Math.random().toString(36).slice(2, 10),
@@ -618,6 +658,13 @@ export default function App() {
             </div>
             <span className={`save-pill ${saveState}`}>{saveState}</span>
             <button className="icon-btn" onClick={() => setDark((d) => !d)} title="Toggle theme">{dark ? <Sun size={16} /> : <Moon size={16} />}</button>
+            {desktop && (
+              <button
+                className={`ghost small ${presenterOpen ? "on" : ""}`}
+                title={presenterOpen ? "Close the presenter window" : "Open a presenter window for your other monitor — it stays out of any screen capture"}
+                onClick={() => (presenterOpen ? desktop?.closePresenter().then(() => setPresenterOpen(false)) : desktop?.openPresenter().then(setPresenterOpen))}
+              ><MonitorPlay size={14} /> Presenter</button>
+            )}
             <button className="ghost small" onClick={() => setPresent(true)} title="Present mode (Alt+P)"><Presentation size={14} /> Present</button>
           </header>
         )}
