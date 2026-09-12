@@ -33,9 +33,25 @@ const sourcesDir = (id) => config.sourcesOf(id);
 /** Rendered slide images and other derived files, kept out of the user's way. */
 const derivedDir = (id, name) => path.join(config.dirOf(id), ".rendered", safeName(name));
 
+/**
+ * This server can run code, drive the mouse and keyboard, and read and write files,
+ * all without a password, because it is meant to serve exactly one person: whoever is
+ * sitting at this machine. So it listens on loopback only, and every request is checked
+ * to have come from there. Without this, anyone sharing your network could take over
+ * the desktop.
+ */
+const HOST = process.env.HOST || "127.0.0.1";
+const isLoopback = (addr = "") =>
+  addr === "127.0.0.1" || addr === "::1" || addr === "::ffff:127.0.0.1" || addr.startsWith("127.");
+
 const app = express();
+app.use((req, res, next) => {
+  if (isLoopback(req.socket.remoteAddress)) return next();
+  res.status(403).type("text/plain").send("Content Studio only accepts connections from this computer.");
+});
 app.use(site.middleware); // requests for <site>.localhost are proxied pages
-app.use(cors());
+// Same-machine only, so a wide-open CORS policy would still be a way in from a web page.
+app.use(cors({ origin: (o, cb) => cb(null, !o || /^https?:\/\/(localhost|127\.0\.0\.1|[a-z0-9-]+\.localhost)(:\d+)?$/i.test(o)) }));
 
 // Registered before the JSON parser: the raw body IS the file.
 app.put("/api/projects/:id/sources/:name", express.raw({ type: "*/*", limit: "1gb" }), async (req, res) => {
@@ -397,7 +413,12 @@ const server = http.createServer(app);
 attachTerminal(server, { cwdFor: (projectId) => (projectId && safeId(projectId) ? config.dirOf(projectId) : config.appDir()) });
 // Local apps embedded through the proxy do their real work over websockets.
 server.on("upgrade", (req, socket, head) => {
+  // The terminal is a shell; this check matters more here than anywhere else.
+  if (!isLoopback(socket.remoteAddress)) return socket.destroy();
   if (new URL(req.url, "http://localhost").pathname === "/api/term") return;
   if (!site.handleUpgrade(req, socket, head)) socket.destroy();
 });
-server.listen(PORT, () => console.log(`API on http://localhost:${PORT}  app data: ${config.appDir()}  (model: ${MODEL})`));
+server.listen(PORT, HOST, () => {
+  console.log(`API on http://localhost:${PORT}  app data: ${config.appDir()}  (model: ${MODEL})`);
+  if (!isLoopback(HOST)) console.warn(`WARNING: HOST=${HOST} exposes a shell and desktop control to your network.`);
+});

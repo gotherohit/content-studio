@@ -141,9 +141,28 @@ Clicks, right-clicks, scrolling and typing in the pane are forwarded to the real
 
 `~/.content-studio/config.json` is the index of where each project folder is. Delete a project folder by hand and the index repairs itself on the next refresh.
 
+## Security
+
+Content Studio has no login, because it is built for one person: whoever is sitting at
+the machine. To make that safe it is deliberately unreachable from anywhere else.
+
+* The server binds to `127.0.0.1` and refuses any connection that did not come from this
+  computer, so nobody on your network or WiFi can reach it.
+* That matters because the app deliberately does powerful things on your behalf: the
+  Terminal pane is a real shell, the Code pane runs scripts, and the Window pane can move
+  your mouse and type for you. Those would be a remote takeover if they were exposed.
+* `HOST` can override the bind address, and the server prints a warning when you do. Only
+  set it if you understand that it hands a shell and desktop control to your network.
+* Cookies for embedded apps are kept in memory, never written to disk, and are forgotten
+  when the server stops.
+* Nothing about your machine or your projects is in this repository: project material
+  lives in folders you choose, and the project index and page cache live in
+  `~/.content-studio/`. Cloning this repo gets you the program, not anyone's data, and a
+  clone runs entirely against the cloner's own machine.
+
 ## Notes
 
-* Code snippets, the terminal and window control all act with your user's permissions.
+* Code snippets, the terminal and window control all act with your user's permissions; see Security above.
 * Pages are downloaded once and cached in `~/.content-studio/cache`. Use the refresh button in the Source toolbar to re-download.
 * The proxy relies on every `*.localhost` name resolving to 127.0.0.1, which Chrome, Edge and Firefox do by default.
 * Sites that need a login, or that block server-side fetching, will not render. Try the print version, or use Reader.
