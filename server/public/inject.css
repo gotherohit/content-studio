@@ -1,0 +1,7 @@
+mark.rs-hl { border-radius: 2px; padding: 0 1px; cursor: pointer; color: inherit; background: #fff3a3; }
+mark.rs-hl-yellow { background: #fff3a3; }
+mark.rs-hl-green { background: #c6f2c9; }
+mark.rs-hl-pink { background: #ffd0e0; }
+mark.rs-hl-blue { background: #cfe4ff; }
+mark.rs-hl[title] { text-decoration: underline dotted; text-underline-offset: 3px; }
+

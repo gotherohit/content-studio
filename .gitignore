@@ -1,0 +1,46 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+.yarn/
+
+# Build output
+dist/
+build/
+*.tsbuildinfo
+
+# Secrets and machine-specific settings
+.env
+.env.*
+!.env.example
+
+# App state and the creator's material both live outside the repo
+# (~/.content-studio holds the project index and page cache), but ignore
+# these names in case an older layout is still on disk.
+config.json
+data/
+.rendered/
+
+# Logs and caches
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.cache/
+.vite/
+.npm/
+.eslintcache
+
+# Editors and OS
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Coverage and test output
+coverage/
+.nyc_output/
