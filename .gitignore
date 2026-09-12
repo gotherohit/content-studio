@@ -44,3 +44,6 @@ desktop.ini
 # Coverage and test output
 coverage/
 .nyc_output/
+
+# packaged installers
+release/

@@ -2,27 +2,38 @@
 
 A single-screen local workspace for building a video from research. A **project** is one video: its sources, highlights, notes, slides, whiteboard, code, terminal, notebooks and AI chat all live together in one folder on your disk.
 
-Runs on localhost. Nothing is stored inside this codebase.
+It ships as a Windows desktop app. Nothing is stored inside this codebase.
 
-## Run
+## Install
+
+Download the latest `ContentStudio-Setup-<version>.exe` from [Releases](https://github.com/gotherohit/content-studio/releases) and run it. The installer is unsigned, so Windows will show a SmartScreen warning the first time: choose **More info → Run anyway**. After that the app updates itself — a new release is downloaded in the background and applied when you say so.
+
+## Run from source
 
 ```bash
 npm install
 npm --prefix client install
 cp .env.example .env      # add ANTHROPIC_API_KEY if you want the AI pane
-npm run dev
+npm run desktop           # build the client, then open the desktop app
 ```
 
-Open http://localhost:5173. The API and proxy run on port 4700.
+For front-end work with hot reload, `npm run dev:desktop` runs Vite and points the app at it.
 
-Production build (one server, no Vite):
+It still runs in a browser if you prefer — `npm run dev`, then http://localhost:5173 — but the Browser and Embed panes are weaker there, for the reasons below.
+
+Build an installer of your own:
 
 ```bash
-npm run build
-npm start
+npm run dist          # writes release/ContentStudio-Setup-<version>.exe
 ```
 
-Then open http://localhost:4700.
+## Why a desktop app
+
+The whole studio is one window, and panes inside it are real Chromium views rather than frames. That difference is most of the app:
+
+* **Colab, Drive, OneDrive and Kaggle just load**, with a real sign-in that is remembered. In a browser they refuse to be framed at all. Your password goes straight to the site; Content Studio never sees it.
+* **A local harness works from the URL it printed**, token and all, because the pane has the true origin and its own cookies — no proxy, no cookie jar, no header rewriting.
+* **The folder picker is the operating system's own**, opened by the window that asked for it.
 
 ## Projects are folders
 
@@ -97,6 +108,8 @@ Pane types: **Source**, **Highlights**, **Notes**, **AI**, **Code**, **Terminal*
 **Present mode** (Alt+P) hides the sidebar, top bar and pane headers so only your panes are on screen for recording.
 
 ## Embedding a running app
+
+In the desktop app an Embed pane is a real browser view: paste the address — including a one-time token URL — and it behaves exactly as it does in Chrome. The rest of this section describes the fallback used when Content Studio runs in a browser tab instead.
 
 Paste any address into an Embed pane — a model harness, Streamlit, Gradio, Ollama, a dev server, or a public site. It is routed through Content Studio's own proxy, which:
 

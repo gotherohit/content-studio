@@ -1,0 +1,36 @@
+# Cut a release by pushing a tag:  git tag v0.2.0 && git push origin v0.2.0
+# The installer is built here and attached to the GitHub release, which is where
+# the app looks when it checks for updates.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: |
+          npm ci
+          npm --prefix client ci
+
+      - name: Build the client
+        run: npm run build
+
+      - name: Build and publish the installer
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx electron-builder --win --publish always

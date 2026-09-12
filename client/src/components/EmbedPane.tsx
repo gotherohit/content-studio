@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { ExternalLink, Globe, RefreshCw, TriangleAlert } from "lucide-react";
 import { api, type SiteProbe } from "../api";
+import { isDesktop } from "../desktop";
+import { WebviewFrame } from "./WebviewFrame";
 
 interface Props {
   url: string;
@@ -32,7 +34,7 @@ function explain(probe: SiteProbe): { title: string; detail: string } | null {
  * talk over a websocket, so the URL is routed through the app's own proxy, which strips
  * those headers, forwards cookies so a login can stick, and pipes the socket through.
  */
-export function EmbedPane({ url, onChange }: Props) {
+function ProxiedEmbed({ url, onChange }: Props) {
   const [draft, setDraft] = useState(url);
   const [framed, setFramed] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -119,5 +121,33 @@ export function EmbedPane({ url, onChange }: Props) {
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * On the desktop there is nothing to work around: a `<webview>` loads the app directly,
+ * with its own cookies and the true origin, so a harness that prints a one-time token URL
+ * behaves exactly as it does in a browser. In a plain browser the proxy above is needed.
+ */
+export function EmbedPane(props: Props) {
+  if (!isDesktop) return <ProxiedEmbed {...props} />;
+  return (
+    <WebviewFrame
+      url={props.url}
+      onChange={props.onChange}
+      scheme="http"
+      placeholder="http://127.0.0.1:3080 — paste the full URL your tool printed"
+      presets={PRESETS.map((u) => [u.replace(/^https?:\/\//, ""), u] as [string, string])}
+      empty={
+        <>
+          <h2>Embed a running app</h2>
+          <p>Paste the address of anything serving over HTTP — a model harness, Streamlit, Gradio, Ollama, a dev server, or a public site.</p>
+          <p className="muted small">
+            Token URLs work as printed, logins stick, and websockets keep running, because this is a real browser view
+            rather than a frame.
+          </p>
+        </>
+      }
+    />
   );
 }

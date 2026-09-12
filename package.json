@@ -1,5 +1,5 @@
 {
-  "name": "blog-news-analysis-app",
+  "name": "content-studio",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -8,13 +8,19 @@
     "dev:server": "node server/index.js",
     "dev:client": "npm --prefix client run dev",
     "build": "npm --prefix client run build",
-    "start": "cross-env NODE_ENV=production node server/index.js"
+    "start": "cross-env NODE_ENV=production node server/index.js",
+    "dev:desktop": "concurrently -n vite,electron -c green,magenta \"npm --prefix client run dev\" \"npm run electron:dev\"",
+    "electron:dev": "cross-env CS_DEV=1 electron .",
+    "desktop": "npm run build && electron .",
+    "dist": "npm run build && electron-builder --win --publish never",
+    "release": "npm run build && electron-builder --win --publish always"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "latest",
     "@mozilla/readability": "^0.6.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
+    "electron-updater": "^6.8.9",
     "express": "^4.21.0",
     "jsdom": "^25.0.0",
     "node-pty": "^1.1.0",
@@ -22,6 +28,63 @@
   },
   "devDependencies": {
     "concurrently": "^9.0.0",
-    "cross-env": "^7.0.3"
+    "cross-env": "^7.0.3",
+    "electron": "^44.3.0",
+    "electron-builder": "^26.15.3"
+  },
+  "productName": "Content Studio",
+  "description": "A single-screen studio for researching and presenting technical stories.",
+  "author": {
+    "name": "gotherohit",
+    "email": "rohitkrsingh2000@gmail.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/gotherohit/content-studio.git"
+  },
+  "license": "MIT",
+  "main": "electron/main.js",
+  "build": {
+    "appId": "com.gotherohit.contentstudio",
+    "productName": "Content Studio",
+    "asar": false,
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "electron/**/*",
+      "server/**/*",
+      "client/dist/**/*",
+      "package.json",
+      "!**/*.map",
+      "!**/test/**",
+      "!**/.bin/**"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "ContentStudio-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "shortcutName": "Content Studio"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "gotherohit",
+        "repo": "content-studio"
+      }
+    ],
+    "npmRebuild": false
   }
 }

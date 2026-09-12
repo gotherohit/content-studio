@@ -6,6 +6,7 @@ import {
 import { viewerForExt } from "./types";
 import type { Highlight, Layout, LayoutPreset, PaneConfig, PaneKind, Project, ProjectSummary, Source } from "./types";
 import { api, type AppConfig } from "./api";
+import { UpdateBanner } from "./components/UpdateBanner";
 import { Sidebar } from "./components/Sidebar";
 import { SourcePane } from "./components/SourcePane";
 import { HighlightsPanel } from "./components/HighlightsPanel";
@@ -14,6 +15,7 @@ import { CodePanel } from "./components/CodePanel";
 import { AiPanel } from "./components/AiPanel";
 import { CanvasPanel } from "./components/CanvasPanel";
 import { EmbedPane } from "./components/EmbedPane";
+import { BrowserPane } from "./components/BrowserPane";
 import { TerminalPane } from "./components/TerminalPane";
 import { JupyterPane } from "./components/JupyterPane";
 import { SlidesPane } from "./components/SlidesPane";
@@ -31,6 +33,7 @@ const KINDS: { id: PaneKind; label: string }[] = [
   { id: "jupyter", label: "Jupyter" },
   { id: "slides", label: "Slides" },
   { id: "canvas", label: "Canvas" },
+  { id: "browser", label: "Browser" },
   { id: "window", label: "Window" },
   { id: "embed", label: "Embed" },
 ];
@@ -420,6 +423,13 @@ export default function App() {
       case "terminal": return <TerminalPane key={`term-${i}-${project.id}`} dark={dark} projectId={project.id} />;
       case "jupyter": return <JupyterPane projectId={project.id} />;
       case "slides": return <SlidesPane value={project.slides} onChange={(slides) => mutate((p) => ({ ...p, slides }))} />;
+      case "browser":
+        return (
+          <BrowserPane
+            url={project.settings.browserUrl ?? ""}
+            onChange={(browserUrl) => mutate((p) => ({ ...p, settings: { ...p.settings, browserUrl } }))}
+          />
+        );
       case "window": return <WindowPane />;
       case "embed": return <EmbedPane url={project.settings.embedUrl ?? ""} onChange={(embedUrl) => mutate((p) => ({ ...p, settings: { ...p.settings, embedUrl } }))} />;
     }
@@ -431,6 +441,7 @@ export default function App() {
 
   return (
     <div className={`app ${present ? "present" : ""} ${collapsed ? "collapsed" : ""}`}>
+      <UpdateBanner />
       {!present && !collapsed && (
         <Sidebar
           projects={projects}

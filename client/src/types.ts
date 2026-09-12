@@ -59,7 +59,7 @@ export interface ChatMessage {
   content: string;
 }
 
-export type PaneKind = "source" | "highlights" | "notes" | "ai" | "code" | "canvas" | "terminal" | "jupyter" | "slides" | "window" | "embed";
+export type PaneKind = "source" | "highlights" | "notes" | "ai" | "code" | "canvas" | "terminal" | "jupyter" | "slides" | "window" | "browser" | "embed";
 export type LayoutPreset = "1" | "2" | "3" | "4" | "1+2" | "2+1";
 /** One pane. A Source pane may pin its own source; otherwise it follows the sidebar selection. */
 export interface PaneConfig {
@@ -88,7 +88,7 @@ export interface Project {
   chat: ChatMessage[];
   slides: string;
   layout: Layout;
-  settings: { jupyterUrl: string; viewMode?: "original" | "reader"; embedUrl?: string };
+  settings: { jupyterUrl: string; viewMode?: "original" | "reader"; embedUrl?: string; browserUrl?: string };
 }
 
 export interface ProjectSummary {

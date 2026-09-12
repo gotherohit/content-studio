@@ -15,6 +15,7 @@ import { createInput } from "./input.js";
 import { TYPES, viewerFor, safeName, uniqueName } from "./assets.js";
 import { renderDeck, openSlideshow, hasPowerPoint, findSoffice } from "./slides.js";
 import { pickFolder } from "./picker.js";
+import { createBrowser } from "./browser.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(here, "..");
@@ -26,6 +27,7 @@ await config.load();
 const site = createSiteProxy({ cacheDirFn: () => path.join(config.cacheDir(), "sites"), port: PORT });
 const jupyter = createJupyter();
 const input = createInput();
+const browser = createBrowser({ profileDirFn: () => path.join(config.appDir(), "browser") });
 await site.loadRegistry();
 
 const safeId = (id) => /^[a-zA-Z0-9_-]+$/.test(id);
@@ -73,6 +75,7 @@ app.get("/api/config", async (_req, res) => {
     appDir: cfg.appDir,
     apiPort: PORT, root: ROOT, model: MODEL,
     canControlWindows: input.available(),
+    browser: await browser.detect(),
     powerPoint: await hasPowerPoint(),
     libreOffice: Boolean(await findSoffice()),
   });
@@ -196,6 +199,10 @@ app.post("/api/site/probe", async (req, res) => {
     res.json({ status: 0, statusText: e.message, contentType: "", location: null, body: "" });
   }
 });
+
+// ---------- browser pane ----------
+app.get("/api/browser/status", async (_req, res) => { await browser.detect(); res.json(browser.status()); });
+app.post("/api/browser/stop", (_req, res) => { browser.stop(); res.json({ ok: true }); });
 
 // ---------- sources ----------
 app.post("/api/fetch", async (req, res) => {
@@ -410,12 +417,14 @@ app.use((err, _req, res, _next) => {
 process.on("unhandledRejection", (e) => console.error("unhandled rejection:", e?.message || e));
 
 const server = http.createServer(app);
+browser.attach(server);
 attachTerminal(server, { cwdFor: (projectId) => (projectId && safeId(projectId) ? config.dirOf(projectId) : config.appDir()) });
 // Local apps embedded through the proxy do their real work over websockets.
 server.on("upgrade", (req, socket, head) => {
   // The terminal is a shell; this check matters more here than anywhere else.
   if (!isLoopback(socket.remoteAddress)) return socket.destroy();
-  if (new URL(req.url, "http://localhost").pathname === "/api/term") return;
+  const p = new URL(req.url, "http://localhost").pathname;
+  if (p === "/api/term" || p === "/api/browser") return;
   if (!site.handleUpgrade(req, socket, head)) socket.destroy();
 });
 server.listen(PORT, HOST, () => {

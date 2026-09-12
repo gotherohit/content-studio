@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { FolderSearch } from "lucide-react";
 import { api } from "../api";
+import { desktop } from "../desktop";
 
 interface Props {
   label: string;
@@ -22,7 +23,10 @@ export function FolderField({ label, value, onChange, description, placeholder }
   async function browse() {
     setBusy(true); setErr(null);
     try {
-      const { dir } = await api.pickFolder(description ?? label, value);
+      // On the desktop the dialog belongs to the window; in a browser the server opens it.
+      const dir = desktop
+        ? await desktop.pickFolder(description ?? label)
+        : (await api.pickFolder(description ?? label, value)).dir;
       if (dir) onChange(dir);
     } catch (e) {
       setErr((e as Error).message);
