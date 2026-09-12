@@ -1,0 +1,138 @@
+# Working on Content Studio
+
+Notes for whoever picks this up next — another session, another harness, or the author in
+six months. Read this before changing anything.
+
+## What this is
+
+A Windows desktop app for one person: a YouTube creator who reads technical news and blog
+posts, researches them, and records an explanation with his own analysis. Everything for
+one video — sources, highlights, notes, slides, notebooks, terminal, canvas, AI chat and
+the running order — lives in one project folder and one window.
+
+It is used **live, while recording**. That shapes every decision below: a thing that
+interrupts, restarts, or surprises during a take is worse than a missing feature.
+
+## Shape
+
+Three processes, one app.
+
+```
+Electron main  (electron/main.js)
+  ├── forks the Express server as a child, ELECTRON_RUN_AS_NODE, first free port from 4700
+  ├── studio window        → http://127.0.0.1:<port>/
+  └── presenter window     → http://127.0.0.1:<port>/?presenter=1   (always on top)
+
+Express server (server/)   → API, reverse proxy, PTY, Jupyter, slides, desktop input
+React client   (client/)   → the whole UI, built by Vite into client/dist/
+```
+
+The server serves `client/dist` in production, so the window loads a real origin rather
+than `file://`. That is why websockets, cookies and the `<sub>.localhost` proxy all work.
+
+| File | What it owns |
+|---|---|
+| `electron/main.js` | windows, the server child, updates, DPAPI bridge, presenter relay |
+| `electron/preload.cjs` | the only bridge between page and desktop |
+| `server/index.js` | every route; the loopback guard is at the top |
+| `server/site.js` | the reverse proxy: `read` mode caches an article, `app` mode pipes a live app |
+| `server/credentials.js` | providers and keys, encrypted through `vault.js` |
+| `server/ai.js` | both wire protocols, streamed |
+| `server/slides.js` | PowerPoint COM, per-slide export |
+| `client/src/App.tsx` | project state, layout, beats, the presenter bridge |
+| `client/src/Presenter.tsx` | the second window; holds no project state |
+
+## Invariants — do not break these
+
+**The server is loopback-only.** It binds `127.0.0.1`, rejects non-loopback peers, and
+limits CORS to local origins. It can run code, drive the mouse and read files with no
+password, so this is the only thing standing between the user and anyone on their WiFi.
+This was a real incident, not a hypothetical. `HOST` exists as a deliberate, warned
+override. Never widen it, never add a convenience that skips the check.
+
+**Nothing of the user's goes in the repo.** Projects live in folders they choose
+(`D:\ResearchStudio\...`), app state in `~/.content-studio/`. No project data, no
+`config.json`, no `credentials.json`, no `.env`. Check before committing.
+
+**Keys are write-only from the UI's point of view.** A key is sent once and never comes
+back — the client sees `hasKey` and the last four characters. Errors from providers are
+scrubbed before display. Do not add an endpoint that returns a key, however convenient.
+
+**The raw-body upload route must stay above `express.json()`** in `server/index.js`.
+Below it, the JSON parser eats the body and `fs.writeFile` gets an object and crashes the
+process.
+
+**A stage stores references, never copies.** Beats point at sources, highlights and files;
+they never snapshot content. Improving the material must improve every beat that uses it.
+
+**Nothing restarts or steals focus by itself.** Updates download in the background and
+wait. The AI request aborts when the pane closes. Assume a recording is in progress.
+
+## Gotchas that cost time
+
+- **`PORT` is taken by tooling.** The server reads `API_PORT`.
+- **`node --watch` crashes node-pty** on Windows (conout worker). `dev:server` has no
+  watcher on purpose.
+- **node-pty needs no rebuild.** Its prebuilds are Node-API, so they run under Electron's
+  ABI. `build.npmRebuild` is `false` because this machine has no Visual Studio, and
+  `electron-builder install-app-deps` therefore fails.
+- **`asar: false` is deliberate**, so `ROOT = resolve(electron/..)` still finds `server/`
+  and `client/dist/`.
+- **`DEV` is gated on `CS_DEV=1`**, not just `!app.isPackaged`, or an unpackaged run
+  silently loads a stale Vite server.
+- **PowerShell `-Command -` consumes stdin**; the input bridge must be launched with
+  `-File`. The folder picker needs `-STA` and a plain `ShowDialog()`.
+- **PowerPoint's `Presentation.Export` reports success and writes nothing.** Slides must be
+  exported one at a time.
+- **A window that subscribes late misses what was already published.** This bit both the
+  update banner and the presenter window. Anything IPC-published needs a way to ask for the
+  current state on mount.
+- **Updates are ~115 MB and do not resume.** Restarting the app mid-download throws it
+  away. If a user reports "it never updates", check for a part-file in
+  `%LOCALAPPDATA%\content-studio-updater\pending\` before assuming a bug.
+
+## How to work here
+
+- **Verify in the running app, not just the compiler.** `npx tsc -b` passing means nothing
+  about whether a pane works. Launch the app with `--remote-debugging-port`, drive the real
+  UI over CDP, and read the state back. Every feature in this repo was checked that way.
+- **Clean up test data.** Beats, providers and sources created while testing go in the
+  user's real projects. Remove them and say so.
+- **Report honestly.** If something is untested, say which part. If a limit is real —
+  approximate timestamps, a log that is not persisted — write it down rather than letting
+  it be discovered mid-recording.
+- **Match the surrounding code.** Comments explain *why*, never *what*. British spelling.
+  No decoration.
+
+## Releasing
+
+```bash
+npm version minor && git push --follow-tags
+```
+
+That bumps `package.json`, tags, and pushes. `.github/workflows/release.yml` fires on a
+`v*` tag, builds the installer on a Windows runner, creates the release and uploads it with
+`latest.yml`. Installed copies update themselves from there.
+
+- The release must be **created and published before electron-builder uploads**, or the
+  builder makes invisible drafts — one per racing upload.
+- Updates jump **straight to the newest version**, never through intermediates. So
+  `normalize()` in `App.tsx` must default every new project field (`beats: p.beats ?? []`)
+  rather than migrating one version at a time.
+- `npm run dist` builds an installer locally without publishing.
+
+## Keep the docs current — this is part of the work
+
+Documentation drifts silently, and this app is used by someone who will not read the source
+to find out what a button does. **In any session that changes behaviour, update the docs in
+the same commit as the change:**
+
+| Change | Update |
+|---|---|
+| A feature, or how one is used | `docs/guide.md` |
+| Anything a release contains | `CHANGELOG.md`, under the version being cut |
+| A new invariant, gotcha, or hard-won fix | this file |
+| Install, updates, or the top-level picture | `README.md` |
+
+A release with no changelog entry is a bug in the release. If a session ends without the
+docs matching the code, say so explicitly rather than leaving it to be discovered later.

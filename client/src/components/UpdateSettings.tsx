@@ -59,7 +59,14 @@ export function UpdateSettings() {
       </div>
 
       {state === "downloading" && (
-        <div className="progress"><div className="bar" style={{ width: `${info?.percent ?? 0}%` }} /></div>
+        <>
+          <div className="progress"><div className="bar" style={{ width: `${info?.percent ?? 0}%` }} /></div>
+          {/* The download does not resume, so a restart here is the one thing that undoes it. */}
+          <p className="muted small">
+            The installer is around 115 MB. Leave the app open until this finishes — closing it now throws the download
+            away and the next launch starts again from nothing.
+          </p>
+        </>
       )}
 
       <div className="row">
