@@ -136,6 +136,7 @@ Clicks, right-clicks, scrolling and typing in the pane are forwarded to the real
 | `ANTHROPIC_API_KEY` | | Needed for the AI pane |
 | `ANTHROPIC_MODEL` | `claude-opus-5` | Model used by the AI pane |
 | `API_PORT` | `4700` | API and proxy port |
+| `HOST` | `127.0.0.1` | Bind address. Changing it exposes a shell and desktop control to your network. |
 | `JUPYTER_PORT` | `8890` | Port for the managed JupyterLab |
 | `RS_SHELL` | `powershell.exe` | Shell used by the Terminal pane |
 
