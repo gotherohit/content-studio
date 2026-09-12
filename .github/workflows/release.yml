@@ -30,6 +30,19 @@ jobs:
       - name: Build the client
         run: npm run build
 
+      # The release is created first, and published, so electron-builder uploads into a
+      # release that already exists. Left to itself it creates drafts — one per parallel
+      # upload — which are invisible on the Releases page and unreadable by the updater.
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = "${{ github.ref_name }}"
+          gh release view $tag --repo $env:GITHUB_REPOSITORY 2>$null
+          if (-not $?) {
+            gh release create $tag --repo $env:GITHUB_REPOSITORY --title $tag --generate-notes
+          }
+
       - name: Build and publish the installer
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

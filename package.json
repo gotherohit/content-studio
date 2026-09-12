@@ -89,7 +89,8 @@
       {
         "provider": "github",
         "owner": "gotherohit",
-        "repo": "content-studio"
+        "repo": "content-studio",
+        "releaseType": "release"
       }
     ],
     "npmRebuild": false
