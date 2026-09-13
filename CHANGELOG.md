@@ -2,6 +2,12 @@
 
 What changed in each release, newest first. Versions are the ones the app updates itself to.
 
+## 0.7.0
+
+- **A new project gets its own folder inside the one you pick.** Choosing `D:\Videos` and naming a project *How Git Actually Stores Your Code* creates `D:\Videos\how-git-actually-stores-your-code`. The dialog shows the path before you commit to it, and a name already in use gets a number rather than clashing.
+- **Deleting a project can no longer take anything else with it.** Previously the folder you chose *was* the project folder, so everything beside it went too. Moving a project applies the same rule.
+- Delete now refuses outright to remove a folder that has no `project.json` in it, whatever the index says.
+
 ## 0.6.1
 
 - **Deleting a project now says why when it cannot.** A failure used to leave the request hanging with nothing shown, so the button appeared to do nothing at all. If a file is held open by another program, it says so and names the folder.

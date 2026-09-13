@@ -50,8 +50,8 @@ password, so this is the only thing standing between the user and anyone on thei
 This was a real incident, not a hypothetical. `HOST` exists as a deliberate, warned
 override. Never widen it, never add a convenience that skips the check.
 
-**Nothing of the user's goes in the repo.** Projects live in folders they choose
-(`D:\ResearchStudio\...`), app state in `~/.content-studio/`. No project data, no
+**Nothing of the user's goes in the repo.** Projects live in folders they choose, app
+state in `~/.content-studio/`. No project data, no
 `config.json`, no `credentials.json`, no `.env`. Check before committing.
 
 **Keys are write-only from the UI's point of view.** A key is sent once and never comes
@@ -61,6 +61,12 @@ scrubbed before display. Do not add an endpoint that returns a key, however conv
 **The raw-body upload route must stay above `express.json()`** in `server/index.js`.
 Below it, the JSON parser eats the body and `fs.writeFile` gets an object and crashes the
 process.
+
+**A project owns a subfolder, never the folder that was picked.** `projectFolder()` puts
+`<chosen>/<slug>` on disk, so deleting a project can only ever remove the project. Delete
+also refuses any folder without a `project.json` in it. Both guards exist because the
+chosen folder used to *be* the project folder, which put everything beside it one
+confirmation away from `fs.rm`.
 
 **A stage stores references, never copies.** Beats point at sources, highlights and files;
 they never snapshot content. Improving the material must improve every beat that uses it.

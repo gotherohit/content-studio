@@ -98,6 +98,9 @@ function FolderSettings({ project, onProjectMoved, onOpenedFolder }: {
             onChange={setDir}
             description={`Where should “${project.title}” live?`}
           />
+          <span className="muted small">
+            The project keeps its own folder inside whatever you choose, so nothing else in that folder is ever at risk.
+          </span>
           <div className="row">
             <button
               disabled={!!busy || !dir.trim() || dir.trim() === project.dir}

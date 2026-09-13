@@ -18,7 +18,16 @@ this is the reference you come back to.
 
 ## Projects are folders
 
-Each project is a self-contained folder you choose:
+**You pick a folder to put a project in, and it makes its own folder inside it**, named
+after the project. Choose `D:\Videos` for *How Git Actually Stores Your Code* and you get
+`D:\Videos\how-git-actually-stores-your-code`. The New project dialog shows the exact path
+before you commit to it, and a name already taken gets a number.
+
+That matters for one reason: deleting a project deletes its folder, and this way that can
+only ever be the project. Nothing else in the folder you picked is at risk. Delete also
+refuses any folder with no `project.json` in it.
+
+Each project is a self-contained folder:
 
 ```
 <project folder>/

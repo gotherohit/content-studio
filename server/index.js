@@ -99,13 +99,42 @@ async function listProjects() {
 
 app.get("/api/projects", async (_req, res) => res.json(await listProjects()));
 
+/**
+ * A project gets its own folder inside the one the user picked.
+ *
+ * Without this the chosen folder *is* the project, so picking a folder that holds other
+ * things — or picking a drive root — puts everything in it one confirmation away from
+ * being deleted. A subfolder means deleting a project can only ever remove the project.
+ */
+function projectSlug(title) {
+  const slug = String(title || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60);
+  return slug || "project";
+}
+
+/** `<parent>/<slug>`, with a number appended if that is taken. Re-picking the project's own folder is a no-op. */
+async function projectFolder(parent, title) {
+  const slug = projectSlug(title);
+  if (path.basename(parent).toLowerCase() === slug) return parent;
+  for (let n = 1; n < 200; n++) {
+    const candidate = path.join(parent, n === 1 ? slug : `${slug}-${n}`);
+    try { await fs.access(candidate); } catch { return candidate; }
+  }
+  return path.join(parent, `${slug}-${Date.now().toString(36)}`);
+}
+
 app.post("/api/projects", async (req, res) => {
   const title = req.body?.title || "Untitled project";
   const id = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
   // Every project lives where the user chose; there is no default location.
   if (!req.body?.dir) return res.status(400).json({ error: "Choose a folder for this project" });
   if (!path.isAbsolute(req.body.dir)) return res.status(400).json({ error: "Choose a folder with Browse" });
-  const dir = path.resolve(req.body.dir);
+  // The project gets its own folder inside the chosen one, so deleting it later cannot
+  // take anything else with it.
+  const dir = await projectFolder(path.resolve(req.body.dir), title);
   const now = new Date().toISOString();
   const project = {
     id, title, createdAt: now, updatedAt: now,
@@ -148,6 +177,14 @@ app.delete("/api/projects/:id", async (req, res) => {
     await config.forget(req.params.id);
     return res.json({ ok: true, kept: dir });
   }
+  // Never delete a folder that is not a project, whatever the index claims.
+  try {
+    await fs.access(path.join(dir, "project.json"));
+  } catch {
+    return res.status(409).json({
+      error: `${dir} does not look like a project folder, so it was left alone. Remove it by hand if you meant to.`,
+    });
+  }
   try {
     await fs.rm(dir, { recursive: true, force: true });
   } catch (e) {
@@ -169,8 +206,11 @@ app.put("/api/projects/:id/folder", async (req, res) => {
   if (!dir) return res.status(400).json({ error: "dir required" });
   // A relative path would silently resolve against the server's own directory.
   if (!path.isAbsolute(dir)) return res.status(400).json({ error: "Give a full path, for example D:\\Videos\\my-project" });
-  try { res.json({ dir: await config.moveProject(req.params.id, dir) }); }
-  catch (e) { res.status(500).json({ error: e.message }); }
+  try {
+    const project = await readProject(req.params.id).catch(() => ({ title: "project" }));
+    const target = await projectFolder(path.resolve(dir), project.title);
+    res.json({ dir: await config.moveProject(req.params.id, target) });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 /** Adopt a project folder that already exists on disk. */
