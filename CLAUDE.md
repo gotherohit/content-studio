@@ -132,7 +132,11 @@ wait. The AI request aborts when the pane closes. Assume a recording is in progr
 
 - **Verify in the running app, not just the compiler.** `npx tsc -b` passing means nothing
   about whether a pane works. Launch the app with `--remote-debugging-port`, drive the real
-  UI over CDP, and read the state back. Every feature in this repo was checked that way.
+  UI over CDP, and read the state back.
+- **And look at it.** State can be right while the screen is wrong. The canvas viewport
+  feature passed every state check — pan and zoom captured and restored exactly — on a
+  canvas that was zero pixels tall and had been invisible all along. Take a screenshot of
+  anything a person is meant to see.
 - **Never test against a real project.** This machine develops the app *and* uses it for
   real videos. All testing goes in `D:	est content studio` — create the folder if it is
   not there, make a scratch project inside it, and delete it when done. **Confirm the open

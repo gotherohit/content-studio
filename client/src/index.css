@@ -763,3 +763,11 @@ mark.hl:hover { filter: brightness(0.94); }
 .presenter-script strong { color: var(--accent); }
 
 .list-item.busy { opacity: 0.55; pointer-events: none; }
+
+/*
+ * The canvas pane. Excalidraw fills 100% of its container and has no size of its own, so
+ * a container that does not grow into the pane collapses to zero height — the drawing
+ * surface and every tool are rendered, just invisibly.
+ */
+.canvas-host { flex: 1; min-height: 0; position: relative; }
+.canvas-host > .excalidraw { position: absolute; inset: 0; }

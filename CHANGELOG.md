@@ -2,6 +2,10 @@
 
 What changed in each release, newest first. Versions are the ones the app updates itself to.
 
+## 0.8.1
+
+- **The canvas pane shows its drawing tools again — and the drawing.** The container Excalidraw sits in never grew into the pane, so it had zero height: every tool and the whole drawing surface were rendered, just invisibly. It now fills the pane.
+
 ## 0.8.0
 
 - **A beat now frames its own part of the canvas.** There is still one drawing per project, but each beat remembers where it was looking — pan and zoom — and returns there when the beat comes up. Draw the whole diagram once, then let beat 3 sit on the left half and beat 7 zoom into the detail.
