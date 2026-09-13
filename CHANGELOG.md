@@ -2,6 +2,11 @@
 
 What changed in each release, newest first. Versions are the ones the app updates itself to.
 
+## 0.7.2
+
+- **A project can finally be deleted.** 0.7.1 shut down the JupyterLab *this* run of the app had started; the one blocking the folder was usually left behind by an earlier run, which the app knew nothing about. Delete now finds any JupyterLab rooted at exactly that folder, whoever started it, and stops it.
+- **The app no longer leaves JupyterLab running when it closes.** `python -m jupyter lab` hands off to `jupyter-lab.exe` and exits, so the real server was re-parented out of the app's process tree and survived — sitting in a project folder and keeping it undeletable for the rest of the day. Quitting now waits for the server to stop what it started.
+
 ## 0.7.1
 
 - **Deleting a project no longer fails because the app itself is holding the folder.** JupyterLab is rooted in the project folder and the Terminal pane's shells sit in it, and Windows will not delete a folder a process is working in — so Content Studio was reliably blocking its own delete. It now shuts those down first, kills the whole process tree rather than just the process it launched, and retries.

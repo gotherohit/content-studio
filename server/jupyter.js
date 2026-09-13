@@ -1,11 +1,45 @@
 // Detects, installs and runs JupyterLab so it can be embedded in the app.
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
 import crypto from "node:crypto";
 
 const PY = process.platform === "win32" ? "python" : "python3";
 const PORT = Number(process.env.JUPYTER_PORT || 8890);
+
+/**
+ * Find any JupyterLab rooted at exactly this folder, whoever started it.
+ *
+ * A Jupyter started by an earlier run of the app outlives it — the app is closed, the
+ * server it forked is gone, and JupyterLab is still sitting in the project folder keeping
+ * Windows from ever deleting it. Nothing in this process knows about that one, so the
+ * only way to find it is to ask the operating system.
+ *
+ * Matching on the exact `--ServerApp.root_dir=<folder>` keeps this precise: it can only
+ * hit a server rooted at the folder being deleted.
+ */
+function findRootedAt(dir) {
+  return new Promise((resolve) => {
+    const done = (out) => resolve([...out.matchAll(/\d+/g)].map((m) => Number(m[0])).filter(Boolean));
+    if (process.platform === "win32") {
+      const script =
+        'Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like ("*--ServerApp.root_dir=" + $env:CS_ROOT_DIR + "*") } | ForEach-Object { $_.ProcessId }';
+      const c = spawn("powershell", ["-NoProfile", "-NonInteractive", "-Command", script], {
+        env: { ...process.env, CS_ROOT_DIR: dir },
+      });
+      let out = "";
+      c.stdout.on("data", (d) => (out += d));
+      c.on("error", () => resolve([]));
+      c.on("close", () => done(out));
+      return;
+    }
+    const c = spawn("pgrep", ["-f", `--ServerApp.root_dir=${dir}`]);
+    let out = "";
+    c.stdout.on("data", (d) => (out += d));
+    c.on("error", () => resolve([]));
+    c.on("close", () => done(out));
+  });
+}
 
 function run(cmd, args) {
   return new Promise((resolve) => {
@@ -79,7 +113,7 @@ export function createJupyter() {
   function killTree(pid) {
     if (!pid) return;
     try {
-      if (process.platform === "win32") spawn("taskkill", ["/PID", String(pid), "/T", "/F"], { stdio: "ignore" });
+      if (process.platform === "win32") spawnSync("taskkill", ["/PID", String(pid), "/T", "/F"], { stdio: "ignore" });
       else process.kill(-pid, "SIGKILL");
     } catch { /* already gone */ }
   }
@@ -92,20 +126,49 @@ export function createJupyter() {
    * therefore has to stop the server the app itself started.
    */
   async function releaseUnder(dir) {
-    if (!child || !rootDir || !dir) return false;
-    const within = path.resolve(rootDir) === path.resolve(dir)
-      || path.resolve(rootDir).startsWith(path.resolve(dir) + path.sep);
-    if (!within) return false;
+    if (!dir) return false;
+    let released = false;
 
-    const port = PORT;
-    stop();
-    rootDir = null;
-    // Killing is asynchronous on Windows; wait until nothing answers before reporting done.
+    // The server this run started, if it is rooted in the folder.
+    if (child && rootDir) {
+      const here = path.resolve(rootDir);
+      const target = path.resolve(dir);
+      if (here === target || here.startsWith(target + path.sep)) {
+        stop();
+        rootDir = null;
+        released = true;
+      }
+    }
+
+    // And any left behind by an earlier run, which this process knows nothing about.
+    for (const pid of await findRootedAt(path.resolve(dir))) {
+      killTree(pid);
+      released = true;
+    }
+    if (!released) return false;
+
+    // Killing is asynchronous on Windows; wait until nothing is rooted there any more.
     for (let i = 0; i < 20; i++) {
       await new Promise((r) => setTimeout(r, 250));
-      try { await fetch(`http://localhost:${port}/api/status`); } catch { return true; }
+      if ((await findRootedAt(path.resolve(dir))).length === 0) break;
     }
     return true;
+  }
+
+  /**
+   * Stop for good, on the way out.
+   *
+   * `python -m jupyter lab` hands off to `jupyter-lab.exe` and exits, which re-parents the
+   * real server out of our process tree — so a tree kill no longer reaches it. Matching on
+   * the folder it is rooted at does, and that is the difference between the app closing
+   * cleanly and leaving a project folder undeletable for the rest of the day.
+   */
+  async function shutdown() {
+    const where = rootDir;
+    stop();
+    rootDir = null;
+    if (!where) return;
+    for (const pid of await findRootedAt(path.resolve(where))) killTree(pid);
   }
 
   /** Streams `pip install jupyterlab` output. Returns a child process. */
@@ -115,5 +178,5 @@ export function createJupyter() {
   }
 
   process.on("exit", stop);
-  return { isInstalled, status, start, stop, install, releaseUnder };
+  return { isInstalled, status, start, stop, shutdown, install, releaseUnder };
 }

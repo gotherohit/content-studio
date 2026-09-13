@@ -3,13 +3,13 @@ import { WebSocketServer } from "ws";
 import pty from "node-pty";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 
 /** A shell may have started things of its own; all of them hold the folder. */
 function killTree(pid) {
   if (!pid) return;
   try {
-    if (process.platform === "win32") spawn("taskkill", ["/PID", String(pid), "/T", "/F"], { stdio: "ignore" });
+    if (process.platform === "win32") spawnSync("taskkill", ["/PID", String(pid), "/T", "/F"], { stdio: "ignore" });
     else process.kill(-pid, "SIGKILL");
   } catch { /* already gone */ }
 }
@@ -75,5 +75,15 @@ export function attachTerminal(httpServer, { cwdFor }) {
     return closed;
   }
 
-  return { closeUnder };
+  /** Close every shell, on the way out, so none is left sitting in a project folder. */
+  function closeAll() {
+    for (const entry of [...live]) {
+      live.delete(entry);
+      killTree(entry.term.pid);
+      try { entry.term.kill(); } catch { /* already gone */ }
+      try { entry.ws.close(); } catch { /* already gone */ }
+    }
+  }
+
+  return { closeUnder, closeAll };
 }

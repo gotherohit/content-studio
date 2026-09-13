@@ -557,6 +557,26 @@ server.on("upgrade", (req, socket, head) => {
   if (p === "/api/term" || p === "/api/browser") return;
   if (!site.handleUpgrade(req, socket, head)) socket.destroy();
 });
+/**
+ * Leave nothing running.
+ *
+ * The desktop shell asks for this before it quits, because JupyterLab outlives a plain
+ * kill — `python -m jupyter lab` hands off to `jupyter-lab.exe` and exits, re-parenting
+ * the real server out of our process tree. A JupyterLab still rooted in a project folder
+ * makes that folder impossible to delete, long after the app itself has gone.
+ */
+let leaving = false;
+async function shutdown() {
+  if (leaving) return;
+  leaving = true;
+  try { terminals.closeAll(); } catch { /* already gone */ }
+  try { await jupyter.shutdown(); } catch { /* already gone */ }
+  process.exit(0);
+}
+process.on("message", (msg) => { if (msg?.type === "shutdown") shutdown(); });
+process.on("SIGTERM", shutdown);
+process.on("SIGINT", shutdown);
+
 server.listen(PORT, HOST, () => {
   console.log(`API on http://localhost:${PORT}  app data: ${config.appDir()}  (model: ${credentials.list().defaultModel ?? "none configured"})`);
   if (!isLoopback(HOST)) console.warn(`WARNING: HOST=${HOST} exposes a shell and desktop control to your network.`);

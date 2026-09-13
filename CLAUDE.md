@@ -114,9 +114,16 @@ wait. The AI request aborts when the pane closes. Assume a recording is in progr
   and every Terminal PTY has it as `cwd`, and Windows will not delete a folder a process is
   working in. Deleting a project must call `jupyter.releaseUnder()` and
   `terminals.closeUnder()` first.
-- **`child.kill()` does not kill a tree on Windows.** `python -m jupyter lab` launches the
-  real server as a grandchild, which survives and keeps holding the folder. Use
-  `taskkill /PID <pid> /T /F`, then wait for it to stop answering.
+- **`child.kill()` does not kill a tree on Windows**, and a tree kill is not enough either.
+  `python -m jupyter lab` hands off to `jupyter-lab.exe` and *exits*, re-parenting the real
+  server out of the tree entirely. The only reliable handle is its command line: find
+  `--ServerApp.root_dir=<folder>` through the OS and kill that. `jupyter.findRootedAt()`
+  does this; `releaseUnder()` and `shutdown()` both use it.
+- **Kill with `spawnSync`, not `spawn`, on any path that exits straight afterwards.** An
+  async `taskkill` never gets to run before `process.exit()`.
+- **Quitting is asynchronous.** `before-quit` calls `preventDefault()`, asks the server to
+  shut down over IPC, and quits for real when it exits or after 8s. Without that, Jupyter
+  is orphaned every time the app closes.
 - **Updates are ~115 MB and do not resume.** Restarting the app mid-download throws it
   away. If a user reports "it never updates", check for a part-file in
   `%LOCALAPPDATA%\content-studio-updater\pending\` before assuming a bug.

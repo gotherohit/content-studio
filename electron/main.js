@@ -6,7 +6,7 @@
 // server is unchanged and still runs on loopback; this process starts it, waits for it,
 // and shows it in a window whose panes may host real Chromium views.
 import { app, BrowserWindow, dialog, ipcMain, safeStorage, screen, session, shell } from "electron";
-import { fork } from "node:child_process";
+import { fork, spawnSync } from "node:child_process";
 import net from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -134,6 +134,39 @@ function serveVault(child) {
       reply({ error: e.message });
     }
   });
+}
+
+/**
+ * Stop the studio server and everything it started.
+ *
+ * Killing only the process we forked leaves its own children running — above all
+ * JupyterLab, which is rooted in a project folder and will then keep that folder
+ * undeletable long after the app has closed. On Windows only a tree kill reaches them.
+ */
+function stopServer() {
+  const child = server;
+  server = null;
+  if (!child) return;
+  try {
+    if (process.platform === "win32" && child.pid) {
+      spawnSync("taskkill", ["/PID", String(child.pid), "/T", "/F"], { stdio: "ignore" });
+    } else {
+      child.kill();
+    }
+  } catch { /* already gone */ }
+}
+
+/** Ask the server to tidy up, and only force the issue if it will not. */
+function quitServerGracefully(done) {
+  const child = server;
+  if (!child) return done();
+  let finished = false;
+  const finish = () => { if (finished) return; finished = true; clearTimeout(timer); stopServer(); done(); };
+  // Generous, because stopping JupyterLab means asking the operating system what is
+  // running; forcing the issue too early is how folders get left locked.
+  const timer = setTimeout(finish, 8000);
+  child.once("exit", finish);
+  try { child.send({ type: "shutdown" }); } catch { finish(); }
 }
 
 function createWindow() {
@@ -280,6 +313,15 @@ if (!app.requestSingleInstanceLock()) {
     app.on("activate", () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
   });
 
-  app.on("before-quit", () => { app.isQuitting = true; try { presenter?.destroy(); } catch { /* gone */ } try { server?.kill(); } catch { /* gone */ } });
+  // Quitting waits for the server to stop what it started — above all JupyterLab, which
+  // otherwise outlives the app and keeps a project folder undeletable.
+  let serverStopped = false;
+  app.on("before-quit", (e) => {
+    app.isQuitting = true;
+    try { presenter?.destroy(); } catch { /* gone */ }
+    if (serverStopped) return;
+    e.preventDefault();
+    quitServerGracefully(() => { serverStopped = true; app.quit(); });
+  });
   app.on("window-all-closed", () => app.quit());
 }
