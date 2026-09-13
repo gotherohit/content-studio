@@ -27,7 +27,7 @@ jobs:
           npm ci
           npm --prefix client ci
 
-      - name: Test beat behaviour
+      - name: Test beat and window behaviour
         run: npm test
 
       - name: Build the client

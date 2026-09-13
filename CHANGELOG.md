@@ -2,6 +2,13 @@
 
 What changed in each release, newest first. Versions are the ones the app updates itself to.
 
+## 0.10.0
+
+- Added a desktop capture picker, fixing Electron's unsupported capture request and automatically matching a chosen window to its application.
+- Window panes now offer **Interact with app**: use the real desktop application, then return to the same Studio layout with a movable floating toolbar or **Ctrl+Shift+F12**. The toolbar can be hidden when the shortcut is available.
+- Removed pointer and keyboard forwarding from Window previews, which could move the Windows cursor unexpectedly and lose focus or drag releases. Failed focus requests now show an error.
+- Clarified **Window** (native desktop preview) versus **Embed** (directly interactive web and localhost apps).
+
 ## 0.9.0
 
 - **Beats return each article pane to its own passage, without animated scrolling.** Captures now include independent reading positions and Reader/Original modes, including two panes showing different parts of the same source. Content anchors account for text reflow and brief late layout changes. Older beats retain highlight-based navigation and can be re-captured to gain reading positions.

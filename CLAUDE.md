@@ -104,6 +104,12 @@ wait. The AI request aborts when the pane closes. Assume a recording is in progr
 - **A window that subscribes late misses what was already published.** This bit both the
   update banner and the presenter window. Anything IPC-published needs a way to ask for the
   current state on mount.
+- **Window previews must never forward pointer movement.** They share the physical
+  desktop cursor with Studio, so forwarding causes feedback and lost drags. Native app
+  interaction is an explicit handoff; Electron owns its return toolbar and temporary
+  shortcut. Only hide the toolbar when the shortcut registered successfully. The input
+  helper briefly attaches to the foreground input queue for that focus request and always
+  detaches afterwards; a failed activation must remain visible to the user.
 - **Beat restoration belongs to each pane, after its content is ready.** Keep reading
   positions separate from the live scroll reports, tag iframe replies with the restoration
   nonce, and use instant scrolling. Document scroll events fire on `document`, not the

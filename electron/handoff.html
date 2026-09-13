@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'unsafe-inline'">
+<title>Back to Studio</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 10px 14px; background: #151923; color: #e8edf7; font: 13px system-ui; -webkit-app-region: drag; }
+  .row { display: flex; align-items: center; gap: 10px; }
+  .grip { color: #95a1b8; cursor: move; }
+  button { -webkit-app-region: no-drag; border: 1px solid #495873; border-radius: 6px; padding: 8px 12px; background: #293e60; color: white; cursor: pointer; }
+  button:focus-visible { outline: 2px solid #93bdff; }
+  #hide { background: transparent; margin-left: auto; }
+  button:disabled { opacity: .45; cursor: default; }
+  p { margin: 8px 0 0; color: #b9c5d9; font-size: 12px; }
+</style>
+<div class="row"><span class="grip" title="Drag to move">⠿</span><button id="back">← Back to Studio</button><button id="hide">Hide toolbar</button></div>
+<p id="hint"></p>
+<script src="handoff-toolbar.js"></script>
+</html>

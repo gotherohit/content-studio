@@ -211,13 +211,16 @@ Many local harnesses print a URL containing a one-time token and reject the bare
 
 ## Controlling a window
 
-The Window pane captures a desktop window or screen. That alone is a live view. To interact with it:
+The **Window** pane is a live preview of a native desktop app or screen. **Embed** is for websites and localhost web apps you interact with directly inside a pane.
 
-1. Click **Pick a window** and choose the window or screen.
-2. Choose the same one from the **Match capture to…** dropdown, so clicks map to real desktop coordinates.
-3. Switch **Control** on.
+1. Click **Pick a window** and choose a thumbnail from Studio's window/screen picker.
+2. Window captures automatically select the matching application. For a screen capture, choose the particular app to bring forward from **Choose app to interact with…**.
+3. Click **Interact with app**. The real application comes forward; use its normal mouse, keyboard, menus and dialogs.
+4. Click the floating **Back to Studio** button, press **Ctrl+Shift+F12**, or Alt+Tab back to Studio. Your current beat and layout stay in place.
 
-Clicks, right-clicks, scrolling and typing in the pane are forwarded to the real application. Windows only; elsewhere the pane stays a live view.
+Drag the toolbar by its grip or background to move it. **Hide toolbar** removes it for recording while the return shortcut remains active. If another program owns the shortcut, the toolbar explains this and cannot be hidden. The shortcut is released when you return. Closing Studio also removes the toolbar.
+
+Interaction requires the Windows desktop app. Elsewhere, Window remains a live preview. If a target closes, rescan and select its new window. Windows may refuse to bring an app forward; Studio reports that failure instead of pretending the switch succeeded. The preview does not forward input or move your physical cursor. Native apps still run in their own windows, and a minimised app may stop updating its capture. The floating toolbar may appear in a whole-display recording; hide it before a take if needed.
 
 ## Models and keys
 
@@ -310,8 +313,7 @@ somewhere else first and delete it afterwards.
 **A beat restores the wrong thing, or says it could not.** Its source or highlight has been
 deleted. Fix the arrangement and press the camera on that beat to re-capture it.
 
-**A site refuses to load in the Embed pane.** Use the Browser pane instead — it is a real
-Chromium view with the true origin, and almost nothing refuses it. Embed exists for local
+**A site refuses to load in the Embed pane.** In the desktop app, both Embed and Browser use real Chromium views. Check the address and that the app is running. Embed is suited to local
 apps you are running yourself.
 
 **Slides show as "cannot be rendered".** PowerPoint renders decks one slide at a time

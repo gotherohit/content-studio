@@ -20,6 +20,13 @@ public class RSIn {
   [DllImport("user32.dll")] public static extern void keybd_event(byte vk, byte scan, uint flags, IntPtr extra);
   [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
   [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int cmd);
+  [DllImport("user32.dll")] public static extern bool IsWindow(IntPtr hWnd);
+  [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr hWnd);
+  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+  [DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId();
+  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, IntPtr processId);
+  [DllImport("user32.dll")] public static extern bool AttachThreadInput(uint from, uint to, bool attach);
+  [DllImport("user32.dll")] public static extern bool BringWindowToTop(IntPtr hWnd);
   [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hWnd);
   [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, out RECT r);
   [DllImport("user32.dll")] public static extern bool GetClientRect(IntPtr hWnd, out RECT r);
@@ -81,7 +88,36 @@ while ($true) {
     $m = $line | ConvertFrom-Json
     switch ($m.type) {
       'windows' { Send-Json @{ id = $m.id; ok = $true; windows = @(Get-Windows); screens = @(Get-Screens) } }
-      'focus'   { [void][RSIn]::ShowWindow([IntPtr]$m.hwnd, 9); [void][RSIn]::SetForegroundWindow([IntPtr]$m.hwnd); Send-Json @{ id = $m.id; ok = $true } }
+      'focus'   {
+        $h = [IntPtr]$m.hwnd
+        if (-not [RSIn]::IsWindow($h)) { throw 'That window has closed. Rescan and choose an app again.' }
+        if ([RSIn]::IsIconic($h)) { [void][RSIn]::ShowWindow($h, 9) }
+        # The helper has no foreground input queue of its own. Share the foreground queue
+        # only during an explicit handoff, then detach even if activation fails.
+        $foreground = [RSIn]::GetForegroundWindow()
+        $currentThread = [RSIn]::GetCurrentThreadId()
+        $foregroundThread = [RSIn]::GetWindowThreadProcessId($foreground, [IntPtr]::Zero)
+        $attached = $false
+        $targetAttached = $false
+        $targetThread = [RSIn]::GetWindowThreadProcessId($h, [IntPtr]::Zero)
+        try {
+          if ($m.fromHwnd -and [RSIn]::IsWindow([IntPtr]$m.fromHwnd) -and $currentThread -ne $foregroundThread) {
+            $attached = [RSIn]::AttachThreadInput($currentThread, $foregroundThread, $true)
+            if ($currentThread -ne $targetThread -and $foregroundThread -ne $targetThread) {
+              $targetAttached = [RSIn]::AttachThreadInput($currentThread, $targetThread, $true)
+            }
+          }
+          [void][RSIn]::BringWindowToTop($h)
+          [void][RSIn]::SetForegroundWindow($h)
+        } finally {
+          if ($targetAttached) { [void][RSIn]::AttachThreadInput($currentThread, $targetThread, $false) }
+          if ($attached) { [void][RSIn]::AttachThreadInput($currentThread, $foregroundThread, $false) }
+        }
+        # Foreground activation across input queues can complete asynchronously.
+        for ($attempt = 0; $attempt -lt 20 -and [RSIn]::GetForegroundWindow() -ne $h; $attempt++) { Start-Sleep -Milliseconds 25 }
+        if ([RSIn]::GetForegroundWindow() -ne $h) { throw 'Windows could not focus that app. Switch to it with Alt+Tab, then try again.' }
+        Send-Json @{ id = $m.id; ok = $true }
+      }
       'move'    { [void][RSIn]::SetCursorPos([int]$m.x, [int]$m.y); Send-Json @{ id = $m.id; ok = $true } }
       'button'  {
         [void][RSIn]::SetCursorPos([int]$m.x, [int]$m.y)
@@ -118,7 +154,7 @@ export function createInput() {
     // itself, so the script's own read loop would never receive anything.
     const scriptPath = path.join(os.tmpdir(), "research-studio-input.ps1");
     fs.writeFileSync(scriptPath, BRIDGE, "utf8");
-    child = spawn("powershell.exe", ["-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", scriptPath], { stdio: ["pipe", "pipe", "pipe"] });
+    child = spawn("powershell.exe", ["-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", scriptPath], { stdio: ["pipe", "pipe", "pipe"], windowsHide: true });
     child.stdout.on("data", (d) => {
       buf += d.toString();
       let i;

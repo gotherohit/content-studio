@@ -3,6 +3,16 @@ const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("studio", {
   isDesktop: true,
+  captureSources: () => ipcRenderer.invoke("studio:captureSources"),
+  chooseCapture: (id) => ipcRenderer.invoke("studio:chooseCapture", id),
+  startHandoff: (hwnd) => ipcRenderer.invoke("handoff:start", hwnd),
+  returnToStudio: () => ipcRenderer.invoke("handoff:return"),
+  handoffState: () => ipcRenderer.invoke("handoff:state"),
+  onHandoffState: (fn) => {
+    const relay = (_e, state) => fn(state);
+    ipcRenderer.on("handoff:state", relay);
+    return () => ipcRenderer.removeListener("handoff:state", relay);
+  },
   info: () => ipcRenderer.invoke("studio:info"),
   pickFolder: (title) => ipcRenderer.invoke("studio:pickFolder", title),
   openExternal: (url) => ipcRenderer.invoke("studio:openExternal", url),

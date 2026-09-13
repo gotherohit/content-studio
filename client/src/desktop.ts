@@ -39,6 +39,12 @@ export type PresenterCommand =
 
 export interface StudioBridge {
   isDesktop: true;
+  captureSources(): Promise<{ id: string; name: string; thumbnail: string }[]>;
+  chooseCapture(id: string): Promise<void>;
+  startHandoff(hwnd: number): Promise<{ active: boolean; shortcut: boolean; hidden: boolean }>;
+  returnToStudio(): Promise<void>;
+  handoffState(): Promise<{ active: boolean; shortcut: boolean; hidden: boolean }>;
+  onHandoffState(fn: (state: { active: boolean; shortcut: boolean; hidden: boolean }) => void): () => void;
   info(): Promise<{ port: number; version: string; partition: string; dev: boolean }>;
   pickFolder(title?: string): Promise<string | null>;
   openExternal(url: string): Promise<void>;

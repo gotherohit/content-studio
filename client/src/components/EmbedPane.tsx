@@ -109,8 +109,8 @@ function ProxiedEmbed({ url, onChange }: Props) {
         />
       ) : (
         <div className="empty-state">
-          <h2>Embed a running app</h2>
-          <p>Paste the address of anything serving over HTTP — a model harness, Streamlit, Gradio, Ollama, a dev server, or a public site.</p>
+          <h2>Embed a web app</h2>
+          <p>Paste the address of anything serving over HTTP — a model harness, Streamlit, Gradio, Ollama, a dev server, or a public site. Interact directly here. For a native desktop application, choose a Window pane.</p>
           <p className="muted small">
             It is routed through Content Studio's proxy, so apps that normally refuse to be framed still load, their
             websockets keep working, and login cookies stick. If a tool prints a URL with a token in it, paste that whole URL.
@@ -140,8 +140,8 @@ export function EmbedPane(props: Props) {
       presets={PRESETS.map((u) => [u.replace(/^https?:\/\//, ""), u] as [string, string])}
       empty={
         <>
-          <h2>Embed a running app</h2>
-          <p>Paste the address of anything serving over HTTP — a model harness, Streamlit, Gradio, Ollama, a dev server, or a public site.</p>
+          <h2>Embed a web app</h2>
+          <p>Paste the address of anything serving over HTTP — a model harness, Streamlit, Gradio, Ollama, a dev server, or a public site. Interact directly here. For a native desktop application, choose a Window pane.</p>
           <p className="muted small">
             Token URLs work as printed, logins stick, and websockets keep running, because this is a real browser view
             rather than a frame.

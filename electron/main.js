@@ -5,12 +5,13 @@
 // folder picker. Electron removes the fight rather than working around it. The Express
 // server is unchanged and still runs on loopback; this process starts it, waits for it,
 // and shows it in a window whose panes may host real Chromium views.
-import { app, BrowserWindow, dialog, ipcMain, safeStorage, screen, session, shell } from "electron";
+import { app, BrowserWindow, desktopCapturer, dialog, ipcMain, safeStorage, screen, session, shell } from "electron";
 import { fork, spawnSync } from "node:child_process";
 import net from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import electronUpdater from "electron-updater";
+import { wireHandoff } from "./handoff.js";
 
 const { autoUpdater } = electronUpdater;
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -189,6 +190,38 @@ function createWindow() {
   });
 
   win.once("ready-to-show", () => win.show());
+  const endHandoff = wireHandoff(win, here, async (route, body) => {
+    const response = await fetch(`http://127.0.0.1:${port}${route}`, body ? {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+    } : undefined);
+    const result = await response.json();
+    if (!response.ok || result.error) throw new Error(result.error || "Could not switch to the app.");
+    return result;
+  });
+  app.on("before-quit", endHandoff);
+  let captureChoice = null;
+  ipcMain.handle("studio:captureSources", async (event) => {
+    if (event.sender !== win.webContents) throw new Error("Capture is only available in Studio");
+    const sources = await desktopCapturer.getSources({ types: ["window", "screen"], thumbnailSize: { width: 240, height: 135 } });
+    return sources.filter((source) => !BrowserWindow.getAllWindows().some((w) => w.getMediaSourceId() === source.id))
+      .map((source) => ({ id: source.id, name: source.name, thumbnail: source.thumbnail.toDataURL() }));
+  });
+  ipcMain.handle("studio:chooseCapture", (event, id) => {
+    if (event.sender !== win.webContents || typeof id !== "string" || !/^(window|screen):/.test(id)) throw new Error("Choose a capture from Studio's picker");
+    if (captureChoice && Date.now() - captureChoice.at < 10000) throw new Error("Another capture is starting. Try again in a moment.");
+    captureChoice = { id, at: Date.now() };
+  });
+  win.webContents.session.setDisplayMediaRequestHandler(async (request, callback) => {
+    const choice = captureChoice;
+    if (request.frame !== win.webContents.mainFrame) { callback({}); return; }
+    captureChoice = null;
+    if (!choice || Date.now() - choice.at > 10000) { callback({}); return; }
+    try {
+      const sources = await desktopCapturer.getSources({ types: ["window", "screen"], thumbnailSize: { width: 0, height: 0 } });
+      const source = sources.find((s) => s.id === choice.id);
+      callback(source ? { video: source } : {});
+    } catch { callback({}); }
+  });
   // A link meant for a new window belongs in the user's own browser, not a bare popup.
   win.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);
