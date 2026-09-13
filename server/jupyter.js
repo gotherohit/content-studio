@@ -68,8 +68,44 @@ export function createJupyter() {
   }
 
   function stop() {
-    if (child) { try { child.kill(); } catch { /* ignore */ } child = null; }
+    if (child) { killTree(child.pid); child = null; }
     return status();
+  }
+
+  /**
+   * `python -m jupyter lab` launches the real server as a grandchild, so killing the
+   * process we spawned leaves JupyterLab running — and still rooted in the project folder.
+   */
+  function killTree(pid) {
+    if (!pid) return;
+    try {
+      if (process.platform === "win32") spawn("taskkill", ["/PID", String(pid), "/T", "/F"], { stdio: "ignore" });
+      else process.kill(-pid, "SIGKILL");
+    } catch { /* already gone */ }
+  }
+
+  /**
+   * Let go of a folder that is about to be deleted.
+   *
+   * JupyterLab is rooted at the project folder and runs with it as its working directory,
+   * and Windows will not delete a folder a process is sitting in. Deleting a project
+   * therefore has to stop the server the app itself started.
+   */
+  async function releaseUnder(dir) {
+    if (!child || !rootDir || !dir) return false;
+    const within = path.resolve(rootDir) === path.resolve(dir)
+      || path.resolve(rootDir).startsWith(path.resolve(dir) + path.sep);
+    if (!within) return false;
+
+    const port = PORT;
+    stop();
+    rootDir = null;
+    // Killing is asynchronous on Windows; wait until nothing answers before reporting done.
+    for (let i = 0; i < 20; i++) {
+      await new Promise((r) => setTimeout(r, 250));
+      try { await fetch(`http://localhost:${port}/api/status`); } catch { return true; }
+    }
+    return true;
   }
 
   /** Streams `pip install jupyterlab` output. Returns a child process. */
@@ -79,5 +115,5 @@ export function createJupyter() {
   }
 
   process.on("exit", stop);
-  return { isInstalled, status, start, stop, install };
+  return { isInstalled, status, start, stop, install, releaseUnder };
 }

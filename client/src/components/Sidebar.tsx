@@ -12,6 +12,8 @@ interface Props {
   onOpenProject: (id: string) => void;
   onNewProject: () => void;
   onDeleteProject: (id: string) => void;
+  /** Shown as busy: shutting Jupyter and any shells down first can take a few seconds. */
+  deletingId: string | null;
   onRenameProject: (title: string) => void;
   onOpenSource: (id: string) => void;
   onRemoveSource: (id: string) => void;
@@ -116,12 +118,15 @@ export function Sidebar(p: Props) {
         actions={<button className="icon-btn" title="New project" onClick={p.onNewProject}><Plus size={15} /></button>}
       >
         {p.projects.map((s) => (
-          <div key={s.id} className={`list-item ${p.project?.id === s.id ? "active" : ""}`} onClick={() => p.onOpenProject(s.id)} title={s.dir}>
+          <div key={s.id} className={`list-item ${p.project?.id === s.id ? "active" : ""} ${p.deletingId === s.id ? "busy" : ""}`} onClick={() => p.onOpenProject(s.id)} title={s.dir}>
             <span className="grow ellipsis">{s.title}</span>
-            <span className="badge">{s.sourceCount}</span>
+            {p.deletingId === s.id
+              ? <span className="muted small">deleting…</span>
+              : <span className="badge">{s.sourceCount}</span>}
             <button
               className="icon-btn danger hover-only"
               title="Delete project"
+              disabled={p.deletingId === s.id}
               onClick={(e) => { e.stopPropagation(); if (confirm(`Delete "${s.title}"?\n\nThis removes its folder and everything in it:\n${s.dir}`)) p.onDeleteProject(s.id); }}
             ><Trash2 size={13} /></button>
           </div>

@@ -2,9 +2,22 @@
 import { WebSocketServer } from "ws";
 import pty from "node-pty";
 import fs from "node:fs/promises";
+import path from "node:path";
+import { spawn } from "node:child_process";
+
+/** A shell may have started things of its own; all of them hold the folder. */
+function killTree(pid) {
+  if (!pid) return;
+  try {
+    if (process.platform === "win32") spawn("taskkill", ["/PID", String(pid), "/T", "/F"], { stdio: "ignore" });
+    else process.kill(-pid, "SIGKILL");
+  } catch { /* already gone */ }
+}
 
 export function attachTerminal(httpServer, { cwdFor }) {
   const wss = new WebSocketServer({ noServer: true });
+  /** Every live shell and the folder it is sitting in. */
+  const live = new Set();
 
   httpServer.on("upgrade", (req, socket, head) => {
     const url = new URL(req.url, "http://localhost");
@@ -29,6 +42,8 @@ export function attachTerminal(httpServer, { cwdFor }) {
       ws.close();
       return;
     }
+    const entry = { term, ws, cwd };
+    live.add(entry);
     term.onData((d) => { if (ws.readyState === ws.OPEN) ws.send(d); });
     term.onExit(({ exitCode }) => { if (ws.readyState === ws.OPEN) { ws.send(`\r\n[process exited with code ${exitCode}]\r\n`); ws.close(); } });
     ws.on("message", (raw) => {
@@ -37,6 +52,28 @@ export function attachTerminal(httpServer, { cwdFor }) {
       if (msg.type === "input") term.write(msg.data);
       else if (msg.type === "resize") term.resize(Math.max(2, msg.cols | 0), Math.max(1, msg.rows | 0));
     });
-    ws.on("close", () => { try { term.kill(); } catch { /* already gone */ } });
+    ws.on("close", () => { live.delete(entry); try { term.kill(); } catch { /* already gone */ } });
   });
+
+  /**
+   * Close every shell sitting inside a folder that is about to be deleted. A shell's
+   * working directory is enough to stop Windows removing the folder.
+   */
+  function closeUnder(dir) {
+    if (!dir) return 0;
+    const root = path.resolve(dir);
+    let closed = 0;
+    for (const entry of [...live]) {
+      const within = path.resolve(entry.cwd) === root || path.resolve(entry.cwd).startsWith(root + path.sep);
+      if (!within) continue;
+      live.delete(entry);
+      killTree(entry.term.pid);
+      try { entry.term.kill(); } catch { /* already gone */ }
+      try { entry.ws.close(); } catch { /* already gone */ }
+      closed++;
+    }
+    return closed;
+  }
+
+  return { closeUnder };
 }

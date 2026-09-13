@@ -168,6 +168,17 @@ app.put("/api/projects/:id", async (req, res) => {
   res.json({ ok: true, updatedAt: project.updatedAt });
 });
 
+/** Killed processes take a moment to let go on Windows, so a first refusal is not final. */
+async function removeWithRetry(dir, attempts = 8) {
+  for (let i = 1; ; i++) {
+    try { return await fs.rm(dir, { recursive: true, force: true }); }
+    catch (e) {
+      if (i >= attempts) throw e;
+      await new Promise((r) => setTimeout(r, 250 * i));
+    }
+  }
+}
+
 app.delete("/api/projects/:id", async (req, res) => {
   if (!safeId(req.params.id)) return res.status(400).json({ error: "bad id" });
   const dir = config.dirOf(req.params.id);
@@ -185,15 +196,21 @@ app.delete("/api/projects/:id", async (req, res) => {
       error: `${dir} does not look like a project folder, so it was left alone. Remove it by hand if you meant to.`,
     });
   }
+  // Let go of the folder first. JupyterLab is rooted there and the Terminal pane's shells
+  // sit in it, and Windows will not delete a folder a process is working in — so the app
+  // was reliably blocking its own delete.
+  const releases = [];
+  if (await jupyter.releaseUnder(dir)) releases.push("JupyterLab");
+  const shells = terminals.closeUnder(dir);
+  if (shells) releases.push(`${shells} terminal${shells === 1 ? "" : "s"}`);
+
   try {
-    await fs.rm(dir, { recursive: true, force: true });
+    await removeWithRetry(dir);
   } catch (e) {
-    // Windows refuses while something holds a file open, and an unhandled rejection here
-    // used to leave the request hanging with nothing shown to anyone.
-    const why = e.code === "EBUSY" || e.code === "EPERM"
-      ? `Something still has a file in ${dir} open. Close anything using it — Explorer, PowerPoint, an editor — and try again.`
+    const why = e.code === "EBUSY" || e.code === "EPERM" || e.code === "ENOTEMPTY"
+      ? `Something outside Content Studio still has a file in ${dir} open — Explorer sitting in the folder, PowerPoint with a deck loaded, or an editor. Close it and try again.`
       : `Could not delete ${dir}: ${e.message}`;
-    return res.status(409).json({ error: why, code: e.code });
+    return res.status(409).json({ error: why, code: e.code, released: releases });
   }
   await config.forget(req.params.id);
   res.json({ ok: true });
@@ -531,7 +548,7 @@ process.on("unhandledRejection", (e) => console.error("unhandled rejection:", e?
 
 const server = http.createServer(app);
 browser.attach(server);
-attachTerminal(server, { cwdFor: (projectId) => (projectId && safeId(projectId) ? config.dirOf(projectId) : config.appDir()) });
+const terminals = attachTerminal(server, { cwdFor: (projectId) => (projectId && safeId(projectId) ? config.dirOf(projectId) : config.appDir()) });
 // Local apps embedded through the proxy do their real work over websockets.
 server.on("upgrade", (req, socket, head) => {
   // The terminal is a shell; this check matters more here than anywhere else.

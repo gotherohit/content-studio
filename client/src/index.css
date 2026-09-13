@@ -761,3 +761,5 @@ mark.hl:hover { filter: brightness(0.94); }
 .presenter-script ul, .presenter-script ol { padding-left: 1.2em; margin: 0.4em 0; }
 .presenter-script li { margin: 0.25em 0; }
 .presenter-script strong { color: var(--accent); }
+
+.list-item.busy { opacity: 0.55; pointer-events: none; }

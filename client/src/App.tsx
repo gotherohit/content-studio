@@ -93,6 +93,8 @@ export default function App() {
   const [showHud, setShowHud] = useState(lsGet("hud", "1") === "1");
   const [presenterOpen, setPresenterOpen] = useState(false);
   const [scriptFor, setScriptFor] = useState<string | null>(null);
+  /** Deleting can take a few seconds when Jupyter or a shell has to be shut down first. */
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const presenterStateRef = useRef<() => void>(() => {});
   /** Read by the global key handler, which is registered before the beat helpers exist. */
   const goToBeatRef = useRef<(i: number) => void>(() => {});
@@ -245,12 +247,16 @@ export default function App() {
     // folder, so the project appears to come back.
     if (saveTimer.current) { window.clearTimeout(saveTimer.current); saveTimer.current = null; }
     dirtyRef.current = false;
+    setDeletingId(id);
+    setError(null);
     try {
       await api.deleteProject(id);
     } catch (e) {
       // Silence here was the bug: a delete that failed simply did nothing.
       setError((e as Error).message);
       return;
+    } finally {
+      setDeletingId(null);
     }
     if (project?.id === id) { setProject(null); setActiveSourceId(null); setBeatIndex(-1); lsSet("lastProject", ""); }
     setSaveState("saved");
@@ -618,6 +624,7 @@ export default function App() {
           onOpenProject={openProject}
           onNewProject={() => setShowNewProject(true)}
           onDeleteProject={deleteProject}
+          deletingId={deletingId}
           onRenameProject={(title) => mutate((p) => ({ ...p, title }))}
           onOpenSource={(id) => { setActiveSourceId(id); setSelectedHl(null); }}
           onRemoveSource={(id) => { mutate((p) => ({ ...p, sources: p.sources.filter((s) => s.id !== id) })); if (activeSourceId === id) setActiveSourceId(null); }}

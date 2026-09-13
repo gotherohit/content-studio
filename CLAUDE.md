@@ -110,6 +110,13 @@ wait. The AI request aborts when the pane closes. Assume a recording is in progr
   id lives inside `project.json`. Overriding `USERPROFILE` gives the server its own home
   but stops Electron starting, so isolate by using a scratch *project folder*, never by
   running a second copy against real data.
+- **The app holds its own project folders open.** JupyterLab is rooted at the project dir
+  and every Terminal PTY has it as `cwd`, and Windows will not delete a folder a process is
+  working in. Deleting a project must call `jupyter.releaseUnder()` and
+  `terminals.closeUnder()` first.
+- **`child.kill()` does not kill a tree on Windows.** `python -m jupyter lab` launches the
+  real server as a grandchild, which survives and keeps holding the folder. Use
+  `taskkill /PID <pid> /T /F`, then wait for it to stop answering.
 - **Updates are ~115 MB and do not resume.** Restarting the app mid-download throws it
   away. If a user reports "it never updates", check for a part-file in
   `%LOCALAPPDATA%\content-studio-updater\pending\` before assuming a bug.

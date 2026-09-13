@@ -2,6 +2,12 @@
 
 What changed in each release, newest first. Versions are the ones the app updates itself to.
 
+## 0.7.1
+
+- **Deleting a project no longer fails because the app itself is holding the folder.** JupyterLab is rooted in the project folder and the Terminal pane's shells sit in it, and Windows will not delete a folder a process is working in — so Content Studio was reliably blocking its own delete. It now shuts those down first, kills the whole process tree rather than just the process it launched, and retries.
+- The sidebar shows *deleting…* while that happens, since shutting Jupyter down takes a few seconds.
+- If something outside the app still holds the folder, the message now says so specifically.
+
 ## 0.7.0
 
 - **A new project gets its own folder inside the one you pick.** Choosing `D:\Videos` and naming a project *How Git Actually Stores Your Code* creates `D:\Videos\how-git-actually-stores-your-code`. The dialog shows the path before you commit to it, and a name already in use gets a number rather than clashing.
