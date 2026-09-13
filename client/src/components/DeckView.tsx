@@ -46,6 +46,7 @@ export function DeckView({ projectId, name, slideshow, slideIndex, onSlideIndex,
   useEffect(() => {
     if (!slideshow || !slides.length) return;
     const onKey = (e: KeyboardEvent) => {
+      if (document.querySelector(".app.present")) return;
       const t = e.target as HTMLElement;
       if (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable) return;
       if (["ArrowRight", "PageDown", " "].includes(e.key)) { onSlideIndex(Math.min(slides.length - 1, idx + 1)); e.preventDefault(); }

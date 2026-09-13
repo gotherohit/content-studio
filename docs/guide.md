@@ -87,12 +87,47 @@ A beat is one step in your argument, and the **stage** that serves it: which pan
 
 In **Present** mode, **→** (or Space) applies the next beat and **←** the previous one. That is the whole interface while recording: the panes rearrange themselves and the right highlight scrolls into view, so the only job left is talking.
 
+The **+ Beat** button saves the current arrangement immediately after the current beat
+(or at the end if none is selected). Each row gives the point its own line. Click its
+number or **Show** to go there; **Restore** returns to its saved arrangement after you
+have scrolled or experimented. Use **Duplicate beat** to reuse its arrangement and script
+as a starting point. Moving a row keeps the same beat on screen, even if its number changes.
+
+Deleting a beat or replacing its arrangement offers **Undo** above the list, without a
+confirmation dialog. Undo restores the last such edit during this session; undoing an
+arrangement change preserves any script or point you edited afterwards. It does not undo
+changes to the underlying source or drawing.
+
+Presentation keys also work while an **Original** article has focus. **Home** and **End**
+jump to the first and last beats in the studio or presenter window. Text fields keep their
+normal typing keys. Starting Present mode with no beat selected opens the first beat.
+
 Things worth knowing:
 
+* **Each Source pane remembers its own reading position.** Capture the beat after arranging
+  and scrolling its panes. You can show the same blog twice at different passages, alongside
+  a canvas, and return to both positions. Reader/Original mode is also remembered per pane.
+  Beat changes jump directly, without an animated scroll through the article. Content anchors
+  keep the passage in place when text reflows in a different pane width; late layout changes
+  are corrected for a short settling period, until you interact with the page.
+* **Older beats need one re-capture to remember reading positions.** They still restore their
+  saved highlights, immediately, but cannot recover scroll positions that were never saved.
+  Arrange the old beat as you want it and use its camera button once.
+* **Reading positions cover Original web pages, Reader, and scrollable in-app file views.**
+  Native PDF viewers and separate Browser/Embed panes do not expose their internal reading
+  positions to beats. Highly dynamic pages or sites with their own nested scrolling areas
+  may need Reader view for reliable passage restoration. A page that cannot confirm restoration
+  shows a visible error instead of staying concealed.
+* **Source slides keep their captured page when a pane mounts.** In Present mode, the arrow
+  keys advance the beat rather than also advancing a slide inside it.
 * **The canvas is one drawing per project, framed per beat.** A stage remembers the canvas
   pan and zoom, so beat 3 can sit on the left half of a diagram and beat 7 zoom into one
   corner of it. What it does not do is give each beat a separate drawing — improve the
   drawing and every beat showing it improves.
+  Multiple Canvas panes can frame different parts of that same drawing independently.
+  Drawing edits are shared immediately, so a fast beat switch does not leave the latest
+  stroke waiting in an unmounted pane; changing one pane's view cannot overwrite another
+  pane's newer drawing.
 * **A stage stores references, not copies.** Improve a note or refine a drawing and every beat pointing at it shows the better version. Only the arrangement is frozen.
 * **What you do inside a beat is not saved over it.** Scroll away, run a cell, make a mess — the beat still holds what you captured. Re-capture only when you ask for it, with the camera on that row.
 * **A broken reference is loud.** If a beat's source or highlight has been deleted, it restores everything it still can and says what it could not, rather than quietly showing the wrong thing.
@@ -213,6 +248,7 @@ A key that cannot be decrypted is **kept, not discarded** — the provider simpl
 | `Alt+B` | Show or hide the sidebar |
 | Drag between panes | Resize columns and rows |
 | `→` `←` `Space` | Next or previous beat, in Present mode |
+| `Home` / `End` | First / last beat, in Present mode or the presenter window |
 | `h` | Hide or show the beat strip |
 | `→` `←` `Space` | Navigate slides, when not presenting |
 | `Ctrl+Enter` | Run the current code snippet |

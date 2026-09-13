@@ -65,6 +65,7 @@ export type LayoutPreset = "1" | "2" | "3" | "4" | "1+2" | "2+1";
 export interface PaneConfig {
   kind: PaneKind;
   sourceId?: string | null;
+  mode?: "original" | "reader";
 }
 
 export interface Layout {
@@ -83,8 +84,21 @@ export interface CanvasView {
 
 /** What a Source pane is doing beyond which source it shows: paging a deck, say. */
 export interface PaneView {
+  canvasView?: CanvasView;
+  sourceId?: string;
+  mode?: "original" | "reader";
+  position?: ReadingPosition;
   slideshow?: boolean;
   slideIndex?: number;
+}
+
+/** A content anchor plus its position within the viewport, rather than just pixels. */
+export interface ReadingPosition {
+  x: number;
+  y: number;
+  anchor?: number;
+  text?: string;
+  offset?: number;
 }
 
 /**

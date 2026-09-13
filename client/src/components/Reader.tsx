@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import DOMPurify from "dompurify";
 import type { Highlight, HighlightColor, Source } from "../types";
 import { applyHighlights, captureSelection } from "../highlighter";
@@ -19,7 +19,7 @@ export function Reader({ source, scrollToId, scrollNonce, onAddHighlight, onSele
   const [popup, setPopup] = useState<{ x: number; y: number; flip: boolean; anchor: NonNullable<ReturnType<typeof captureSelection>> } | null>(null);
 
   // Render sanitized HTML, then lay the highlights over it.
-  useEffect(() => {
+  useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
     el.innerHTML = DOMPurify.sanitize(source.content, { ADD_ATTR: ["target"] });
@@ -33,7 +33,7 @@ export function Reader({ source, scrollToId, scrollNonce, onAddHighlight, onSele
 
   useEffect(() => {
     if (!scrollToId) return;
-    ref.current?.querySelector<HTMLElement>(`mark.hl[data-hid="${scrollToId}"]`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    ref.current?.querySelector<HTMLElement>(`mark.hl[data-hid="${scrollToId}"]`)?.scrollIntoView({ behavior: "instant", block: "center" });
   }, [scrollToId, scrollNonce]);
 
   function onMouseUp(e: React.MouseEvent) {

@@ -1,14 +1,24 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import { Excalidraw } from "@excalidraw/excalidraw";
 import "@excalidraw/excalidraw/index.css";
 import type { CanvasView, Project } from "../types";
 
 /** Only the part of Excalidraw's API this pane uses, so a version bump cannot break the import. */
-type CanvasApi = { updateScene: (scene: { appState: Record<string, unknown> }) => void };
+type CanvasApi = {
+  updateScene: (scene: { appState?: Record<string, unknown>; elements?: unknown[] }) => void;
+  addFiles: (files: unknown[]) => void;
+};
+
+function sceneVersion(elements: readonly unknown[], files?: Record<string, unknown>) {
+  return elements.map((element) => {
+    const el = element as { id: string; version: number; versionNonce: number };
+    return `${el.id}:${el.version}:${el.versionNonce}`;
+  }).join("|") + Object.keys(files ?? {}).join("|");
+}
 
 interface Props {
   canvas: Project["canvas"];
-  onChange: (c: Project["canvas"]) => void;
+  onChange: (c: NonNullable<Project["canvas"]>, sceneChanged: boolean) => void;
   dark: boolean;
   /** Where a beat wants the canvas pointed. */
   view: CanvasView | null;
@@ -20,25 +30,42 @@ interface Props {
 
 export function CanvasPanel({ canvas, onChange, dark, view, viewNonce, onView }: Props) {
   const timer = useRef<number | null>(null);
-  const api = useRef<CanvasApi | null>(null);
+  const contentVersion = useRef("");
+  const syncing = useRef(false);
+  const [api, setApi] = useState<CanvasApi | null>(null);
+  const receiveApi = useCallback((instance: unknown) => setApi(instance as CanvasApi), []);
   const last = useRef<CanvasView | null>(null);
+  useLayoutEffect(() => () => { if (timer.current) window.clearTimeout(timer.current); }, []);
+  useLayoutEffect(() => {
+    if (!api || !canvas) return;
+    const version = sceneVersion(canvas.elements, canvas.files);
+    if (contentVersion.current === version) return;
+    if (timer.current) window.clearTimeout(timer.current);
+    contentVersion.current = version;
+    syncing.current = true;
+    try {
+      api.addFiles(Object.values(canvas.files ?? {}));
+      api.updateScene({ elements: canvas.elements });
+    } finally { syncing.current = false; }
+  }, [api, canvas?.elements, canvas?.files]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // A beat frames its own part of the drawing, rather than each beat needing its own canvas.
-  useEffect(() => {
-    if (!view || !api.current) return;
-    api.current.updateScene({
+  useLayoutEffect(() => {
+    if (!view || !api) return;
+    api.updateScene({
       appState: { scrollX: view.scrollX, scrollY: view.scrollY, zoom: { value: view.zoom } },
     });
-  }, [viewNonce]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [viewNonce, api]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="canvas-host">
       <Excalidraw
         theme={dark ? "dark" : "light"}
-        excalidrawAPI={(instance: unknown) => (api.current = instance as CanvasApi)}
-        initialData={canvas ? { elements: canvas.elements as never, appState: { ...(canvas.appState as object), collaborators: new Map() } as never, files: canvas.files as never } : undefined}
+        excalidrawAPI={receiveApi}
+        initialData={{ elements: (canvas?.elements ?? []) as never, appState: { ...(canvas?.appState as object), ...(view ? { scrollX: view.scrollX, scrollY: view.scrollY, zoom: { value: view.zoom } } : {}), collaborators: new Map() } as never, files: canvas?.files as never }}
         onChange={(elements, appState, files) => {
-          // Panning and zooming is reported at once; the drawing itself is saved on a pause.
+          if (syncing.current) return;
+          // Keep scene edits in project state before a beat can unmount this pane.
           const now = {
             scrollX: Math.round(appState.scrollX),
             scrollY: Math.round(appState.scrollY),
@@ -51,10 +78,15 @@ export function CanvasPanel({ canvas, onChange, dark, view, viewNonce, onView }:
           }
 
           if (timer.current) window.clearTimeout(timer.current);
-          timer.current = window.setTimeout(() => {
-            const { collaborators: _c, ...rest } = appState as unknown as Record<string, unknown>;
-            onChange({ elements: elements as unknown[], appState: rest, files: files as unknown as Record<string, unknown> });
-          }, 600);
+          const { collaborators: _c, ...rest } = appState as unknown as Record<string, unknown>;
+          const next = { elements: elements as unknown[], appState: rest, files: files as unknown as Record<string, unknown> };
+          const version = sceneVersion(elements, files);
+          if (version !== contentVersion.current) {
+            contentVersion.current = version;
+            onChange(next, true);
+          } else {
+            timer.current = window.setTimeout(() => onChange(next, false), 600);
+          }
         }}
         UIOptions={{ canvasActions: { loadScene: false } }}
       />

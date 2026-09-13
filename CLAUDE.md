@@ -104,6 +104,12 @@ wait. The AI request aborts when the pane closes. Assume a recording is in progr
 - **A window that subscribes late misses what was already published.** This bit both the
   update banner and the presenter window. Anything IPC-published needs a way to ask for the
   current state on mount.
+- **Beat restoration belongs to each pane, after its content is ready.** Keep reading
+  positions separate from the live scroll reports, tag iframe replies with the restoration
+  nonce, and use instant scrolling. Document scroll events fire on `document`, not the
+  document's scrolling element. A concealed iframe may suspend animation frames, so
+  acknowledge its synchronous restore without waiting for one. Excalidraw can expose its
+  API after the initial effect: restore again when that API arrives.
 - **A second server instance is not isolated.** Every instance shares
   `~/.content-studio/`, so a test server registering or deleting a project rewrites the
   *real* index. Deleting a clone of a project also unregisters the original, because the

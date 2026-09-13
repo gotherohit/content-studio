@@ -1,11 +1,16 @@
 /* Runs inside the framed copy of an article. Talks to the app through postMessage. */
-(function () {
+(async function () {
+  var positionModule = await import(new URL("./reading-position.js", document.currentScript.src).href);
   var CTX = 40;
   var parentWin = window.parent;
   var send = function (msg) { parentWin.postMessage(Object.assign({ src: "rs-frame" }, msg), "*"); };
   var pageUrl = location.href;
   var currentList = [];
   var applying = false;
+  var stopTracking = null;
+  var positionNonce = null;
+  var pendingHighlight = null;
+  var presenting = false;
 
   function textNodes(root) {
     var out = [], w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT), n;
@@ -70,6 +75,11 @@
       root.normalize();
     });
     setTimeout(function () { applying = false; }, 0);
+    if (pendingHighlight) jumpToHighlight();
+  }
+  function jumpToHighlight() {
+    var el = Array.from(document.querySelectorAll("mark.rs-hl")).find(function (mark) { return mark.getAttribute("data-hid") === pendingHighlight; });
+    if (el) { el.scrollIntoView({ behavior: "instant", block: "center" }); pendingHighlight = null; }
   }
   // Page scripts (React hydration etc.) may replace the DOM and drop our marks: re-apply when that happens.
   var reapplyTimer = null;
@@ -127,17 +137,43 @@
   // forms/submit and anything else that would navigate away from our origin
   document.addEventListener("submit", function (e) { e.preventDefault(); }, true);
 
+  // Key events do not bubble out of an iframe. Forward only presentation commands.
+  window.addEventListener("keydown", function (e) {
+    var target = e.target;
+    if (!presenting || e.ctrlKey || e.metaKey || e.altKey || target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
+    if (["ArrowRight", "ArrowLeft", "PageDown", "PageUp", " ", "Home", "End", "Escape", "h"].indexOf(e.key) < 0) return;
+    e.preventDefault(); e.stopImmediatePropagation();
+    send({ type: "presentationKey", key: e.key });
+  }, true);
+
   window.addEventListener("message", function (e) {
     var m = e.data || {};
-    if (m.src !== "rs-app") return;
+    if (m.src !== "rs-app" || e.source !== parentWin) return;
+    if (m.type === "presentation") presenting = Boolean(m.enabled);
+    if (m.type === "restorePosition" && m.nonce !== positionNonce) {
+      positionNonce = m.nonce;
+      if (m.position) userScrolled = true;
+      pendingHighlight = null;
+      if (stopTracking) stopTracking();
+      stopTracking = positionModule.trackReadingPosition(document.body, document.scrollingElement, m.position, function (position) {
+        send({ type: "position", position: position, nonce: positionNonce });
+      });
+      // A concealed iframe may not receive animation frames; acknowledge the synchronous jump.
+      send({ type: "positionRestored", nonce: positionNonce });
+    }
     if (m.type === "highlights") {
       currentList = m.list || [];
       var delay = document.readyState === "complete" ? 0 : 800;
       setTimeout(function () { applyHighlights(currentList); }, delay);
     }
     if (m.type === "scrollTo") {
-      var el = document.querySelector("mark.rs-hl[data-hid='" + m.id + "']");
-      if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+      userScrolled = true;
+      if (stopTracking) stopTracking();
+      stopTracking = positionModule.trackReadingPosition(document.body, document.scrollingElement, undefined, function (position) {
+        send({ type: "position", position: position, nonce: positionNonce });
+      });
+      pendingHighlight = m.id;
+      jumpToHighlight();
     }
     if (m.type === "clearSelection") { var s = window.getSelection(); if (s) s.removeAllRanges(); }
   });

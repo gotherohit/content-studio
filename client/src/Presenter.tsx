@@ -33,7 +33,7 @@ export default function Presenter() {
     try { return Number(localStorage.getItem("presenterScale")) || 1; } catch { return 1; }
   });
   const startedAt = useRef<number | null>(null);
-  const lastIndex = useRef<number>(-1);
+  const lastBeat = useRef<string | null>(null);
 
   // The theme is the studio's, read from the same place it stores it.
   useEffect(() => {
@@ -65,8 +65,10 @@ export default function Presenter() {
 
   // Every beat change while the clock runs becomes a line of the chapter list.
   useEffect(() => {
-    if (!state || state.index === lastIndex.current) return;
-    lastIndex.current = state.index;
+    if (!state) return;
+    const identity = `${state.projectId}:${state.beats[state.index]?.id ?? ""}`;
+    if (identity === lastBeat.current) return;
+    lastBeat.current = identity;
     if (!running || state.index < 0) return;
     const at = startedAt.current ? (Date.now() - startedAt.current) / 1000 : 0;
     setLog((l) => [...l, { at, label: state.beats[state.index]?.point || `Beat ${state.index + 1}` }]);
@@ -78,9 +80,12 @@ export default function Presenter() {
   // The arrow keys work here too, so the creator can drive from either window.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.target as HTMLElement)?.tagName === "INPUT") return;
+      const target = e.target as HTMLElement;
+      if (["INPUT", "TEXTAREA", "SELECT"].includes(target?.tagName) || target?.isContentEditable || e.ctrlKey || e.metaKey || e.altKey) return;
       if (["ArrowRight", "PageDown", " "].includes(e.key)) { send({ type: "next" }); e.preventDefault(); }
       if (["ArrowLeft", "PageUp"].includes(e.key)) { send({ type: "prev" }); e.preventDefault(); }
+      if (e.key === "Home" && state?.beats.length) { send({ type: "goto", index: 0 }); e.preventDefault(); }
+      if (e.key === "End" && state?.beats.length) { send({ type: "goto", index: state.beats.length - 1 }); e.preventDefault(); }
       if (e.key === "f") { mark(true); e.preventDefault(); }
     };
     window.addEventListener("keydown", onKey);

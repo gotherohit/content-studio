@@ -2,6 +2,18 @@
 
 What changed in each release, newest first. Versions are the ones the app updates itself to.
 
+## 0.9.0
+
+- **Beats return each article pane to its own passage, without animated scrolling.** Captures now include independent reading positions and Reader/Original modes, including two panes showing different parts of the same source. Content anchors account for text reflow and brief late layout changes. Older beats retain highlight-based navigation and can be re-captured to gain reading positions.
+- **Restoring a beat no longer resets a source's slide state on mount.** Presentation keys advance the running order without also advancing source slides.
+- **Canvas views restore after the drawing API is ready**, including newly mounted panes; multiple canvas panes remember independent views of the shared drawing.
+- Missing pinned sources show an error and an empty pane instead of silently substituting another article. Original pages that cannot confirm restoration show an error rather than remaining concealed.
+- **A clearer beat list:** titles have their own row, new beats insert after the current one, and Duplicate reuses an arrangement and script. Deleting a beat or replacing its arrangement offers Undo.
+- **The current beat keeps its identity when the running order changes.** Reordering other beats no longer changes the current selection or adds a false chapter marker in the presenter log.
+- Presentation keys work inside Original articles, without interfering with text fields. Home/End jump to the first/last beat, and starting Present without a selection opens the first beat.
+- **Fast beat switches keep the latest canvas edits.** Multiple canvas panes synchronise the shared drawing; viewport-only changes preserve newer scene content.
+- Added eight beat regression tests, also run by the release workflow.
+
 ## 0.8.1
 
 - **The canvas pane shows its drawing tools again — and the drawing.** The container Excalidraw sits in never grew into the pane, so it had zero height: every tool and the whole drawing surface were rendered, just invisibly. It now fills the pane.

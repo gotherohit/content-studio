@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
   ArrowDown, ArrowUp, Camera, ChevronDown, ChevronRight, Clapperboard, FileCode2, FileText, FolderOpen,
-  Image, Plus, Presentation, ScrollText, Settings, Table2, Trash2, X,
+  Copy, Image, Plus, Presentation, ScrollText, Settings, Table2, Trash2, Undo2, X,
 } from "lucide-react";
 import type { Beat, Project, ProjectSummary } from "../types";
 
@@ -26,7 +26,10 @@ interface Props {
   onMoveBeat: (from: number, to: number) => void;
   onRemoveBeat: (id: string) => void;
   onEditScript: (id: string) => void;
-  captureStage: () => Beat["stage"];
+  onRecaptureBeat: (id: string) => void;
+  onDuplicateBeat: (id: string) => void;
+  undoLabel: string | null;
+  onUndoBeat: () => void;
 }
 
 const lsGet = (k: string, d: string) => { try { return localStorage.getItem(k) ?? d; } catch { return d; } };
@@ -69,7 +72,7 @@ function Section({ id, title, count, actions, children }: {
  * screen rather than in a separate step, and re-capture replaces the arrangement without
  * disturbing the text.
  */
-function BeatRow({ beat, index, active, last, onGo, onPoint, onRecapture, onMove, onRemove, onScript }: {
+function BeatRow({ beat, index, active, last, onGo, onPoint, onRecapture, onMove, onRemove, onScript, onDuplicate }: {
   beat: Beat; index: number; active: boolean; last: boolean;
   onGo: () => void;
   onPoint: (point: string) => void;
@@ -77,26 +80,35 @@ function BeatRow({ beat, index, active, last, onGo, onPoint, onRecapture, onMove
   onMove: (delta: -1 | 1) => void;
   onRemove: () => void;
   onScript: () => void;
+  onDuplicate: () => void;
 }) {
   return (
-    <div className={`list-item beat-row ${active ? "active" : ""}`} onClick={onGo}>
-      <span className="beat-no">{index + 1}</span>
+    <div className={`list-item beat-row ${active ? "active" : ""}`}>
+      <div className="beat-heading">
+      <button className="beat-no" title={`Show beat ${index + 1}`} aria-current={active ? "step" : undefined} onClick={onGo}>{index + 1}</button>
       <input
         className="beat-point grow"
         value={beat.point}
-        placeholder="The point this makes…"
+        aria-label={`Beat ${index + 1} point`}
+        placeholder={`Beat ${index + 1} — add your point`}
         onClick={(e) => e.stopPropagation()}
         onChange={(e) => onPoint(e.target.value)}
       />
+      </div>
+      <div className="beat-actions">
+      <button className="ghost small beat-show" onClick={onGo} title="Restore this beat's saved arrangement">{active ? "Restore" : "Show"}</button>
+      <span className="grow" />
       <button
-        className={beat.script?.trim() ? "icon-btn has-script" : "icon-btn hover-only"}
+        className={beat.script?.trim() ? "icon-btn has-script" : "icon-btn"}
         title={beat.script?.trim() ? "Edit what to say here" : "Write what to say here"}
         onClick={(e) => { e.stopPropagation(); onScript(); }}
       ><ScrollText size={12} /></button>
-      <button className="icon-btn hover-only" title="Move up" disabled={index === 0} onClick={(e) => { e.stopPropagation(); onMove(-1); }}><ArrowUp size={12} /></button>
-      <button className="icon-btn hover-only" title="Move down" disabled={last} onClick={(e) => { e.stopPropagation(); onMove(1); }}><ArrowDown size={12} /></button>
-      <button className="icon-btn hover-only" title="Replace this beat's arrangement with what is on screen" onClick={(e) => { e.stopPropagation(); onRecapture(); }}><Camera size={12} /></button>
-      <button className="icon-btn danger hover-only" title="Delete beat" onClick={(e) => { e.stopPropagation(); onRemove(); }}><X size={12} /></button>
+      <button className="icon-btn" title="Move up" disabled={index === 0} onClick={onMove.bind(null, -1)}><ArrowUp size={12} /></button>
+      <button className="icon-btn" title="Move down" disabled={last} onClick={onMove.bind(null, 1)}><ArrowDown size={12} /></button>
+      <button className="icon-btn" title="Duplicate beat" onClick={onDuplicate}><Copy size={12} /></button>
+      <button className="icon-btn" title="Replace this beat's arrangement with what is on screen" onClick={onRecapture}><Camera size={12} /></button>
+      <button className="icon-btn danger" title="Delete beat" onClick={onRemove}><X size={12} /></button>
+      </div>
     </div>
   );
 }
@@ -161,11 +173,12 @@ export function Sidebar(p: Props) {
             title="Beats"
             count={p.project.beats?.length ?? 0}
             actions={
-              <button className="icon-btn" title="Save what is on screen as a beat" onClick={p.onCaptureBeat}>
-                <Camera size={15} />
+              <button className="ghost small" title="Save what is on screen as a beat" onClick={p.onCaptureBeat}>
+                <Plus size={13} /> Beat
               </button>
             }
           >
+            {p.undoLabel && <div className="beat-undo" role="status"><span>{p.undoLabel}</span><button className="ghost small" onClick={p.onUndoBeat}><Undo2 size={12} /> Undo</button></div>}
             {(p.project.beats ?? []).map((b, i) => (
               <BeatRow
                 key={b.id}
@@ -175,7 +188,8 @@ export function Sidebar(p: Props) {
                 last={i === (p.project?.beats?.length ?? 0) - 1}
                 onGo={() => p.onGoToBeat(i)}
                 onPoint={(point) => p.onEditBeat(b.id, (x) => ({ ...x, point }))}
-                onRecapture={() => p.onEditBeat(b.id, (x) => ({ ...x, stage: p.captureStage() }))}
+                onRecapture={() => p.onRecaptureBeat(b.id)}
+                onDuplicate={() => p.onDuplicateBeat(b.id)}
                 onMove={(delta) => p.onMoveBeat(i, i + delta)}
                 onRemove={() => p.onRemoveBeat(b.id)}
                 onScript={() => p.onEditScript(b.id)}

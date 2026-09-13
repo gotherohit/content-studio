@@ -4,8 +4,9 @@ import {
   PanelLeftOpen, Paperclip, Plus, Presentation, Square, SquareSplitHorizontal, SquareSplitVertical, Sun, X,
 } from "lucide-react";
 import { viewerForExt } from "./types";
+import { duplicateBeat, insertBeatAfter, moveBeatInList } from "./beats";
 import { desktop } from "./desktop";
-import type { Beat, CanvasView, Highlight, Layout, LayoutPreset, PaneConfig, PaneKind, PaneView, Project, ProjectSummary, Source, Stage } from "./types";
+import type { Beat, CanvasView, Highlight, Layout, LayoutPreset, PaneConfig, PaneKind, PaneView, Project, ProjectSummary, ReadingPosition, Source, Stage } from "./types";
 import { api, type AppConfig } from "./api";
 import { UpdateBanner } from "./components/UpdateBanner";
 import { Sidebar } from "./components/Sidebar";
@@ -87,12 +88,16 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [present, setPresent] = useState(false);
   const [paneViews, setPaneViews] = useState<Record<number, PaneView>>({});
+  const [stageNonce, setStageNonce] = useState(0);
+  const positions = useRef<Record<number, { projectId: string; sourceId: string; mode: string; position: ReadingPosition }>>({});
+  const canvasViews = useRef<Record<number, CanvasView>>({});
   /** Where the canvas is looking now, and where a beat wants it pointed. */
   const canvasViewRef = useRef<CanvasView | null>(null);
   const [canvasTarget, setCanvasTarget] = useState<CanvasView | null>(null);
   const [canvasNonce, setCanvasNonce] = useState(0);
   /** Which beat was applied last, so Present mode knows where it is in the running order. */
-  const [beatIndex, setBeatIndex] = useState(-1);
+  const [activeBeatId, setActiveBeatId] = useState<string | null>(null);
+  const [beatUndo, setBeatUndo] = useState<{ projectId: string; label: string; apply: (p: Project) => Project } | null>(null);
   /** The beat strip is inside the window, so anything capturing the window records it. */
   const [showHud, setShowHud] = useState(lsGet("hud", "1") === "1");
   const [presenterOpen, setPresenterOpen] = useState(false);
@@ -102,6 +107,7 @@ export default function App() {
   const presenterStateRef = useRef<() => void>(() => {});
   /** Read by the global key handler, which is registered before the beat helpers exist. */
   const goToBeatRef = useRef<(i: number) => void>(() => {});
+  const presentationKeyRef = useRef<(key: string) => boolean>(() => false);
   const [showSettings, setShowSettings] = useState(false);
   const [showNewProject, setShowNewProject] = useState(false);
   const [collapsed, setCollapsed] = useState(lsGet("collapsed", "0") === "1");
@@ -118,11 +124,25 @@ export default function App() {
   const source = project?.sources.find((s) => s.id === activeSourceId) ?? null;
   const layout = project?.layout ?? DEFAULT_LAYOUT;
   const beats = project?.beats ?? [];
+  const beatIndex = beats.findIndex((beat) => beat.id === activeBeatId);
   // The presenter window's commands arrive outside React's render flow.
   const beatsRef = useRef(beats);
   const beatIndexRef = useRef(beatIndex);
   beatsRef.current = beats;
   beatIndexRef.current = beatIndex;
+  presentationKeyRef.current = (key) => {
+    if (!present) return false;
+    const last = beatsRef.current.length - 1;
+    if (key === "Escape") { setPresent(false); return true; }
+    if (last < 0) return false;
+    if (["ArrowRight", "PageDown", " "].includes(key)) goToBeatRef.current(Math.min(last, beatIndexRef.current + 1));
+    else if (["ArrowLeft", "PageUp"].includes(key)) goToBeatRef.current(Math.max(0, beatIndexRef.current - 1));
+    else if (key === "Home") goToBeatRef.current(0);
+    else if (key === "End") goToBeatRef.current(last);
+    else if (key === "h") setShowHud((v) => { lsSet("hud", v ? "0" : "1"); return !v; });
+    else return false;
+    return true;
+  };
 
   const refreshList = useCallback(() => api.listProjects().then(setProjects), []);
 
@@ -153,6 +173,13 @@ export default function App() {
     }
     setProject(p);
     setActiveSourceId(p.sources[0]?.id ?? null);
+    setPaneViews({});
+    positions.current = {};
+    canvasViews.current = {};
+    setCanvasTarget(null);
+    canvasViewRef.current = null;
+    setActiveBeatId(null);
+    setBeatUndo(null);
     setSelectedHl(null);
     lsSet("lastProject", id);
     adoptFolderFiles(p).catch(() => {});
@@ -190,6 +217,7 @@ export default function App() {
     setProject((prev) => {
       if (!prev) return prev;
       const next = fn(prev);
+      if (next === prev) return prev;
       dirtyRef.current = true;
       setSaveState("dirty");
       if (saveTimer.current) window.clearTimeout(saveTimer.current);
@@ -218,22 +246,19 @@ export default function App() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement;
-      const typing = t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable;
+      const typing = ["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName) || t.isContentEditable;
       if (e.altKey && !typing) {
-        if (e.key === "p") { setPresent((v) => !v); e.preventDefault(); }
+        if (e.key === "p") { if (!present && beatIndexRef.current < 0 && beatsRef.current.length) goToBeatRef.current(0); setPresent((v) => !v); e.preventDefault(); }
         if (e.key === "b") { setCollapsed((v) => !v); e.preventDefault(); }
       }
       if (e.key === "Escape" && present && !document.fullscreenElement) setPresent(false);
       // While presenting, one key is the whole interface: the next beat.
-      if (present && !typing && beats.length) {
-        if (e.key === "ArrowRight" || e.key === "PageDown" || e.key === " ") { goToBeatRef.current(Math.min(beats.length - 1, beatIndex + 1)); e.preventDefault(); }
-        if (e.key === "ArrowLeft" || e.key === "PageUp") { goToBeatRef.current(Math.max(0, beatIndex - 1)); e.preventDefault(); }
-        // Screen capture takes the whole window, so the strip has to be easy to banish.
-        if (e.key === "h") { setShowHud((v) => { lsSet("hud", v ? "0" : "1"); return !v; }); e.preventDefault(); }
+      if (present && !typing && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        if (presentationKeyRef.current(e.key)) { e.preventDefault(); e.stopImmediatePropagation(); }
       }
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
   }, [present, beats.length, beatIndex]);
 
   // ---- actions
@@ -242,6 +267,13 @@ export default function App() {
     await refreshList();
     setProject(p);
     setActiveSourceId(null);
+    setPaneViews({});
+    positions.current = {};
+    canvasViews.current = {};
+    setCanvasTarget(null);
+    canvasViewRef.current = null;
+    setActiveBeatId(null);
+    setBeatUndo(null);
     setSelectedHl(null);
     lsSet("lastProject", p.id);
   }
@@ -262,7 +294,7 @@ export default function App() {
     } finally {
       setDeletingId(null);
     }
-    if (project?.id === id) { setProject(null); setActiveSourceId(null); setBeatIndex(-1); lsSet("lastProject", ""); }
+    if (project?.id === id) { setProject(null); setActiveSourceId(null); setActiveBeatId(null); setBeatUndo(null); lsSet("lastProject", ""); }
     setSaveState("saved");
     refreshList();
   }
@@ -388,7 +420,17 @@ export default function App() {
   const captureStage = useCallback((): Stage => ({
     preset: layout.preset,
     panes: layout.panes.map((x) => ({ ...x })),
-    views: { ...paneViews },
+    views: Object.fromEntries(layout.panes.map((pane, i) => {
+      const sourceId = pane.sourceId || activeSourceId || undefined;
+      const view = paneViews[i]?.sourceId === sourceId || !paneViews[i]?.sourceId ? paneViews[i] ?? {} : {};
+      const mode = view.mode ?? pane.mode ?? project?.settings.viewMode ?? "original";
+      const live = positions.current[i];
+      return [i, {
+        ...view, sourceId, mode,
+        canvasView: pane.kind === "canvas" ? canvasViews.current[i] : undefined,
+        position: pane.kind === "source" && live?.projectId === project?.id && live?.sourceId === sourceId && live?.mode === mode ? { ...live.position } : undefined,
+      }];
+    })),
     split: layout.split,
     rowSplit: layout.rowSplit,
     activeSourceId,
@@ -410,29 +452,27 @@ export default function App() {
       ? stage.activeSourceId
       : (stage.activeSourceId ? (missing.push("its source"), null) : null);
 
-    setLayout(() => ({
-      preset: stage.preset,
-      // a pinned source that has been removed falls back to following the sidebar
-      panes: stage.panes.map((x) => ({
-        ...x,
-        sourceId: x.sourceId && project?.sources.some((s) => s.id === x.sourceId) ? x.sourceId : null,
-      })),
-      split: stage.split,
-      rowSplit: stage.rowSplit,
-    }));
+    const panes = stage.panes.map((x, i) => {
+      if (x.sourceId && !project?.sources.some((s) => s.id === x.sourceId)) missing.push(`the source in pane ${i + 1}`);
+      return { ...x };
+    });
     setPaneViews(stage.views ?? {});
+    setStageNonce((n) => n + 1);
     setActiveSourceId(liveSource);
-    if (stage.canvasView) { setCanvasTarget(stage.canvasView); setCanvasNonce((n) => n + 1); }
+    setCanvasTarget(stage.canvasView ?? null);
+    setCanvasNonce((n) => n + 1);
 
     const hl = liveSource && stage.highlightId
       ? project?.sources.find((s) => s.id === liveSource)?.highlights.some((h) => h.id === stage.highlightId)
       : false;
     if (stage.highlightId && !hl) missing.push("its highlight");
-    setSelectedHl(hl ? stage.highlightId : null);
+    // New beats restore each pane's viewport; the highlight is only an older beat's fallback.
+    setSelectedHl(hl && !Object.values(stage.views ?? {}).some((v) => v.position) ? stage.highlightId : null);
     if (hl) setScrollNonce((n) => n + 1);
 
     mutate((p) => ({
       ...p,
+      layout: { preset: stage.preset, panes, split: stage.split, rowSplit: stage.rowSplit },
       settings: {
         ...p.settings,
         viewMode: stage.viewMode,
@@ -441,12 +481,14 @@ export default function App() {
       },
     }));
     setError(missing.length ? `This beat could not restore ${missing.join(" or ")} — it may have been removed.` : null);
-  }, [project, setLayout, mutate]);
+  }, [project, mutate]);
 
   const goToBeat = useCallback((i: number) => {
     const list = project?.beats ?? [];
     if (i < 0 || i >= list.length) return;
-    setBeatIndex(i);
+    // Update the ref immediately as presenter/iframe commands may arrive before React renders.
+    beatIndexRef.current = i;
+    setActiveBeatId(list[i].id);
     applyStage(list[i].stage);
   }, [project?.beats, applyStage]);
   goToBeatRef.current = goToBeat;
@@ -464,7 +506,7 @@ export default function App() {
       if (cmd.type === "next") goToBeatRef.current(Math.min(beatsRef.current.length - 1, beatIndexRef.current + 1));
       if (cmd.type === "prev") goToBeatRef.current(Math.max(0, beatIndexRef.current - 1));
       if (cmd.type === "goto") goToBeatRef.current(cmd.index);
-      if (cmd.type === "present") setPresent(cmd.on);
+      if (cmd.type === "present") { if (cmd.on && beatIndexRef.current < 0 && beatsRef.current.length) goToBeatRef.current(0); setPresent(cmd.on); }
       // The window has just mounted and missed whatever was published before it existed.
       if (cmd.type === "sync") presenterStateRef.current();
     });
@@ -474,11 +516,12 @@ export default function App() {
   const publishPresenter = useCallback(() => {
     desktop?.publishPresenterState({
       projectTitle: project?.title ?? "",
-      beats: beats.map((b) => ({ point: b.point, script: b.script ?? "" })),
+      projectId: project?.id ?? "",
+      beats: beats.map((b) => ({ id: b.id, point: b.point, script: b.script ?? "" })),
       index: beatIndex,
       presenting: present,
     });
-  }, [project?.title, beats, beatIndex, present]);
+  }, [project?.id, project?.title, beats, beatIndex, present]);
   presenterStateRef.current = publishPresenter;
 
   useEffect(() => { if (presenterOpen) publishPresenter(); }, [presenterOpen, publishPresenter]);
@@ -490,22 +533,58 @@ export default function App() {
       stage: captureStage(),
       createdAt: new Date().toISOString(),
     };
-    mutate((p) => ({ ...p, beats: [...(p.beats ?? []), beat] }));
-    setBeatIndex((project?.beats ?? []).length);
+    mutate((p) => ({ ...p, beats: insertBeatAfter(p.beats ?? [], activeBeatId, beat) }));
+    setActiveBeatId(beat.id);
   }
 
   const editBeat = (id: string, fn: (b: Beat) => Beat) =>
     mutate((p) => ({ ...p, beats: (p.beats ?? []).map((b) => (b.id === id ? fn(b) : b)) }));
 
   function moveBeat(from: number, to: number) {
-    mutate((p) => {
-      const list = [...(p.beats ?? [])];
-      if (to < 0 || to >= list.length) return p;
-      const [moved] = list.splice(from, 1);
-      list.splice(to, 0, moved);
-      return { ...p, beats: list };
-    });
-    setBeatIndex(to);
+    const id = beats[from]?.id;
+    if (id) mutate((p) => ({ ...p, beats: moveBeatInList(p.beats ?? [], id, to) }));
+  }
+
+  function copyBeat(id: string) {
+    const original = beats.find((beat) => beat.id === id);
+    if (!original) return;
+    const copy = duplicateBeat(original, crypto.randomUUID());
+    mutate((p) => ({ ...p, beats: insertBeatAfter(p.beats ?? [], id, copy) }));
+    setActiveBeatId(copy.id);
+    applyStage(copy.stage);
+  }
+
+  function recaptureBeat(id: string) {
+    const beat = beats.find((item) => item.id === id);
+    if (!beat || !project) return;
+    const previous = structuredClone(beat.stage);
+    setBeatUndo({ projectId: project.id, label: "Arrangement updated", apply: (p) => ({ ...p, beats: p.beats.map((b) => b.id === id ? { ...b, stage: previous } : b) }) });
+    const stage = captureStage();
+    editBeat(id, (b) => ({ ...b, stage }));
+    setActiveBeatId(id);
+  }
+
+  function removeBeat(id: string) {
+    const index = beats.findIndex((beat) => beat.id === id);
+    const beat = beats[index];
+    if (!beat || !project) return;
+    const predecessor = beats[index - 1]?.id ?? null;
+    setBeatUndo({ projectId: project.id, label: "Beat deleted", apply: (p) => {
+      if (p.beats.some((b) => b.id === id)) return p;
+      const next = [...p.beats];
+      const at = predecessor ? next.findIndex((b) => b.id === predecessor) + 1 : 0;
+      next.splice(at, 0, beat);
+      return { ...p, beats: next };
+    } });
+    mutate((p) => ({ ...p, beats: p.beats.filter((beat) => beat.id !== id) }));
+    // The displayed arrangement stays put; do not pretend a neighbouring beat is on screen.
+    if (activeBeatId === id) setActiveBeatId(null);
+  }
+
+  function undoBeatEdit() {
+    if (!beatUndo || project?.id !== beatUndo.projectId) return;
+    mutate((p) => p.id === beatUndo.projectId ? beatUndo.apply(p) : p);
+    setBeatUndo(null);
   }
 
   function setPreset(id: LayoutPreset) {
@@ -562,14 +641,15 @@ export default function App() {
         const paneSource = (pane.sourceId ? project.sources.find((s) => s.id === pane.sourceId) : source) ?? null;
         return (
           <SourcePane
+            key={`${project.id}:${paneSource?.id ?? "empty"}`}
             source={paneSource}
             sources={project.sources}
             pinnedId={pane.sourceId ?? null}
             onPin={(sourceId) => setLayout((l) => ({ ...l, panes: l.panes.map((x, j) => (j === i ? { ...x, sourceId } : x)) }))}
             projectId={project.id}
             apiPort={config?.apiPort ?? 4700}
-            mode={project.settings.viewMode ?? "original"}
-            onMode={(viewMode) => mutate((p) => ({ ...p, settings: { ...p.settings, viewMode } }))}
+            mode={pane.mode ?? project.settings.viewMode ?? "original"}
+            onMode={(mode) => setLayout((l) => ({ ...l, panes: l.panes.map((x, j) => j === i ? { ...x, mode } : x) }))}
             onToggleScripts={() => paneSource && updateSource(paneSource.id, (s) => ({ ...s, scripts: s.scripts === false }))}
             onAddHighlight={(h) => paneSource && addHighlight(paneSource.id, h)}
             onSelectHighlight={(id) => paneSource && selectFromPage(paneSource.id, id)}
@@ -577,8 +657,12 @@ export default function App() {
             onRefresh={() => paneSource && refreshSource(paneSource)}
             scrollToId={paneSource && paneSource.id === activeSourceId ? selectedHl : null}
             scrollNonce={scrollNonce}
+            restoreNonce={stageNonce}
+            presenting={present}
+            onPresentationKey={(key) => { presentationKeyRef.current(key); }}
             view={paneViews[i] ?? {}}
             onView={(v) => setPaneViews((m) => ({ ...m, [i]: v }))}
+            onPosition={(position, mode) => { if (paneSource) positions.current[i] = { projectId: project.id, sourceId: paneSource.id, mode, position }; }}
             fontScale={fontScale}
             busy={loading}
             config={config}
@@ -603,11 +687,13 @@ export default function App() {
         <CanvasPanel
           key={project.id}
           canvas={project.canvas}
-          onChange={(canvas) => mutate((p) => ({ ...p, canvas }))}
+          onChange={(canvas, sceneChanged) => mutate((p) => p.id === project.id ? {
+            ...p, canvas: sceneChanged || !p.canvas ? canvas : { ...p.canvas, appState: canvas.appState },
+          } : p)}
           dark={dark}
-          view={canvasTarget}
+          view={paneViews[i]?.canvasView ?? canvasTarget}
           viewNonce={canvasNonce}
-          onView={(v) => { canvasViewRef.current = v; }}
+          onView={(v) => { canvasViewRef.current = v; canvasViews.current[i] = v; }}
         />
       );
       case "terminal": return <TerminalPane key={`term-${i}-${project.id}`} dark={dark} projectId={project.id} />;
@@ -651,8 +737,11 @@ export default function App() {
           onEditBeat={editBeat}
           onMoveBeat={moveBeat}
           onEditScript={setScriptFor}
-          onRemoveBeat={(id) => { mutate((p) => ({ ...p, beats: (p.beats ?? []).filter((b) => b.id !== id) })); setBeatIndex(-1); }}
-          captureStage={captureStage}
+          onRemoveBeat={removeBeat}
+          onRecaptureBeat={recaptureBeat}
+          onDuplicateBeat={copyBeat}
+          undoLabel={beatUndo?.projectId === project?.id ? beatUndo?.label ?? null : null}
+          onUndoBeat={undoBeatEdit}
           onRevealFolder={() => project?.dir && api.reveal(project.dir).catch((e) => setError(e.message))}
         />
       )}
@@ -703,7 +792,7 @@ export default function App() {
                 onClick={() => (presenterOpen ? desktop?.closePresenter().then(() => setPresenterOpen(false)) : desktop?.openPresenter().then(setPresenterOpen))}
               ><MonitorPlay size={14} /> Presenter</button>
             )}
-            <button className="ghost small" onClick={() => setPresent(true)} title="Present mode (Alt+P)"><Presentation size={14} /> Present</button>
+            <button className="ghost small" onClick={() => { if (beatIndex < 0 && beats.length) goToBeat(0); setPresent(true); }} title="Present mode (Alt+P)"><Presentation size={14} /> Present</button>
           </header>
         )}
 

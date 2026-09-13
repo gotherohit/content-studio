@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, ExternalLink, Maximize, Play, RefreshCw, Zap, ZapOff } from "lucide-react";
-import type { Highlight, PaneView, Source } from "../types";
+import type { Highlight, PaneView, ReadingPosition, Source } from "../types";
+import { trackReadingPosition } from "../../../server/public/reading-position.js";
 import type { AppConfig } from "../api";
 import { Reader } from "./Reader";
 import { OriginalView } from "./OriginalView";
@@ -22,6 +23,10 @@ interface Props {
   onRefresh: () => void;
   scrollToId: string | null;
   scrollNonce: number;
+  restoreNonce: number;
+  presenting: boolean;
+  onPresentationKey: (key: string) => void;
+  onPosition: (position: ReadingPosition, mode: string) => void;
   /** Paging state, held by the app so a stage can capture and restore it. */
   view: PaneView;
   onView: (v: PaneView) => void;
@@ -34,11 +39,17 @@ interface Props {
 const SLIDEABLE = new Set(["markdown", "pdf", "deck"]);
 
 export function SourcePane(p: Props) {
-  const slideshow = Boolean(p.view.slideshow);
-  const slideIndex = p.view.slideIndex ?? 0;
-  const setSlideshow = (v: boolean) => p.onView({ ...p.view, slideshow: v });
+  const view = !p.view.sourceId || p.view.sourceId === p.source?.id ? p.view : {};
+  const mode = view.mode ?? p.mode;
+  const setMode = (mode: "original" | "reader") => {
+    p.onView({ ...view, sourceId: p.source?.id, mode, position: undefined });
+    p.onMode(mode);
+  };
+  const slideshow = Boolean(view.slideshow);
+  const slideIndex = view.slideIndex ?? 0;
+  const setSlideshow = (v: boolean) => p.onView({ ...view, sourceId: p.source?.id, slideshow: v });
   const setSlideIndex = (v: number | ((i: number) => number)) =>
-    p.onView({ ...p.view, slideIndex: typeof v === "function" ? v(slideIndex) : v });
+    p.onView({ ...view, sourceId: p.source?.id, slideIndex: typeof v === "function" ? v(slideIndex) : v });
   const [slideCount, setSlideCount] = useState(1);
   const stageRef = useRef<HTMLDivElement>(null);
 
@@ -47,11 +58,30 @@ export function SourcePane(p: Props) {
   const viewer = isFile ? source!.file!.viewer : null;
   const canSlide = !!viewer && SLIDEABLE.has(viewer);
 
-  useEffect(() => { setSlideshow(false); setSlideIndex(0); }, [source?.id]);
+  const report = useRef(p.onPosition);
+  report.current = p.onPosition;
+  useLayoutEffect(() => {
+    const host = stageRef.current;
+    if (!host || (!isFile && mode === "original")) return;
+    let cleanup: (() => void) | undefined;
+    let current: Element | null = null;
+    const attach = () => {
+      const scroller = host.querySelector(".reader-scroll, .file-scroll, .deck-grid");
+      if (!scroller || scroller === current) return;
+      cleanup?.();
+      current = scroller;
+      cleanup = trackReadingPosition(scroller, scroller, view.position, (position) => report.current(position, mode));
+    };
+    attach();
+    const observer = new MutationObserver(attach);
+    observer.observe(host, { childList: true, subtree: true });
+    return () => { observer.disconnect(); cleanup?.(); };
+  }, [source?.id, mode, p.restoreNonce, slideshow]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!slideshow || viewer !== "markdown") return; // deck and pdf handle their own keys
     const onKey = (e: KeyboardEvent) => {
+      if (document.querySelector(".app.present")) return;
       const t = e.target as HTMLElement;
       if (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable) return;
       if (["ArrowRight", "PageDown", " "].includes(e.key)) { setSlideIndex((i) => Math.min(slideCount - 1, i + 1)); e.preventDefault(); }
@@ -123,11 +153,11 @@ export function SourcePane(p: Props) {
         ) : (
           <>
             <div className="seg">
-              <button className={p.mode === "original" ? "active" : ""} onClick={() => p.onMode("original")}>Original</button>
-              <button className={p.mode === "reader" ? "active" : ""} onClick={() => p.onMode("reader")}>Reader</button>
+              <button className={mode === "original" ? "active" : ""} onClick={() => setMode("original")}>Original</button>
+              <button className={mode === "reader" ? "active" : ""} onClick={() => setMode("reader")}>Reader</button>
             </div>
             <span className="muted small grow ellipsis" title={source.url}>{source.url}</span>
-            {p.mode === "original" && (
+            {mode === "original" && (
               <button
                 className={`icon-btn ${scripts ? "on" : ""}`}
                 onClick={p.onToggleScripts}
@@ -158,8 +188,9 @@ export function SourcePane(p: Props) {
             onAddHighlight={p.onAddHighlight}
             onSelectHighlight={p.onSelectHighlight}
           />
-        ) : p.mode === "original" ? (
+        ) : mode === "original" ? (
           <OriginalView
+            key={`${source.id}:${scripts}`}
             source={source}
             apiPort={p.apiPort}
             scripts={scripts}
@@ -168,6 +199,11 @@ export function SourcePane(p: Props) {
             onOpenLink={p.onOpenLink}
             scrollToId={p.scrollToId}
             scrollNonce={p.scrollNonce}
+            position={view.position}
+            restoreNonce={p.restoreNonce}
+            presenting={p.presenting}
+            onPresentationKey={p.onPresentationKey}
+            onPosition={(position) => report.current(position, mode)}
           />
         ) : (
           <Reader

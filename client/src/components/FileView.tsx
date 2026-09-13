@@ -78,8 +78,8 @@ export function FileView(p: Props) {
 
   useEffect(() => {
     if (!p.scrollToId) return;
-    bodyRef.current?.querySelector<HTMLElement>(`mark.hl[data-hid="${p.scrollToId}"]`)?.scrollIntoView({ behavior: "smooth", block: "center" });
-  }, [p.scrollToId, p.scrollNonce]);
+    bodyRef.current?.querySelector<HTMLElement>(`mark.hl[data-hid="${p.scrollToId}"]`)?.scrollIntoView({ behavior: "instant", block: "center" });
+  }, [p.scrollToId, p.scrollNonce, text]);
 
   function onMouseUp(e: React.MouseEvent) {
     if ((e.target as HTMLElement).closest(".hl-popup")) return;

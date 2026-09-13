@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import type { Highlight, HighlightColor, Source } from "../types";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import type { Highlight, HighlightColor, ReadingPosition, Source } from "../types";
 import { HighlightPopup } from "./HighlightPopup";
 
 type Anchor = { text: string; prefix: string; suffix: string };
@@ -13,6 +13,11 @@ interface Props {
   onOpenLink: (url: string, newTab: boolean) => void;
   scrollToId: string | null;
   scrollNonce: number;
+  position?: ReadingPosition;
+  restoreNonce: number;
+  presenting: boolean;
+  onPresentationKey: (key: string) => void;
+  onPosition: (position: ReadingPosition) => void;
 }
 
 /** "https://www.example.com/a/b#c" -> "http://www--example--com.localhost:4700/a/b#c" (the app's reverse proxy). */
@@ -24,9 +29,13 @@ export function proxiedUrl(url: string, apiPort: number, scripts: boolean): stri
 }
 
 /** The page exactly as the site serves it, running its own scripts, with highlights layered on top. */
-export function OriginalView({ source, apiPort, scripts, onAddHighlight, onSelectHighlight, onOpenLink, scrollToId, scrollNonce }: Props) {
+export function OriginalView({ source, apiPort, scripts, onAddHighlight, onSelectHighlight, onOpenLink, scrollToId, scrollNonce, position, restoreNonce, onPosition, presenting, onPresentationKey }: Props) {
   const frame = useRef<HTMLIFrameElement>(null);
   const [ready, setReady] = useState(false);
+  const [restoredNonce, setRestoredNonce] = useState<number | null>(null);
+  const [positionError, setPositionError] = useState(false);
+  const latest = useRef({ position, restoreNonce, onPosition, presenting, onPresentationKey });
+  latest.current = { position, restoreNonce, onPosition, presenting, onPresentationKey };
   const [popup, setPopup] = useState<{ x: number; y: number; flip: boolean; anchor: Anchor } | null>(null);
   const src = proxiedUrl(source.url, apiPort, scripts);
 
@@ -36,7 +45,15 @@ export function OriginalView({ source, apiPort, scripts, onAddHighlight, onSelec
     const onMsg = (e: MessageEvent) => {
       const m = e.data || {};
       if (m.src !== "rs-frame" || e.source !== frame.current?.contentWindow) return;
-      if (m.type === "ready") { setReady(true); post({ type: "highlights", list: source.highlights }); }
+      if (m.type === "ready") {
+        setReady(true);
+        post({ type: "highlights", list: source.highlights });
+        post({ type: "restorePosition", position: latest.current.position, nonce: latest.current.restoreNonce });
+        post({ type: "presentation", enabled: latest.current.presenting });
+      }
+      if (m.type === "position" && m.nonce === latest.current.restoreNonce && m.position && Number.isFinite(m.position.y) && Number.isFinite(m.position.x)) latest.current.onPosition(m.position);
+      if (m.type === "positionRestored" && m.nonce === latest.current.restoreNonce) { setRestoredNonce(m.nonce); setPositionError(false); }
+      if (m.type === "presentationKey" && latest.current.presenting && ["ArrowRight", "ArrowLeft", "PageDown", "PageUp", " ", "Home", "End", "Escape", "h"].includes(m.key)) latest.current.onPresentationKey(m.key);
       if (m.type === "selection") {
         if (!m.anchor) { setPopup(null); return; }
         const host = frame.current!.getBoundingClientRect();
@@ -54,7 +71,18 @@ export function OriginalView({ source, apiPort, scripts, onAddHighlight, onSelec
 
   useEffect(() => { if (ready) post({ type: "highlights", list: source.highlights }); }, [source.highlights, ready]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (ready && scrollToId) post({ type: "scrollTo", id: scrollToId }); }, [scrollToId, scrollNonce, ready]); // eslint-disable-line react-hooks/exhaustive-deps
+  useLayoutEffect(() => { if (ready) post({ type: "restorePosition", position, nonce: restoreNonce }); }, [restoreNonce, ready]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (ready) post({ type: "presentation", enabled: presenting }); }, [presenting, ready]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { setReady(false); setPopup(null); }, [source.id, scripts]);
+  useEffect(() => {
+    if (!position || restoredNonce === restoreNonce) return;
+    setPositionError(false);
+    const timer = window.setTimeout(() => {
+      setPositionError(true);
+      setRestoredNonce(restoreNonce);
+    }, 5000);
+    return () => window.clearTimeout(timer);
+  }, [position, restoreNonce, restoredNonce]);
 
   function commit(color: HighlightColor, comment: string) {
     if (!popup) return;
@@ -65,10 +93,12 @@ export function OriginalView({ source, apiPort, scripts, onAddHighlight, onSelec
 
   return (
     <div className="original-host">
+      {positionError && <div className="error-bar">This page did not confirm its saved reading position. Try Reader view or capture this beat again.</div>}
       <iframe
         ref={frame}
         key={`${source.id}-${scripts}`}
         className="original-frame"
+        style={{ visibility: position && restoredNonce !== restoreNonce ? "hidden" : "visible" }}
         src={src}
         title={source.title}
         sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals"

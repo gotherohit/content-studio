@@ -22,8 +22,9 @@ export interface UpdateInfo {
 
 /** What the presenter window is told. It holds no project state of its own. */
 export interface PresenterState {
+  projectId: string;
   projectTitle: string;
-  beats: { point: string; script: string }[];
+  beats: { id: string; point: string; script: string }[];
   index: number;
   presenting: boolean;
 }
