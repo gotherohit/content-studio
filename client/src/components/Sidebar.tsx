@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
   ArrowDown, ArrowUp, Camera, ChevronDown, ChevronRight, Clapperboard, FileCode2, FileText, FolderOpen,
-  Image, Plus, Presentation, Settings, Table2, Trash2, X,
+  Image, Plus, Presentation, ScrollText, Settings, Table2, Trash2, X,
 } from "lucide-react";
 import type { Beat, Project, ProjectSummary } from "../types";
 
@@ -23,6 +23,7 @@ interface Props {
   onEditBeat: (id: string, fn: (b: Beat) => Beat) => void;
   onMoveBeat: (from: number, to: number) => void;
   onRemoveBeat: (id: string) => void;
+  onEditScript: (id: string) => void;
   captureStage: () => Beat["stage"];
 }
 
@@ -66,13 +67,14 @@ function Section({ id, title, count, actions, children }: {
  * screen rather than in a separate step, and re-capture replaces the arrangement without
  * disturbing the text.
  */
-function BeatRow({ beat, index, active, last, onGo, onPoint, onRecapture, onMove, onRemove }: {
+function BeatRow({ beat, index, active, last, onGo, onPoint, onRecapture, onMove, onRemove, onScript }: {
   beat: Beat; index: number; active: boolean; last: boolean;
   onGo: () => void;
   onPoint: (point: string) => void;
   onRecapture: () => void;
   onMove: (delta: -1 | 1) => void;
   onRemove: () => void;
+  onScript: () => void;
 }) {
   return (
     <div className={`list-item beat-row ${active ? "active" : ""}`} onClick={onGo}>
@@ -84,6 +86,11 @@ function BeatRow({ beat, index, active, last, onGo, onPoint, onRecapture, onMove
         onClick={(e) => e.stopPropagation()}
         onChange={(e) => onPoint(e.target.value)}
       />
+      <button
+        className={beat.script?.trim() ? "icon-btn has-script" : "icon-btn hover-only"}
+        title={beat.script?.trim() ? "Edit what to say here" : "Write what to say here"}
+        onClick={(e) => { e.stopPropagation(); onScript(); }}
+      ><ScrollText size={12} /></button>
       <button className="icon-btn hover-only" title="Move up" disabled={index === 0} onClick={(e) => { e.stopPropagation(); onMove(-1); }}><ArrowUp size={12} /></button>
       <button className="icon-btn hover-only" title="Move down" disabled={last} onClick={(e) => { e.stopPropagation(); onMove(1); }}><ArrowDown size={12} /></button>
       <button className="icon-btn hover-only" title="Replace this beat's arrangement with what is on screen" onClick={(e) => { e.stopPropagation(); onRecapture(); }}><Camera size={12} /></button>
@@ -166,6 +173,7 @@ export function Sidebar(p: Props) {
                 onRecapture={() => p.onEditBeat(b.id, (x) => ({ ...x, stage: p.captureStage() }))}
                 onMove={(delta) => p.onMoveBeat(i, i + delta)}
                 onRemove={() => p.onRemoveBeat(b.id)}
+                onScript={() => p.onEditScript(b.id)}
               />
             ))}
             {!(p.project.beats ?? []).length && (

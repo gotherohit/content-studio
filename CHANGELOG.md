@@ -2,6 +2,11 @@
 
 What changed in each release, newest first. Versions are the ones the app updates itself to.
 
+## 0.6.0
+
+- **A script for each beat.** The scroll icon on a beat opens a Markdown editor with a preview — what the segment must cover, the phrase to use, what not to say. It saves as you type.
+- The script appears in the **presenter window only**, never inside the studio window, so it cannot reach a screen recording. `-` and `+` there set a text size you can read from where you sit, and it is remembered.
+
 ## 0.5.1
 
 - Documentation: [the guide](docs/guide.md) now holds the full feature reference, this changelog records each release, and `CLAUDE.md` carries the invariants and gotchas for anyone working on the code.

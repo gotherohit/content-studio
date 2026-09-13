@@ -22,6 +22,7 @@ import { JupyterPane } from "./components/JupyterPane";
 import { SlidesPane } from "./components/SlidesPane";
 import { WindowPane } from "./components/WindowPane";
 import { SettingsDialog } from "./components/SettingsDialog";
+import { BeatScriptDialog } from "./components/BeatScriptDialog";
 import { NewProjectDialog } from "./components/NewProjectDialog";
 
 const KINDS: { id: PaneKind; label: string }[] = [
@@ -68,7 +69,8 @@ function normalize(p: Project): Project {
         typeof x === "string" ? { kind: x as PaneKind } : x,
       ),
     },
-    beats: p.beats ?? [],
+    // the script field was briefly called `note`
+    beats: (p.beats ?? []).map((b) => (b.note && !b.script ? { ...b, script: b.note, note: undefined } : b)),
     settings: { viewMode: "original", ...(p.settings ?? {}), jupyterUrl: p.settings?.jupyterUrl ?? "http://localhost:8888" },
   };
 }
@@ -90,6 +92,7 @@ export default function App() {
   /** The beat strip is inside the window, so anything capturing the window records it. */
   const [showHud, setShowHud] = useState(lsGet("hud", "1") === "1");
   const [presenterOpen, setPresenterOpen] = useState(false);
+  const [scriptFor, setScriptFor] = useState<string | null>(null);
   const presenterStateRef = useRef<() => void>(() => {});
   /** Read by the global key handler, which is registered before the beat helpers exist. */
   const goToBeatRef = useRef<(i: number) => void>(() => {});
@@ -448,7 +451,7 @@ export default function App() {
   const publishPresenter = useCallback(() => {
     desktop?.publishPresenterState({
       projectTitle: project?.title ?? "",
-      beats: beats.map((b) => ({ point: b.point })),
+      beats: beats.map((b) => ({ point: b.point, script: b.script ?? "" })),
       index: beatIndex,
       presenting: present,
     });
@@ -613,6 +616,7 @@ export default function App() {
           onGoToBeat={goToBeat}
           onEditBeat={editBeat}
           onMoveBeat={moveBeat}
+          onEditScript={setScriptFor}
           onRemoveBeat={(id) => { mutate((p) => ({ ...p, beats: (p.beats ?? []).filter((b) => b.id !== id) })); setBeatIndex(-1); }}
           captureStage={captureStage}
           onRevealFolder={() => project?.dir && api.reveal(project.dir).catch((e) => setError(e.message))}
@@ -715,6 +719,15 @@ export default function App() {
         <div className="drop-overlay">
           <div className="drop-card"><Paperclip size={22} /> Drop files to add them as sources</div>
         </div>
+      )}
+
+      {scriptFor && beats.some((b) => b.id === scriptFor) && (
+        <BeatScriptDialog
+          beat={beats.find((b) => b.id === scriptFor)!}
+          index={beats.findIndex((b) => b.id === scriptFor)}
+          onChange={(script) => editBeat(scriptFor, (b) => ({ ...b, script }))}
+          onClose={() => setScriptFor(null)}
+        />
       )}
 
       {showNewProject && (

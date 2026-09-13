@@ -85,6 +85,30 @@ Things worth knowing:
 * **A broken reference is loud.** If a beat's source or highlight has been deleted, it restores everything it still can and says what it could not, rather than quietly showing the wrong thing.
 * **The beat strip is inside the window**, so screen-capture software records it. Press **h** to hide it; it stays hidden until you press **h** again. Better, use the presenter window below.
 
+### What to say on a beat
+
+The scroll icon on a beat opens its **script**: what this segment has to cover, the phrase
+you want to use, the thing you always forget. It is **Markdown**, with a Preview tab, and
+it saves as you type.
+
+The script is shown in the **presenter window** and nowhere else. It is never drawn inside
+the studio window, so it cannot appear in a recording no matter what is capturing the
+screen. Use `-` and `+` there to set a text size you can read from where you sit; the
+choice is remembered.
+
+Bold renders in the accent colour, which makes it a good way to mark the words that must
+come out right:
+
+```markdown
+Open with the number, not the concept.
+
+- **seven labs**, not "several"
+- say *illicit distillation* once, then just "this"
+- do NOT call it a hack, it is a training method
+
+> If the demo fails, cut to the diagram.
+```
+
 ### The presenter window
 
 **Presenter** in the toolbar opens a second, small, always-on-top window — put it on your other monitor. Since OBS (or anything else) captures the *studio* window, this one is never in shot, which is the whole point of it.

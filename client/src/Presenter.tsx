@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, Clipboard, Flag, Play, RotateCcw, Square } from "lucide-react";
+import { marked } from "marked";
+import DOMPurify from "dompurify";
+import { ChevronLeft, ChevronRight, Clipboard, Flag, Minus, Play, Plus, RotateCcw, Square } from "lucide-react";
 import { desktop, type PresenterState } from "./desktop";
 
 /** mm:ss, which is what a chapter list wants. */
@@ -27,6 +29,9 @@ export default function Presenter() {
   const [elapsed, setElapsed] = useState(0);
   const [log, setLog] = useState<Entry[]>([]);
   const [copied, setCopied] = useState(false);
+  const [scale, setScale] = useState(() => {
+    try { return Number(localStorage.getItem("presenterScale")) || 1; } catch { return 1; }
+  });
   const startedAt = useRef<number | null>(null);
   const lastIndex = useRef<number>(-1);
 
@@ -82,6 +87,15 @@ export default function Presenter() {
     return () => window.removeEventListener("keydown", onKey);
   }, [running, state]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  /** Read from a metre away, so the size is worth keeping between sessions. */
+  function resize(delta: number) {
+    setScale((v) => {
+      const next = Math.min(2, Math.max(0.7, Math.round((v + delta) * 10) / 10));
+      try { localStorage.setItem("presenterScale", String(next)); } catch { /* private window */ }
+      return next;
+    });
+  }
+
   function start() {
     startedAt.current = Date.now();
     setElapsed(0);
@@ -121,9 +135,17 @@ export default function Presenter() {
         <span className={`presenter-clock ${running ? "live" : ""}`}>{clock(elapsed)}</span>
       </div>
 
-      <div className="presenter-point">
-        {current ? (current.point || <span className="muted">no point written</span>) : (
-          beats.length ? "Press → to start the running order" : "Capture some beats in the studio window first"
+      <div className="presenter-body" style={{ fontSize: `${scale}em` }}>
+        <div className="presenter-point">
+          {current ? (current.point || <span className="muted">no point written</span>) : (
+            beats.length ? "Press → to start the running order" : "Capture some beats in the studio window first"
+          )}
+        </div>
+        {current?.script?.trim() && (
+          <div
+            className="presenter-script md-preview"
+            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(marked.parse(current.script) as string) }}
+          />
         )}
       </div>
 
@@ -132,6 +154,8 @@ export default function Presenter() {
       <div className="presenter-controls">
         <button className="icon-btn" title="Previous beat (←)" disabled={i <= 0} onClick={() => send({ type: "prev" })}><ChevronLeft size={18} /></button>
         <button className="icon-btn" title="Next beat (→)" disabled={!beats.length || i >= beats.length - 1} onClick={() => send({ type: "next" })}><ChevronRight size={18} /></button>
+        <button className="icon-btn" title="Smaller text" onClick={() => resize(-0.1)}><Minus size={14} /></button>
+        <button className="icon-btn" title="Larger text" onClick={() => resize(0.1)}><Plus size={14} /></button>
         <span className="grow" />
         {running ? (
           <>

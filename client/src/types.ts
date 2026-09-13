@@ -111,7 +111,12 @@ export interface Beat {
   id: string;
   /** One line: the point this segment makes. Shown to the presenter, never to the camera. */
   point: string;
-  /** Script or bullets, optional. */
+  /**
+   * What to say: Markdown, rendered in the presenter window on the other monitor. Never
+   * drawn inside the studio window, so it cannot end up in a screen recording.
+   */
+  script?: string;
+  /** What `script` was called before. Read once on load, then dropped. */
   note?: string;
   stage: Stage;
   createdAt: string;
