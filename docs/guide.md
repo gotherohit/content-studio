@@ -252,6 +252,12 @@ open until it says *ready*, then click **Restart and install**. If you would rat
 wait, download the installer from
 [Releases](https://github.com/gotherohit/content-studio/releases) and run it over the top.
 
+**A project will not delete.** It now tells you why in the error bar. The usual cause is
+another program holding a file in the folder open — Explorer sitting in it, PowerPoint with
+a deck loaded, an editor. Close those and try again. The folder and everything in it is
+removed, so there is no undo; if you only want it out of the sidebar, move the folder
+somewhere else first and delete it afterwards.
+
 **A beat restores the wrong thing, or says it could not.** Its source or highlight has been
 deleted. Fix the arrangement and press the camera on that beat to re-capture it.
 

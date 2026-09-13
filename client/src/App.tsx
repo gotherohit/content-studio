@@ -241,8 +241,19 @@ export default function App() {
   }
 
   async function deleteProject(id: string) {
-    await api.deleteProject(id);
-    if (project?.id === id) { setProject(null); setActiveSourceId(null); lsSet("lastProject", ""); }
+    // A save queued a moment ago would otherwise land after the delete and recreate the
+    // folder, so the project appears to come back.
+    if (saveTimer.current) { window.clearTimeout(saveTimer.current); saveTimer.current = null; }
+    dirtyRef.current = false;
+    try {
+      await api.deleteProject(id);
+    } catch (e) {
+      // Silence here was the bug: a delete that failed simply did nothing.
+      setError((e as Error).message);
+      return;
+    }
+    if (project?.id === id) { setProject(null); setActiveSourceId(null); setBeatIndex(-1); lsSet("lastProject", ""); }
+    setSaveState("saved");
     refreshList();
   }
 

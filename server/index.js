@@ -129,6 +129,9 @@ app.get("/api/projects/:id", async (req, res) => {
 
 app.put("/api/projects/:id", async (req, res) => {
   if (!safeId(req.params.id)) return res.status(400).json({ error: "bad id" });
+  // Without this, a save that arrives just after a delete recreates the project's folder,
+  // or — once the index has forgotten it — writes project.json into ~/.content-studio.
+  if (!config.dirOf(req.params.id)) return res.status(404).json({ error: "That project no longer exists" });
   const { dir: _ignored, ...rest } = req.body || {};
   const project = { ...rest, id: req.params.id, updatedAt: new Date().toISOString() };
   await fs.mkdir(sourcesDir(project.id), { recursive: true });
@@ -139,8 +142,23 @@ app.put("/api/projects/:id", async (req, res) => {
 app.delete("/api/projects/:id", async (req, res) => {
   if (!safeId(req.params.id)) return res.status(400).json({ error: "bad id" });
   const dir = config.dirOf(req.params.id);
-  if (req.query.keepFiles === "1") await config.forget(req.params.id);
-  else { await fs.rm(dir, { recursive: true, force: true }); await config.forget(req.params.id); }
+  if (!dir) return res.status(404).json({ error: "That project is not in the index" });
+
+  if (req.query.keepFiles === "1") {
+    await config.forget(req.params.id);
+    return res.json({ ok: true, kept: dir });
+  }
+  try {
+    await fs.rm(dir, { recursive: true, force: true });
+  } catch (e) {
+    // Windows refuses while something holds a file open, and an unhandled rejection here
+    // used to leave the request hanging with nothing shown to anyone.
+    const why = e.code === "EBUSY" || e.code === "EPERM"
+      ? `Something still has a file in ${dir} open. Close anything using it — Explorer, PowerPoint, an editor — and try again.`
+      : `Could not delete ${dir}: ${e.message}`;
+    return res.status(409).json({ error: why, code: e.code });
+  }
+  await config.forget(req.params.id);
   res.json({ ok: true });
 });
 

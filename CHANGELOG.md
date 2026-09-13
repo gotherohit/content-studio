@@ -2,6 +2,12 @@
 
 What changed in each release, newest first. Versions are the ones the app updates itself to.
 
+## 0.6.1
+
+- **Deleting a project now says why when it cannot.** A failure used to leave the request hanging with nothing shown, so the button appeared to do nothing at all. If a file is held open by another program, it says so and names the folder.
+- A save that arrives just after a delete is refused instead of recreating the project's folder, or writing `project.json` into `~/.content-studio` once the index has forgotten it.
+- Deleting the open project cancels its pending save first, so it cannot come back.
+
 ## 0.6.0
 
 - **A script for each beat.** The scroll icon on a beat opens a Markdown editor with a preview — what the segment must cover, the phrase to use, what not to say. It saves as you type.

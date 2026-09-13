@@ -65,6 +65,11 @@ process.
 **A stage stores references, never copies.** Beats point at sources, highlights and files;
 they never snapshot content. Improving the material must improve every beat that uses it.
 
+**Every failure must be visible.** Express 4 does not catch async rejections, so a
+route that throws leaves the request hanging and the UI showing nothing at all. Wrap
+route bodies that touch the filesystem, and give the client a `catch` that calls
+`setError`. A silent no-op is the worst outcome in an app used while recording.
+
 **Nothing restarts or steals focus by itself.** Updates download in the background and
 wait. The AI request aborts when the pane closes. Assume a recording is in progress.
 
@@ -87,6 +92,12 @@ wait. The AI request aborts when the pane closes. Assume a recording is in progr
 - **A window that subscribes late misses what was already published.** This bit both the
   update banner and the presenter window. Anything IPC-published needs a way to ask for the
   current state on mount.
+- **A second server instance is not isolated.** Every instance shares
+  `~/.content-studio/`, so a test server registering or deleting a project rewrites the
+  *real* index. Deleting a clone of a project also unregisters the original, because the
+  id lives inside `project.json`. Overriding `USERPROFILE` gives the server its own home
+  but stops Electron starting, so isolate by using a scratch *project folder*, never by
+  running a second copy against real data.
 - **Updates are ~115 MB and do not resume.** Restarting the app mid-download throws it
   away. If a user reports "it never updates", check for a part-file in
   `%LOCALAPPDATA%\content-studio-updater\pending\` before assuming a bug.
