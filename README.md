@@ -27,7 +27,7 @@ For front-end work with hot reload, `npm run dev:desktop` runs Vite and points t
 
 It still runs in a browser if you prefer — `npm run dev`, then http://localhost:5173 — but the Browser and Embed panes are weaker there, for the reasons below, and updates and key encryption belong to the desktop app.
 
-Working on the code? Start with [CLAUDE.md](CLAUDE.md): the invariants, the gotchas that cost a day each, and how to cut a release.
+Working on the code? Start with [CLAUDE.md](CLAUDE.md): the invariants, the gotchas that cost a day each, and how to cut a release. Coding agents should read [AGENTS.md](AGENTS.md) first — it points there and adds the rules for testing safely on a machine that also holds real work.
 
 Build an installer of your own:
 

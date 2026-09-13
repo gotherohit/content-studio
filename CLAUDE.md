@@ -3,6 +3,12 @@
 Notes for whoever picks this up next — another session, another harness, or the author in
 six months. Read this before changing anything.
 
+**Also read [AGENTS.md](AGENTS.md)**, and any `AGENTS.md` in the directory you are working
+in — the nearest one wins for that subtree. It carries the sandbox rules every agent must
+follow, and it points back here for everything else. This file stays the source of truth
+for architecture, invariants and process; AGENTS.md is the source of truth for how testing
+is allowed to touch this machine. Keep them in step.
+
 ## What this is
 
 A Windows desktop app for one person: a YouTube creator who reads technical news and blog
@@ -113,12 +119,12 @@ wait. The AI request aborts when the pane closes. Assume a recording is in progr
 - **Verify in the running app, not just the compiler.** `npx tsc -b` passing means nothing
   about whether a pane works. Launch the app with `--remote-debugging-port`, drive the real
   UI over CDP, and read the state back. Every feature in this repo was checked that way.
-- **Never test against the user's real project.** Make a scratch project in a temp folder
-  and work there. This rule was written after a test typed over the user's saved code
-  snippet and then deleted it during cleanup: the "+ new" click silently missed, so the
-  edit landed in the snippet that was already open. There are no backups of `project.json`
-  and no shadow copies on this machine — data lost there is lost. If you do touch a real
-  project, remove what you added and say so explicitly.
+- **Never test against a real project.** This machine develops the app *and* uses it for
+  real videos. All testing goes in `D:	est content studio` — create the folder if it is
+  not there, make a scratch project inside it, and delete it when done. **Confirm the open
+  project's name before acting**: a selector that misses falls through to whatever was
+  already open, which is how a saved snippet was overwritten and then deleted here. There
+  are no backups of `project.json` and no shadow copies on this machine.
 - **Report honestly.** If something is untested, say which part. If a limit is real —
   approximate timestamps, a log that is not persisted — write it down rather than letting
   it be discovered mid-recording.
@@ -153,6 +159,7 @@ the same commit as the change:**
 | A feature, or how one is used | `docs/guide.md` |
 | Anything a release contains | `CHANGELOG.md`, under the version being cut |
 | A new invariant, gotcha, or hard-won fix | this file |
+| A rule about how agents may touch this machine | `AGENTS.md` |
 | Install, updates, or the top-level picture | `README.md` |
 
 A release with no changelog entry is a bug in the release. If a session ends without the
