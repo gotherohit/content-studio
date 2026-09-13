@@ -74,6 +74,13 @@ export interface Layout {
   rowSplit: number; // % height of the top row (1+2, 2+1, 4)
 }
 
+/** Where the canvas is looking: one drawing can serve many beats if each frames its own part. */
+export interface CanvasView {
+  scrollX: number;
+  scrollY: number;
+  zoom: number;
+}
+
 /** What a Source pane is doing beyond which source it shows: paging a deck, say. */
 export interface PaneView {
   slideshow?: boolean;
@@ -99,6 +106,8 @@ export interface Stage {
   viewMode: "original" | "reader";
   embedUrl?: string;
   browserUrl?: string;
+  /** The part of the canvas this beat is about. There is one canvas per project. */
+  canvasView?: CanvasView;
 }
 
 /**

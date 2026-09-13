@@ -5,7 +5,7 @@ import {
 } from "lucide-react";
 import { viewerForExt } from "./types";
 import { desktop } from "./desktop";
-import type { Beat, Highlight, Layout, LayoutPreset, PaneConfig, PaneKind, PaneView, Project, ProjectSummary, Source, Stage } from "./types";
+import type { Beat, CanvasView, Highlight, Layout, LayoutPreset, PaneConfig, PaneKind, PaneView, Project, ProjectSummary, Source, Stage } from "./types";
 import { api, type AppConfig } from "./api";
 import { UpdateBanner } from "./components/UpdateBanner";
 import { Sidebar } from "./components/Sidebar";
@@ -87,6 +87,10 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [present, setPresent] = useState(false);
   const [paneViews, setPaneViews] = useState<Record<number, PaneView>>({});
+  /** Where the canvas is looking now, and where a beat wants it pointed. */
+  const canvasViewRef = useRef<CanvasView | null>(null);
+  const [canvasTarget, setCanvasTarget] = useState<CanvasView | null>(null);
+  const [canvasNonce, setCanvasNonce] = useState(0);
   /** Which beat was applied last, so Present mode knows where it is in the running order. */
   const [beatIndex, setBeatIndex] = useState(-1);
   /** The beat strip is inside the window, so anything capturing the window records it. */
@@ -392,6 +396,7 @@ export default function App() {
     viewMode: project?.settings.viewMode ?? "original",
     embedUrl: project?.settings.embedUrl,
     browserUrl: project?.settings.browserUrl,
+    canvasView: canvasViewRef.current ?? undefined,
   }), [layout, paneViews, activeSourceId, selectedHl, project?.settings]);
 
   /**
@@ -417,6 +422,7 @@ export default function App() {
     }));
     setPaneViews(stage.views ?? {});
     setActiveSourceId(liveSource);
+    if (stage.canvasView) { setCanvasTarget(stage.canvasView); setCanvasNonce((n) => n + 1); }
 
     const hl = liveSource && stage.highlightId
       ? project?.sources.find((s) => s.id === liveSource)?.highlights.some((h) => h.id === stage.highlightId)
@@ -593,7 +599,17 @@ export default function App() {
       case "notes": return <NotesPanel value={project.notes} onChange={(notes) => mutate((p) => ({ ...p, notes }))} />;
       case "ai": return <AiPanel chat={project.chat} onChange={(chat) => mutate((p) => ({ ...p, chat }))} source={source} allSources={project.sources} onOpenSettings={() => setShowSettings(true)} />;
       case "code": return <CodePanel projectId={project.id} snippets={project.snippets} onChange={(snippets) => mutate((p) => ({ ...p, snippets }))} />;
-      case "canvas": return <CanvasPanel key={project.id} canvas={project.canvas} onChange={(canvas) => mutate((p) => ({ ...p, canvas }))} dark={dark} />;
+      case "canvas": return (
+        <CanvasPanel
+          key={project.id}
+          canvas={project.canvas}
+          onChange={(canvas) => mutate((p) => ({ ...p, canvas }))}
+          dark={dark}
+          view={canvasTarget}
+          viewNonce={canvasNonce}
+          onView={(v) => { canvasViewRef.current = v; }}
+        />
+      );
       case "terminal": return <TerminalPane key={`term-${i}-${project.id}`} dark={dark} projectId={project.id} />;
       case "jupyter": return <JupyterPane projectId={project.id} />;
       case "slides": return <SlidesPane value={project.slides} onChange={(slides) => mutate((p) => ({ ...p, slides }))} />;

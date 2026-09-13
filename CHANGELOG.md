@@ -2,6 +2,10 @@
 
 What changed in each release, newest first. Versions are the ones the app updates itself to.
 
+## 0.8.0
+
+- **A beat now frames its own part of the canvas.** There is still one drawing per project, but each beat remembers where it was looking — pan and zoom — and returns there when the beat comes up. Draw the whole diagram once, then let beat 3 sit on the left half and beat 7 zoom into the detail.
+
 ## 0.7.2
 
 - **A project can finally be deleted.** 0.7.1 shut down the JupyterLab *this* run of the app had started; the one blocking the folder was usually left behind by an earlier run, which the app knew nothing about. Delete now finds any JupyterLab rooted at exactly that folder, whoever started it, and stops it.

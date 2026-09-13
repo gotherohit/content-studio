@@ -89,6 +89,10 @@ In **Present** mode, **→** (or Space) applies the next beat and **←** the pr
 
 Things worth knowing:
 
+* **The canvas is one drawing per project, framed per beat.** A stage remembers the canvas
+  pan and zoom, so beat 3 can sit on the left half of a diagram and beat 7 zoom into one
+  corner of it. What it does not do is give each beat a separate drawing — improve the
+  drawing and every beat showing it improves.
 * **A stage stores references, not copies.** Improve a note or refine a drawing and every beat pointing at it shows the better version. Only the arrangement is frozen.
 * **What you do inside a beat is not saved over it.** Scroll away, run a cell, make a mess — the beat still holds what you captured. Re-capture only when you ask for it, with the camera on that row.
 * **A broken reference is loud.** If a beat's source or highlight has been deleted, it restores everything it still can and says what it could not, rather than quietly showing the wrong thing.
