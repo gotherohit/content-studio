@@ -55,6 +55,8 @@ committing.
   whether a pane works. Launch with `--remote-debugging-port`, drive the real UI, read the
   state back.
 - **Clean up.** Remove test projects, providers, beats and files you created, and say so.
+  Close development app instances you launched for verification too: a hidden copy holds
+  the single-instance lock and can prevent the installed app from appearing.
 - **Report honestly.** Name what you did not test. Write down real limits rather than
   letting them be discovered mid-recording.
 - **Keep the documentation current in the same commit** — `docs/guide.md` for features,

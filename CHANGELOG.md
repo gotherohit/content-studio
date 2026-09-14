@@ -2,6 +2,10 @@
 
 What changed in each release, newest first. Versions are the ones the app updates itself to.
 
+## 0.11.1
+
+- Launching Studio again now explicitly shows its existing window, fixing a silent no-op when a hidden instance already holds the app's single-instance lock.
+
 ## 0.11.0
 
 - Replaced single-response AI chat with a research agent that streams progress, calls file, shell, public-page and web-search tools, and continues through a bounded research workflow.

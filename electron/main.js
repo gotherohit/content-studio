@@ -331,7 +331,13 @@ ipcMain.handle("studio:openExternal", (_e, url) => shell.openExternal(url));
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
-  app.on("second-instance", () => { if (win) { if (win.isMinimized()) win.restore(); win.focus(); } });
+  app.on("second-instance", () => {
+    if (!win || win.isDestroyed()) return;
+    if (win.isMinimized()) win.restore();
+    // focus() alone does not reveal a hidden window left by a background launch.
+    win.show();
+    win.focus();
+  });
 
   app.whenReady().then(async () => {
     configureWebviews();

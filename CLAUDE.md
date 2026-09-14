@@ -90,6 +90,10 @@ wait. The AI request aborts when the pane closes. Assume a recording is in progr
 
 ## Gotchas that cost time
 
+- **A hidden development copy can block the installed app.** Both use the same
+  single-instance lock. Close verification copies when finished, and explicitly `show()`
+  the existing window before focusing it when the executable is launched again.
+
 - **Research transcripts are server-owned**, under `<project>/.ai/conversations/` or
   `~/.content-studio/conversations/`. Never put them back in project autosave: a second
   pane can overwrite a running conversation. Reserve a run before asynchronous work,

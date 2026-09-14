@@ -283,6 +283,8 @@ A key that cannot be decrypted is **kept, not discarded** — the provider simpl
 
 ## Odds and ends
 
+* Launching Studio again brings its existing window forward, including when that window was hidden. Development copies share the installed app's single-instance lock; close them after testing.
+
 * Code snippets, the terminal and window control all act with your user's permissions; see [Security](../README.md#security).
 * Pages are downloaded once and cached in `~/.content-studio/cache`. Use the refresh button in the Source toolbar to re-download.
 * The proxy relies on every `*.localhost` name resolving to 127.0.0.1, which Chrome, Edge and Firefox do by default.
