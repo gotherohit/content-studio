@@ -27,6 +27,7 @@ public class RSIn {
   [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, IntPtr processId);
   [DllImport("user32.dll")] public static extern bool AttachThreadInput(uint from, uint to, bool attach);
   [DllImport("user32.dll")] public static extern bool BringWindowToTop(IntPtr hWnd);
+  [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr hWnd, IntPtr after, int x, int y, int width, int height, uint flags);
   [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hWnd);
   [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, out RECT r);
   [DllImport("user32.dll")] public static extern bool GetClientRect(IntPtr hWnd, out RECT r);
@@ -109,6 +110,12 @@ while ($true) {
           }
           [void][RSIn]::BringWindowToTop($h)
           [void][RSIn]::SetForegroundWindow($h)
+          # Keep Studio rendering its live preview, but explicitly put it behind the
+          # real app. Foreground keyboard focus alone is not a visibility guarantee.
+          if ($m.fromHwnd -and [IntPtr]$m.fromHwnd -ne $h -and [RSIn]::IsWindow([IntPtr]$m.fromHwnd)) {
+            [void][RSIn]::SetWindowPos([IntPtr]$m.fromHwnd, [IntPtr]1, 0, 0, 0, 0, 0x0013)
+            [void][RSIn]::BringWindowToTop($h)
+          }
         } finally {
           if ($targetAttached) { [void][RSIn]::AttachThreadInput($currentThread, $targetThread, $false) }
           if ($attached) { [void][RSIn]::AttachThreadInput($currentThread, $foregroundThread, $false) }

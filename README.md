@@ -52,7 +52,8 @@ The whole studio is one window, and panes inside it are real Chromium views rath
 | [Beats](docs/guide.md#beats) | The running order. Capture an arrangement per point you make; one key walks them while recording. |
 | [The presenter window](docs/guide.md#the-presenter-window) | A second window for your other monitor, outside any screen capture, with the clock and a chapter log. |
 | [Layout](docs/guide.md#layout) | Up to four panes, each showing a different source or tool. |
-| [Models and keys](docs/guide.md#models-and-keys) | Any Anthropic- or OpenAI-compatible provider. Keys encrypted at rest, never shown again. |
+| [Research with AI](docs/guide.md#research-with-ai) | A tool-using research agent with reviewed file/shell actions, web search and persistent project or global conversations. |
+| [Models and keys](docs/guide.md#models-and-keys) | Anthropic- or OpenAI-compatible providers; research requires a tool-capable model. Keys encrypted at rest, never shown again. |
 | [A real browser pane](docs/guide.md#embedding-a-running-app) | Colab, Drive, Kaggle and your own local harnesses, signed in, in a pane. |
 | [Controlling a window](docs/guide.md#controlling-a-window) | Capture and drive another desktop application from inside the studio. |
 

@@ -44,6 +44,9 @@ than `file://`. That is why websockets, cookies and the `<sub>.localhost` proxy 
 | `server/site.js` | the reverse proxy: `read` mode caches an article, `app` mode pipes a live app |
 | `server/credentials.js` | providers and keys, encrypted through `vault.js` |
 | `server/ai.js` | both wire protocols, streamed |
+| `server/research-agent.js` | durable conversations, bounded agent loop, approvals and cancellation |
+| `server/agent-model.js` / `server/agent-tools.js` | provider tool calls and reviewed local tools |
+| `server/research-search.js` | search credentials and Tavily requests |
 | `server/slides.js` | PowerPoint COM, per-slide export |
 | `client/src/App.tsx` | project state, layout, beats, the presenter bridge |
 | `client/src/Presenter.tsx` | the second window; holds no project state |
@@ -86,6 +89,17 @@ route bodies that touch the filesystem, and give the client a `catch` that calls
 wait. The AI request aborts when the pane closes. Assume a recording is in progress.
 
 ## Gotchas that cost time
+
+- **Research transcripts are server-owned**, under `<project>/.ai/conversations/` or
+  `~/.content-studio/conversations/`. Never put them back in project autosave: a second
+  pane can overwrite a running conversation. Reserve a run before asynchronous work,
+  checkpoint tool calls/results, and await cancellation during shutdown. Moving or deleting
+  a project must be refused while its research agent is running.
+- **Share one vault instance across credential stores.** Its IPC request ids are local
+  to the instance; independent instances can collide and resolve the wrong encryption reply.
+- **Research shell cwd is not a sandbox.** File tools enforce project/workspace boundaries;
+  shell commands need explicit review and run with the user's account. Keep that distinction
+  visible in the approval UI and documentation.
 
 - **`PORT` is taken by tooling.** The server reads `API_PORT`.
 - **`node --watch` crashes node-pty** on Windows (conout worker). `dev:server` has no

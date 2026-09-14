@@ -2,6 +2,15 @@
 
 What changed in each release, newest first. Versions are the ones the app updates itself to.
 
+## 0.11.0
+
+- Replaced single-response AI chat with a research agent that streams progress, calls file, shell, public-page and web-search tools, and continues through a bounded research workflow.
+- Added review cards for file writes and shell commands, cancellation, durable tool results, interrupted-run recovery and whole-turn conversation history management.
+- Added project and global conversations, a conversation picker, explicit import of previous project chat and a Files shortcut. Project outputs live in `research/`; conversations live separately from project autosave.
+- Added Tavily web-search settings with encrypted, masked keys. Public URL reading works without a search key.
+- Window handoff now explicitly places Studio behind the selected app while keeping the preview rendering. Its return toolbar identifies the selected app.
+- Added research regression tests covering both provider protocols, persistence, approvals, cancellation, credential storage and file boundaries.
+
 ## 0.10.0
 
 - Added a desktop capture picker, fixing Electron's unsupported capture request and automatically matching a chosen window to its application.

@@ -220,7 +220,31 @@ The **Window** pane is a live preview of a native desktop app or screen. **Embed
 
 Drag the toolbar by its grip or background to move it. **Hide toolbar** removes it for recording while the return shortcut remains active. If another program owns the shortcut, the toolbar explains this and cannot be hidden. The shortcut is released when you return. Closing Studio also removes the toolbar.
 
+The toolbar names the app currently being used. Studio moves behind that app while continuing to render its preview. The app is not embedded inside the slot: selecting text, dragging and keyboard shortcuts happen in its real window. If only the toolbar appears, return to Studio and rescan; that is a failed switch, not another control mode.
+
 Interaction requires the Windows desktop app. Elsewhere, Window remains a live preview. If a target closes, rescan and select its new window. Windows may refuse to bring an app forward; Studio reports that failure instead of pretending the switch succeeded. The preview does not forward input or move your physical cursor. Native apps still run in their own windows, and a minimised app may stop updating its capture. The floating toolbar may appear in a whole-display recording; hide it before a take if needed.
+
+## Research with AI
+
+Choose **AI** in a pane, select a model that supports tool calling, and ask a question or describe a deliverable. The agent can investigate sources, read files, search the web and create Markdown briefs, Mermaid diagrams, SVGs and scripts. It works through several tool calls and shows their results in the conversation. Generated diagrams are files; they are not automatically inserted into the Canvas.
+
+Choose **Current source**, **All project sources** or **No source context** to control which saved article text and highlights are sent with the request. Project files can also be read through `project/` paths. These file tools keep the original project material read-only and put new work in the project's `research/` folder.
+
+Every file write shows the proposed contents before **Allow once** or **Decline**. Every shell command shows the exact command and working folder. PowerShell works on Windows; Bash requires Git for Windows in its usual installation location. Commands run with your account and can access files outside the working folder: this is not an OS sandbox. Review the command before approving it. Commands stop after 30 seconds; output is capped.
+
+**Stop** cancels a run. Closing its AI pane also cancels it, keeping completed tool results and any partial text already received. Runs are limited to 12 model steps and 15 minutes; send a follow-up to continue. Older complete turns leave the model's working context, but remain on disk and can be read by the history tool. A provider/model without tool support will report an error; protocol compatibility alone does not guarantee tool support.
+
+### Conversations and files
+
+**Project research** is the default when a project is open. Conversations are stored separately from project autosave in `<project>/.ai/conversations/`, and deliverables in `<project>/research/`. They travel with the project folder. **Global research** stores conversations in `~/.content-studio/conversations/` and deliverables in `~/.content-studio/research/`; it does not include the selected project's sources or file access. Global research also works before opening a project.
+
+Use **New** to start a conversation and the conversation dropdown to resume one. **Files** opens its research folder. Existing project chat can be imported explicitly; the original chat is kept. Conversation files are local JSON, not encrypted like API keys, so keep private research in a folder you trust. Selected context and tool results are sent to the model provider you choose.
+
+### Web search
+
+Add a **Tavily API key** in **Settings → Web search**. This is separate from the model provider's key. The desktop encrypts it using your Windows account, stores it in `~/.content-studio/search.json`, and shows only its last four characters. Save replaces the key; Remove key disables search. Running the server outside Electron cannot encrypt new keys; Settings reports this.
+
+Search sends the query to Tavily and returns source links and excerpts. Reading a public page by URL requires no search key. The reader accepts public HTTP(S) text pages on standard ports, with bounded size and time; it does not run page JavaScript, log in, read private-network URLs or bypass access restrictions. Add PDFs and other documents as project sources. Verify citations and conclusions before using them in a video.
 
 ## Models and keys
 

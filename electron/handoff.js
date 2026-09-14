@@ -63,7 +63,7 @@ export function wireHandoff(studio, here, request) {
       if (token !== generation) throw new Error("Interaction cancelled.");
       const area = screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea;
       const bar = new BrowserWindow({
-        width: 440, height: 92, x: Math.round(area.x + (area.width - 440) / 2), y: area.y + 12,
+        width: 440, height: 112, x: Math.round(area.x + (area.width - 440) / 2), y: area.y + 12,
         frame: false, resizable: false, minimizable: false, maximizable: false,
         alwaysOnTop: true, skipTaskbar: true, focusable: false, show: false, backgroundColor: "#151923",
         webPreferences: { preload: path.join(here, "handoff-preload.cjs"), contextIsolation: true, nodeIntegration: false, sandbox: true },
@@ -72,7 +72,7 @@ export function wireHandoff(studio, here, request) {
       bar.setAlwaysOnTop(true, "screen-saver");
       bar.on("closed", () => { if (toolbar === bar) finish(true); });
       shortcut = globalShortcut.register(SHORTCUT, () => finish(true));
-      await bar.loadFile(path.join(here, "handoff.html"), { query: { shortcut: String(shortcut) } });
+      await bar.loadFile(path.join(here, "handoff.html"), { query: { shortcut: String(shortcut), target: target.title } });
       if (token !== generation) throw new Error("Interaction cancelled.");
       // Creating/showing another Studio window can enqueue an activation event on
       // Windows. Show the toolbar before the final native focus transfer.
@@ -85,7 +85,7 @@ export function wireHandoff(studio, here, request) {
       publish();
       return state();
     } catch (error) {
-      finish();
+      finish(Boolean(toolbar));
       throw error;
     } finally { busy = false; }
   });

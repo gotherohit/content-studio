@@ -1,3 +1,18 @@
+# Research verification
+
+`npm test` includes isolated research-agent tests for tool-call streaming in both provider
+formats, signed-content replay, file boundaries, write approval, concurrent file edits,
+encrypted search keys, durable transcripts, history trimming and cancellation. Windows
+scratch folders live under the dedicated test folder in AGENTS.md and are removed afterwards.
+
+For a real UI check, run `node test/research-provider-fixture.mjs` and add a temporary
+OpenAI-compatible, keyless provider at `http://127.0.0.1:4891/v1`, model `fixture-agent`.
+Open a new disposable project in the test folder, choose AI, and explicitly select the
+fixture model. Send a request, approve its file write and PowerShell command, and check the
+saved file, tool results and conversation after reload. A request containing `slow` tests
+Stop. No paid model or real web search is used. Remove the temporary provider and scratch
+project, and stop the fixture when done. A real Tavily request needs a separately supplied key.
+
 # Window handoff verification
 
 `npm test` includes the handoff lifecycle tests: return, hidden toolbar, shortcut

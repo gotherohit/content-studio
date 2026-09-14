@@ -122,7 +122,8 @@ export default function App() {
   const dirtyRef = useRef(false);
 
   const source = project?.sources.find((s) => s.id === activeSourceId) ?? null;
-  const layout = project?.layout ?? DEFAULT_LAYOUT;
+  const [globalLayout, setGlobalLayout] = useState<Layout>(DEFAULT_LAYOUT);
+  const layout = project?.layout ?? globalLayout;
   const beats = project?.beats ?? [];
   const beatIndex = beats.findIndex((beat) => beat.id === activeBeatId);
   // The presenter window's commands arrive outside React's render flow.
@@ -407,8 +408,10 @@ export default function App() {
   }
 
   // ---- layout
-  const setLayout = useCallback((fn: (l: Layout) => Layout) =>
-    mutate((p) => ({ ...p, layout: fn({ ...DEFAULT_LAYOUT, ...(p.layout ?? {}) }) })), [mutate]);
+  const setLayout = useCallback((fn: (l: Layout) => Layout) => {
+    if (!project) { setGlobalLayout(fn); return; }
+    mutate((p) => ({ ...p, layout: fn({ ...DEFAULT_LAYOUT, ...(p.layout ?? {}) }) }));
+  }, [mutate, project]);
 
   // ---- beats
   //
@@ -634,7 +637,8 @@ export default function App() {
   }
 
   function renderPane(pane: PaneConfig, i: number) {
-    if (!project) return <div className="empty-state"><h2>No project open</h2><p>Create or open a project on the left.</p></div>;
+    if (!project && pane.kind === "ai") return <AiPanel key="global" source={null} onOpenSettings={() => setShowSettings(true)} />;
+    if (!project) return <div className="empty-state"><h2>No project open</h2><p>Create or open a project on the left, or choose AI for global research.</p></div>;
     switch (pane.kind) {
       case "source": {
         // A pinned pane keeps its own source; an unpinned one follows the sidebar.
@@ -681,7 +685,7 @@ export default function App() {
           />
         );
       case "notes": return <NotesPanel value={project.notes} onChange={(notes) => mutate((p) => ({ ...p, notes }))} />;
-      case "ai": return <AiPanel chat={project.chat} onChange={(chat) => mutate((p) => ({ ...p, chat }))} source={source} allSources={project.sources} onOpenSettings={() => setShowSettings(true)} />;
+      case "ai": return <AiPanel key={project.id} projectId={project.id} hasLegacyChat={project.chat.length > 0} source={source} onOpenSettings={() => setShowSettings(true)} />;
       case "code": return <CodePanel projectId={project.id} snippets={project.snippets} onChange={(snippets) => mutate((p) => ({ ...p, snippets }))} />;
       case "canvas": return (
         <CanvasPanel

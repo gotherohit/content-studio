@@ -17,6 +17,9 @@ import { TYPES, viewerFor, safeName, uniqueName } from "./assets.js";
 import { renderDeck, openSlideshow, hasPowerPoint, findSoffice } from "./slides.js";
 import { pickFolder } from "./picker.js";
 import { createBrowser } from "./browser.js";
+import { createVault } from "./vault.js";
+import { createResearchSearch } from "./research-search.js";
+import { createResearchAgent } from "./research-agent.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(here, "..");
@@ -24,8 +27,11 @@ const PORT = Number(process.env.API_PORT || 4700);
 
 const config = createConfig(ROOT);
 await config.load();
-const credentials = createCredentials({ appDirFn: () => config.appDir() });
+const vault = createVault();
+const credentials = createCredentials({ appDirFn: () => config.appDir(), vault });
 await credentials.load();
+const researchSearch = createResearchSearch({ appDir: config.appDir(), vault });
+await researchSearch.load();
 const site = createSiteProxy({ cacheDirFn: () => path.join(config.cacheDir(), "sites"), port: PORT });
 const jupyter = createJupyter();
 const input = createInput();
@@ -85,6 +91,8 @@ app.get("/api/config", async (_req, res) => {
 
 // ---------- projects ----------
 const readProject = async (id) => JSON.parse(await fs.readFile(config.fileOf(id), "utf8"));
+const researchAgent = createResearchAgent({ config, credentials, search: researchSearch, readProject });
+app.use("/api/research", researchAgent.router);
 
 async function listProjects() {
   const out = [];
@@ -180,6 +188,7 @@ async function removeWithRetry(dir, attempts = 8) {
 }
 
 app.delete("/api/projects/:id", async (req, res) => {
+  if (researchAgent.isProjectActive(req.params.id)) return res.status(409).json({ error: "Stop the project's research agent before deleting this project." });
   if (!safeId(req.params.id)) return res.status(400).json({ error: "bad id" });
   const dir = config.dirOf(req.params.id);
   if (!dir) return res.status(404).json({ error: "That project is not in the index" });
@@ -218,6 +227,7 @@ app.delete("/api/projects/:id", async (req, res) => {
 
 /** Put this project's folder somewhere else, moving everything in it. */
 app.put("/api/projects/:id/folder", async (req, res) => {
+  if (researchAgent.isProjectActive(req.params.id)) return res.status(409).json({ error: "Stop the project's research agent before moving its folder." });
   if (!safeId(req.params.id)) return res.status(400).json({ error: "bad id" });
   const { dir } = req.body || {};
   if (!dir) return res.status(400).json({ error: "dir required" });
@@ -569,6 +579,7 @@ let leaving = false;
 async function shutdown() {
   if (leaving) return;
   leaving = true;
+  await researchAgent.stopAll();
   try { terminals.closeAll(); } catch { /* already gone */ }
   try { await jupyter.shutdown(); } catch { /* already gone */ }
   process.exit(0);

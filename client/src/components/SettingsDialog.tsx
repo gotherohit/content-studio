@@ -5,6 +5,7 @@ import type { Project } from "../types";
 import { FolderField } from "./FolderField";
 import { ModelSettings } from "./ModelSettings";
 import { UpdateSettings } from "./UpdateSettings";
+import { SearchSettings } from "./SearchSettings";
 
 interface Props {
   project: Project | null;
@@ -15,7 +16,7 @@ interface Props {
   initialTab?: Tab;
 }
 
-type Tab = "models" | "folders" | "updates";
+type Tab = "models" | "folders" | "updates" | "search";
 
 /**
  * Content Studio's own settings, as opposed to a project's.
@@ -39,6 +40,7 @@ export function SettingsDialog({ project, onClose, onProjectMoved, onOpenedFolde
         </div>
 
         <div className="tab-bar">
+          <button className={tab === "search" ? "tab active" : "tab"} onClick={() => setTab("search")}>Web search</button>
           <button className={tab === "models" ? "tab active" : "tab"} onClick={() => setTab("models")}>
             <Sparkles size={13} /> Models and keys
           </button>
@@ -51,6 +53,7 @@ export function SettingsDialog({ project, onClose, onProjectMoved, onOpenedFolde
         </div>
 
         {tab === "models" && <ModelSettings />}
+        {tab === "search" && <SearchSettings />}
         {tab === "folders" && (
           <FolderSettings project={project} onProjectMoved={onProjectMoved} onOpenedFolder={onOpenedFolder} />
         )}

@@ -783,3 +783,16 @@ mark.hl:hover { filter: brightness(0.94); }
  */
 .canvas-host { flex: 1; min-height: 0; position: relative; }
 .canvas-host > .excalidraw { position: absolute; inset: 0; }
+.research-agent { min-height: 0; gap: 8px; }
+.research-agent > .row select { max-width: 100%; min-width: 0; flex: 1; }
+.research-agent form textarea { width: 100%; }
+.research-agent .chat { min-height: 100px; }
+.research-location { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.research-intro { padding: 12px 2px; }
+.agent-tool { border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font-size: 12px; flex-shrink: 0; }
+.agent-tool summary { cursor: pointer; }
+.agent-tool summary > span { float: right; opacity: .7; }
+.agent-tool pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 260px; overflow: auto; font-size: 11px; }
+.agent-tool.needs-review { border-color: var(--accent); background: var(--panel-2); }
+.agent-approval { padding-top: 10px; }
+.agent-approval > details { margin: 8px 0; }
