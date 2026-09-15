@@ -3,9 +3,30 @@ import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
 import crypto from "node:crypto";
+import net from "node:net";
 
 const PY = process.platform === "win32" ? "python" : "python3";
 const PORT = Number(process.env.JUPYTER_PORT || 8890);
+
+export async function availablePort(preferred = PORT) {
+  for (let port = preferred; port < Math.min(preferred + 40, 65536); port++) {
+    const free = await new Promise((resolve) => {
+      const probe = net.createServer();
+      probe.once("error", () => resolve(false));
+      probe.listen(port, "127.0.0.1", () => probe.close(() => resolve(true)));
+    });
+    if (free) return port;
+  }
+  throw new Error("No free loopback port for JupyterLab");
+}
+
+export function launchArguments(port, token, root) {
+  return ["-m", "jupyterlab", "--no-browser", `--port=${port}`, "--ServerApp.port_retries=0",
+    "--ServerApp.ip=127.0.0.1", `--IdentityProvider.token=${token}`, "--ServerApp.password=",
+    '--ServerApp.tornado_settings={"headers":{"Content-Security-Policy":"frame-ancestors http://127.0.0.1:* http://localhost:*"}}',
+    "--ServerApp.allow_origin_pat=^https?://(127\\.0\\.0\\.1|localhost)(:[0-9]+)?$", `--ServerApp.root_dir=${root}`,
+    `--LabApp.workspaces_dir=${path.join(root, ".jupyter", "workspaces")}`];
+}
 
 /**
  * Find any JupyterLab rooted at exactly this folder, whoever started it.
@@ -58,50 +79,66 @@ export function createJupyter() {
   let installed = null; // cached
   let log = "";
   let rootDir = null;
+  let port = PORT;
+  let ready = false;
+  let generation = 0;
+  let pending = Promise.resolve();
 
   async function isInstalled(force = false) {
     if (installed !== null && !force) return installed;
-    const r = await run(PY, ["-m", "jupyter", "lab", "--version"]);
+    const r = await run(PY, ["-m", "jupyterlab", "--version"]);
     installed = r.ok;
     return installed;
   }
 
   function status() {
-    return { installed, running: Boolean(child), port: PORT, token, rootDir, url: child ? `http://localhost:${PORT}/lab?token=${token}` : null, log: log.slice(-4000) };
+    return { installed, running: Boolean(child && ready), port, rootDir, url: child && ready ? `http://127.0.0.1:${port}/lab?token=${token}` : null, log: token ? log.slice(-4000).split(token).join("[token]") : log.slice(-4000) };
   }
 
   /** Roots JupyterLab at the project's own folder, so notebooks sit with its sources. */
-  async function start(notebooksDir) {
+  function start(notebooksDir) {
+    const next = pending.then(() => startNow(notebooksDir));
+    pending = next.catch(() => {});
+    return next;
+  }
+
+  async function startNow(notebooksDir) {
+    if (!notebooksDir) throw new Error("Open a valid project before starting JupyterLab");
+    notebooksDir = path.resolve(notebooksDir);
     await fs.mkdir(notebooksDir, { recursive: true });
     // Jupyter's root cannot change without a restart, so switch folders by restarting.
-    if (child && rootDir === notebooksDir) return status();
+    if (child && ready && rootDir === notebooksDir) return status();
     if (child) stop();
+    const version = ++generation;
     if (!(await isInstalled())) throw new Error("JupyterLab is not installed");
+    port = await availablePort();
+    if (version !== generation) throw new Error("Jupyter startup cancelled");
     rootDir = notebooksDir;
     token = crypto.randomBytes(12).toString("hex");
     log = "";
-    const args = [
-      "-m", "jupyter", "lab", "--no-browser", `--port=${PORT}`, `--ServerApp.token=${token}`, "--ServerApp.password=",
-      "--ServerApp.tornado_settings={\"headers\":{\"Content-Security-Policy\":\"frame-ancestors *\"}}",
-      "--ServerApp.allow_origin=*", "--ServerApp.disable_check_xsrf=True", `--ServerApp.root_dir=${notebooksDir}`,
-    ];
-    child = spawn(PY, args, { cwd: notebooksDir, env: { ...process.env, PYTHONIOENCODING: "utf-8" } });
-    child.stdout.on("data", (d) => (log += d));
-    child.stderr.on("data", (d) => (log += d));
-    child.on("exit", () => { child = null; });
+    const current = spawn(PY, launchArguments(port, token, notebooksDir), { cwd: notebooksDir, windowsHide: true, detached: process.platform !== "win32", env: { ...process.env, PYTHONIOENCODING: "utf-8" } });
+    child = current; ready = false;
+    const append = (d) => { if (child === current) log = (log + d).slice(-16000); };
+    current.stdout.on("data", append);
+    current.stderr.on("data", append);
+    current.on("error", (e) => { append(e.message); if (child === current) { child = null; ready = false; } });
+    current.on("exit", () => { if (child === current) { child = null; ready = false; } });
     // wait until it answers
     for (let i = 0; i < 40; i++) {
       await new Promise((r) => setTimeout(r, 500));
       try {
-        const r = await fetch(`http://localhost:${PORT}/api/status?token=${token}`);
-        if (r.ok) break;
+        const r = await fetch(`http://127.0.0.1:${port}/api/status?token=${token}`, { signal: AbortSignal.timeout(1000) });
+        if (r.ok && child === current && version === generation) { ready = true; return status(); }
       } catch { /* not up yet */ }
-      if (!child) throw new Error(`Jupyter exited:\n${log.slice(-2000)}`);
+      if (version !== generation) throw new Error("Jupyter startup cancelled");
+      if (child !== current) throw new Error(`Jupyter exited:\n${status().log.slice(-2000)}`);
     }
-    return status();
+    stop();
+    throw new Error(`Jupyter did not become ready within the startup timeout.\n${status().log.slice(-2000)}`);
   }
 
   function stop() {
+    generation++; ready = false;
     if (child) { killTree(child.pid); child = null; }
     return status();
   }
@@ -113,7 +150,7 @@ export function createJupyter() {
   function killTree(pid) {
     if (!pid) return;
     try {
-      if (process.platform === "win32") spawnSync("taskkill", ["/PID", String(pid), "/T", "/F"], { stdio: "ignore" });
+      if (process.platform === "win32") spawnSync("taskkill", ["/PID", String(pid), "/T", "/F"], { stdio: "ignore", windowsHide: true });
       else process.kill(-pid, "SIGKILL");
     } catch { /* already gone */ }
   }

@@ -10,7 +10,7 @@ async function j<T>(r: Response): Promise<T> {
   return body as T;
 }
 
-export interface JupyterStatus { installed: boolean | null; running: boolean; url: string | null; log: string; port: number }
+export interface JupyterStatus { installed: boolean | null; running: boolean; url: string | null; log: string; port: number; rootDir?: string | null }
 
 /** POST and read a text/event-stream, calling onText for each text chunk. Resolves with the final event. */
 async function sse(url: string, body: unknown, onText: (t: string) => void): Promise<Record<string, unknown>> {

@@ -432,7 +432,8 @@ app.post("/api/run", async (req, res) => {
 app.get("/api/jupyter/status", async (_req, res) => { await jupyter.isInstalled(); res.json(jupyter.status()); });
 app.post("/api/jupyter/start", async (req, res) => {
   const id = req.body?.projectId;
-  const dir = id && safeId(id) ? config.dirOf(id) : config.appDir();
+  const dir = id && safeId(id) ? config.dirOf(id) : null;
+  if (!dir) return res.status(400).json({ error: "Open a valid project before starting JupyterLab" });
   try { res.json(await jupyter.start(dir)); } catch (e) { res.status(500).json({ error: e.message }); }
 });
 app.post("/api/jupyter/stop", (_req, res) => res.json(jupyter.stop()));

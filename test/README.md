@@ -1,3 +1,19 @@
+# Jupyter verification
+
+`npm test` checks loopback-only startup arguments, project-local Lab workspaces, and
+occupied-port handling. For a real kernel test, start the development server on port
+4710, create a fresh project in the dedicated test folder, and run Electron with
+`test/jupyter-desktop.cjs`, `--remote-debugging-port=9223`, and a quoted
+`--test-profile=<fresh folder beneath the test folder>` argument. This fixture displays
+the real renderer with a separate browser profile. The server still shares the real app
+index: only register, open and delete the new scratch project.
+
+Select Jupyter in that project, start it, create a Python notebook and run `6 * 7`.
+Save it, reload Studio and execute another cell. Check that the kernel returns to Idle,
+then Stop/start and verify the saved notebook opens and executes again. Remove the
+scratch project, close the fixture, stop its development server, and remove only the
+test browser profile. Do not stop the user's installed app or its Jupyter server.
+
 # Research verification
 
 `npm test` includes isolated research-agent tests for tool-call streaming in both provider

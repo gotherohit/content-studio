@@ -11,7 +11,12 @@ export function JupyterPane({ projectId }: { projectId: string }) {
 
   const refresh = () => api.jupyterStatus().then(setSt).catch((e) => setErr(e.message));
   // "start" is idempotent and also creates this project's notebook folder
-  useEffect(() => { api.jupyterStatus().then((s) => (s.running ? api.jupyterStart(projectId) : s)).then(setSt).catch((e) => setErr(e.message)); }, [projectId]);
+  useEffect(() => {
+    let active = true; setSt(null); setErr(null);
+    api.jupyterStatus().then((s) => (s.running ? api.jupyterStart(projectId) : s))
+      .then((s) => { if (active) setSt(s); }).catch((e) => { if (active) setErr(e.message); });
+    return () => { active = false; };
+  }, [projectId]);
   useEffect(() => { logRef.current?.scrollTo(0, logRef.current.scrollHeight); }, [log]);
 
   async function install() {
@@ -27,20 +32,24 @@ export function JupyterPane({ projectId }: { projectId: string }) {
     try { setSt(await api.jupyterStart(projectId)); } catch (e) { setErr((e as Error).message); }
     setBusy(null);
   }
-  async function stop() { setSt(await api.jupyterStop()); }
+  async function stop() { try { setSt(await api.jupyterStop()); } catch (e) { setErr((e as Error).message); } }
 
   if (!st) return <div className="panel-empty">{err || "Checking Jupyter…"}</div>;
 
   if (st.running && st.url) {
-    // open the lab inside a per-project folder so notebooks stay with the video
-    const url = st.url.replace("/lab?", `/lab/tree/${projectId}/files?`);
+    // Jupyter is already rooted at this project. Match the top-level site's host so
+    // its authentication cookie also accompanies kernel WebSocket connections.
+    const target = new URL(st.url);
+    if (["127.0.0.1", "localhost"].includes(window.location.hostname)) target.hostname = window.location.hostname;
+    const url = target.href;
     return (
       <div className="jupyter-pane">
         <div className="row term-bar">
-          <span className="muted small grow">JupyterLab on port {st.port} · notebooks in projects/{projectId}/files</span>
+          <span className="muted small grow" title={st.rootDir || undefined}>JupyterLab on port {st.port} · notebooks saved in this project folder</span>
           <a className="small" href={url} target="_blank" rel="noreferrer">open in tab</a>
           <button className="ghost small" onClick={stop}>Stop</button>
         </div>
+        {err && <div className="error-bar">{err}</div>}
         <iframe className="embed" src={url} title="JupyterLab" />
       </div>
     );

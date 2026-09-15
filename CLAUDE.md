@@ -90,6 +90,15 @@ wait. The AI request aborts when the pane closes. Assume a recording is in progr
 
 ## Gotchas that cost time
 
+- **Jupyter's iframe and Studio must use the same loopback hostname.** `localhost`
+  inside `127.0.0.1` is cross-site: the page can load with a URL token while its kernel
+  WebSocket is refused with 403 because the login cookie is missing. Keep token and XSRF
+  authentication enabled; fix the host rather than disabling browser protections.
+- **Jupyter already uses the project as its root.** Never append the old
+  `<project-id>/files` URL. Keep Lab workspaces under that project's `.jupyter/` folder,
+  and launch `python -m jupyterlab` directly to own the real server process. The legacy
+  root-based process cleanup remains for servers orphaned by earlier versions.
+
 - **A hidden development copy can block the installed app.** Both use the same
   single-instance lock. Close verification copies when finished, and explicitly `show()`
   the existing window before focusing it when the executable is launched again.

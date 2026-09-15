@@ -2,6 +2,13 @@
 
 What changed in each release, newest first. Versions are the ones the app updates itself to.
 
+## 0.11.2
+
+- Fixed Jupyter's missing-path dialog: the pane now opens the project root directly instead of appending the obsolete `project-id/files` path.
+- Fixed embedded kernels stuck connecting because Jupyter used `localhost` while Studio used `127.0.0.1`. The hosts now match so authenticated kernel WebSockets retain their login cookie.
+- Jupyter runs directly as a managed Python process, binds loopback, chooses an available port, and reports failed startup. Concurrent starts are serialised and an old process exiting cannot clear the new server's state.
+- Jupyter tab layouts are now saved per project. Notebook files stay in their existing project folder.
+
 ## 0.11.1
 
 - Launching Studio again now explicitly shows its existing window, fixing a silent no-op when a hidden instance already holds the app's single-instance lock.

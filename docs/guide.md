@@ -209,6 +209,22 @@ That is why an app loads here even though pasting its URL into a plain iframe sh
 
 Many local harnesses print a URL containing a one-time token and reject the bare address. Paste the whole URL the tool printed, query string included. If the app refuses, the pane shows its actual reply rather than an empty frame.
 
+## Jupyter notebooks
+
+Choose **Jupyter**, then **Start JupyterLab**. The launcher opens at the project folder;
+notebooks you create are saved there. Studio uses the installed Python and can install
+JupyterLab when it is missing.
+
+The embedded page uses the same loopback hostname as Studio, allowing its authenticated
+kernel connection to work inside the pane. Authentication stays enabled. If port 8890 is
+occupied, Studio chooses another free loopback port and displays it in the pane toolbar.
+Startup failures show a diagnostic instead of claiming the server is ready.
+
+Jupyter's saved tabs and layout live in the project's `.jupyter/workspaces/` directory.
+**Stop** stops the managed server and its kernels; starting again opens the same folder.
+Save notebook edits before stopping or updating Studio. Existing notebooks do not need to
+be moved into a `project-id/files` subfolder.
+
 ## Controlling a window
 
 The **Window** pane is a live preview of a native desktop app or screen. **Embed** is for websites and localhost web apps you interact with directly inside a pane.
@@ -299,7 +315,7 @@ Optional, and nothing in it is needed to use the app.
 |---|---|---|
 | `API_PORT` | `4700` | API and proxy port |
 | `HOST` | `127.0.0.1` | Bind address. Changing it exposes a shell and desktop control to your network. |
-| `JUPYTER_PORT` | `8890` | Port for the managed JupyterLab |
+| `JUPYTER_PORT` | `8890` | Preferred JupyterLab port; another free loopback port is chosen if occupied |
 | `RS_SHELL` | `powershell.exe` | Shell used by the Terminal pane |
 | `ANTHROPIC_API_KEY` | | Only read once, to carry an older setup over into Settings |
 
