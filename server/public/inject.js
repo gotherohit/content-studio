@@ -1,108 +1,39 @@
 /* Runs inside the framed copy of an article. Talks to the app through postMessage. */
 (async function () {
-  var positionModule = await import(new URL("./reading-position.js", document.currentScript.src).href);
-  var CTX = 40;
+  var scriptUrl = document.currentScript.src;
+  var positionModule = await import(new URL("./reading-position.js", scriptUrl).href);
+  var highlightsModule = await import(new URL("./highlights.js", scriptUrl).href);
   var parentWin = window.parent;
   var send = function (msg) { parentWin.postMessage(Object.assign({ src: "rs-frame" }, msg), "*"); };
   var pageUrl = location.href;
   var currentList = [];
-  var applying = false;
   var stopTracking = null;
   var positionNonce = null;
   var pendingHighlight = null;
   var presenting = false;
 
-  function textNodes(root) {
-    var out = [], w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT), n;
-    while ((n = w.nextNode())) out.push(n);
-    return out;
-  }
-  function offsetOf(root, node, offset) {
-    var total = 0, nodes = textNodes(root);
-    for (var i = 0; i < nodes.length; i++) {
-      var t = nodes[i];
-      if (t === node) return total + offset;
-      if (node.nodeType !== 3 && node.contains(t)) {
-        var before = Array.prototype.slice.call(node.childNodes, 0, offset);
-        var inBefore = before.some(function (c) { return c === t || c.contains(t); });
-        if (inBefore) { total += t.data.length; continue; }
-        return total;
-      }
-      total += t.data.length;
-    }
-    return total;
-  }
-  function locate(full, h) {
-    var i = full.indexOf(h.prefix + h.text + h.suffix); if (i >= 0) return i + h.prefix.length;
-    i = full.indexOf(h.prefix + h.text); if (i >= 0) return i + h.prefix.length;
-    i = full.indexOf(h.text + h.suffix); if (i >= 0) return i;
-    return full.indexOf(h.text);
-  }
-  function wrapRange(root, start, end, h) {
-    var pos = 0, nodes = textNodes(root);
-    for (var i = 0; i < nodes.length; i++) {
-      var t = nodes[i], nStart = pos, nEnd = pos + t.data.length;
-      pos = nEnd;
-      if (nEnd <= start || nStart >= end) continue;
-      var from = Math.max(start, nStart) - nStart, to = Math.min(end, nEnd) - nStart;
-      var target = t;
-      if (from > 0) target = target.splitText(from);
-      if (to - from < target.data.length) target.splitText(to - from);
-      var mark = document.createElement("mark");
-      mark.className = "rs-hl rs-hl-" + h.color;
-      mark.setAttribute("data-hid", h.id);
-      if (h.comment) mark.title = h.comment;
-      target.parentNode.insertBefore(mark, target);
-      mark.appendChild(target);
-      var next = Math.min(end, nEnd);
-      if (next < end) wrapRange(root, next, end, h);
-      return;
-    }
-  }
+  var highlightWatcher = highlightsModule.watchHighlights(document.body, function () { return currentList; }, function () {
+    highlightsModule.applyHighlights(document.body, currentList, "rs-hl");
+    if (pendingHighlight) jumpToHighlight();
+  });
   function applyHighlights(list) {
     currentList = list;
-    applying = true;
-    var root = document.body;
-    Array.prototype.forEach.call(root.querySelectorAll("mark.rs-hl"), function (m) {
-      var p = m.parentNode; while (m.firstChild) p.insertBefore(m.firstChild, m); p.removeChild(m);
-    });
-    root.normalize();
-    var full = root.textContent || "";
-    list.forEach(function (h) {
-      var s = locate(full, h);
-      if (s < 0) return;
-      wrapRange(root, s, s + h.text.length, h);
-      root.normalize();
-    });
-    setTimeout(function () { applying = false; }, 0);
-    if (pendingHighlight) jumpToHighlight();
+    highlightWatcher.render();
   }
   function jumpToHighlight() {
     var el = Array.from(document.querySelectorAll("mark.rs-hl")).find(function (mark) { return mark.getAttribute("data-hid") === pendingHighlight; });
     if (el) { el.scrollIntoView({ behavior: "instant", block: "center" }); pendingHighlight = null; }
   }
-  // Page scripts (React hydration etc.) may replace the DOM and drop our marks: re-apply when that happens.
-  var reapplyTimer = null;
-  new MutationObserver(function () {
-    if (applying || !currentList.length) return;
-    if (document.querySelectorAll("mark.rs-hl").length >= currentList.length) return;
-    clearTimeout(reapplyTimer);
-    reapplyTimer = setTimeout(function () { applyHighlights(currentList); }, 400);
-  }).observe(document.documentElement, { childList: true, subtree: true });
-
   // ---- selection -> parent
   document.addEventListener("mouseup", function () {
     setTimeout(function () {
       var sel = window.getSelection();
       if (!sel || sel.isCollapsed || !sel.rangeCount) { send({ type: "selection", anchor: null }); return; }
-      var range = sel.getRangeAt(0), root = document.body, full = root.textContent || "";
-      var start = offsetOf(root, range.startContainer, range.startOffset);
-      var end = offsetOf(root, range.endContainer, range.endOffset);
-      if (end <= start) return;
-      var text = full.slice(start, end);
-      if (!text.trim()) return;
+      var range = sel.getRangeAt(0);
+      var anchor = highlightsModule.captureRange(document.body, range);
+      if (!anchor) return;
       var r = range.getBoundingClientRect();
-      send({ type: "selection", anchor: { text: text, prefix: full.slice(Math.max(0, start - CTX), start), suffix: full.slice(end, end + CTX) },
+      send({ type: "selection", anchor: anchor,
         rect: { left: r.left, top: r.top, width: r.width, height: r.height, bottom: r.bottom } });
     }, 0);
   });

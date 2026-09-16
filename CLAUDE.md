@@ -90,6 +90,12 @@ wait. The AI request aborts when the pane closes. Assume a recording is in progr
 
 ## Gotchas that cost time
 
+- **Count highlights by identity, never mark fragments.** A single selection across inline
+  formatting creates several marks, so a fragment count cannot detect lost highlights.
+  Reader and Original share `server/public/highlights.js`: capture and replay use the same
+  visible-text index. Disconnect the repair observer during our own writes, and defer
+  repairs while the user is selecting text.
+
 - **Jupyter's iframe and Studio must use the same loopback hostname.** `localhost`
   inside `127.0.0.1` is cross-site: the page can load with a URL token while its kernel
   WebSocket is refused with 403 because the login cookie is missing. Keep token and XSRF

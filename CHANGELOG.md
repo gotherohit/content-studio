@@ -2,6 +2,12 @@
 
 What changed in each release, newest first. Versions are the ones the app updates itself to.
 
+## 0.11.3
+
+- Fixed highlights saved in the Highlights pane but missing from the article: hidden duplicates and script content no longer capture the match, and website styles cannot erase the selected colour.
+- Highlights recover after an article updates its DOM, including selections spanning formatted text and partially replaced passages.
+- Reader and Original now share selection and replay logic, including whitespace-tolerant matching and correct paragraph boundaries.
+
 ## 0.11.2
 
 - Fixed Jupyter's missing-path dialog: the pane now opens the project root directly instead of appending the obsolete `project-id/files` path.

@@ -67,6 +67,10 @@ A source is anything you want on screen. Paste a URL in the top bar, click **Fil
 | Word, Excel | Export to PDF and add that instead |
 
 Select text in a web page, markdown or text source to highlight it and attach a comment.
+Saved highlights appear in both Original and Reader views. Original view restores their
+colours when page scripts refresh the article; hidden copies of text are ignored. Minor
+whitespace changes are tolerated, but a passage rewritten or removed by the publisher may
+no longer match even though its saved quote remains in Highlights.
 
 **Every Source pane picks its own source.** The dropdown at the left of a Source pane's toolbar either follows the sidebar selection or pins one source, so a slide deck can sit in one pane and the article it discusses in another.
 

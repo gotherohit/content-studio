@@ -1,0 +1,11 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Highlight verification article</title>
+<style>body { font: 20px/1.8 system-ui; padding: 30px; color: #222; background: white; } mark { background: transparent !important; color: inherit !important; } button { padding: 8px; }</style>
+<link rel="stylesheet" href="http://127.0.0.1:4710/api/inject.css"></head><body>
+<script type="application/json">Second passage stays highlighted after the page updates.</script>
+<div hidden>Second passage stays highlighted after the page updates.</div>
+<h1>Highlight verification article</h1>
+<p id="first">A longer <strong>formatted passage</strong> can create several highlight fragments.</p>
+<p id="second">Second passage stays highlighted after the page updates.</p>
+<button id="replace" onclick="document.querySelector('#second').textContent='Second passage stays highlighted after the page updates.'">Simulate article update</button>
+<script defer src="http://127.0.0.1:4710/api/inject.js"></script>
+</body></html>

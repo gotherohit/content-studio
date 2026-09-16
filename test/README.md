@@ -29,6 +29,16 @@ saved file, tool results and conversation after reload. A request containing `sl
 Stop. No paid model or real web search is used. Remove the temporary provider and scratch
 project, and stop the fixture when done. A real Tavily request needs a separately supplied key.
 
+# Highlight verification
+
+Highlight regressions run in `npm test`: hidden duplicate text, element selection boundaries,
+whitespace changes, overlapping marks, website colour overrides and DOM replacement recovery.
+For UI verification, use a disposable project and serve `highlight-article.html` through a
+browser route override for a synthetic source URL. Its injection URLs expect the test server
+on port 4710. Select both passages with the real colour picker, click **Simulate article
+update**, and check both coloured passages and Highlights cards. Check Reader, Original and
+reopening the project, then remove the disposable project and close the test app.
+
 # Window handoff verification
 
 `npm test` includes the handoff lifecycle tests: return, hidden toolbar, shortcut
