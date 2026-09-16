@@ -114,6 +114,11 @@ Things worth knowing:
   Beat changes jump directly, without an animated scroll through the article. Content anchors
   keep the passage in place when text reflows in a different pane width; late layout changes
   are corrected for a short settling period, until you interact with the page.
+* **Site headers and sticky contents lists are ignored when a position is captured.** They
+  stay on screen however far you scroll, so they cannot say where you are. Beats captured
+  before 0.11.4 in a wide pane may have saved one of them; those now return to their saved
+  scroll distance, which is right at the pane width you captured them in. Press the camera
+  on such a beat once to give it a proper anchor in the article.
 * **Older beats need one re-capture to remember reading positions.** They still restore their
   saved highlights, immediately, but cannot recover scroll positions that were never saved.
   Arrange the old beat as you want it and use its camera button once.
@@ -358,6 +363,14 @@ somewhere else first and delete it afterwards.
 
 **A beat restores the wrong thing, or says it could not.** Its source or highlight has been
 deleted. Fix the arrangement and press the camera on that beat to re-capture it.
+
+**A beat shows the article wherever the previous beat left it.** It was captured before
+0.11.4 in a pane wide enough for the site's own header to be on screen, and anchored to the
+header instead of the article. Scroll to the passage and press the camera on that beat.
+
+**The presenter window is blank.** It reloads itself once if its page fails to load or
+stops. If that also fails, the studio shows why in the error bar; close the presenter and
+open it again.
 
 **A site refuses to load in the Embed pane.** In the desktop app, both Embed and Browser use real Chromium views. Check the address and that the app is running. Embed is suited to local
 apps you are running yourself.

@@ -98,6 +98,8 @@ export interface ReadingPosition {
   y: number;
   anchor?: number;
   text?: string;
+  /** Which copy of `text` the anchor was, since pages repeat headings in their contents lists. */
+  occurrence?: number;
   offset?: number;
 }
 

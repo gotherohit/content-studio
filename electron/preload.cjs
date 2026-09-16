@@ -49,4 +49,10 @@ contextBridge.exposeInMainWorld("studio", {
     ipcRenderer.on("presenter:closed", relay);
     return () => ipcRenderer.removeListener("presenter:closed", relay);
   },
+  /** The presenter window did not come up, even after one reload. */
+  onPresenterFailed: (fn) => {
+    const relay = (_e, reason) => fn(reason);
+    ipcRenderer.on("presenter:failed", relay);
+    return () => ipcRenderer.removeListener("presenter:failed", relay);
+  },
 });

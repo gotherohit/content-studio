@@ -505,6 +505,8 @@ export default function App() {
     if (!desktop) return;
     desktop.presenterOpen().then(setPresenterOpen).catch(() => {});
     const offClosed = desktop.onPresenterClosed(() => setPresenterOpen(false));
+    const offFailed = desktop.onPresenterFailed((reason) =>
+      setError(`The presenter window did not come up: ${reason}. Close it and open it again.`));
     const offCmd = desktop.onPresenterCommand((cmd) => {
       if (cmd.type === "next") goToBeatRef.current(Math.min(beatsRef.current.length - 1, beatIndexRef.current + 1));
       if (cmd.type === "prev") goToBeatRef.current(Math.max(0, beatIndexRef.current - 1));
@@ -513,7 +515,7 @@ export default function App() {
       // The window has just mounted and missed whatever was published before it existed.
       if (cmd.type === "sync") presenterStateRef.current();
     });
-    return () => { offClosed(); offCmd(); };
+    return () => { offClosed(); offFailed(); offCmd(); };
   }, []);
 
   const publishPresenter = useCallback(() => {

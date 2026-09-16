@@ -63,6 +63,7 @@ export interface StudioBridge {
   sendPresenterCommand(cmd: PresenterCommand): void;
   onPresenterCommand(fn: (cmd: PresenterCommand) => void): () => void;
   onPresenterClosed(fn: () => void): () => void;
+  onPresenterFailed(fn: (reason: string) => void): () => void;
 }
 
 /** True in the second window, which renders the presenter view instead of the studio. */

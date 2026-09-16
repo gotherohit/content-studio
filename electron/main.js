@@ -75,6 +75,58 @@ async function startServer() {
  * clock. It holds no project state of its own — the studio window is the source of truth
  * and this relays commands back to it.
  */
+const presenterUrl = () => (DEV ? "http://127.0.0.1:5173/?presenter=1" : `http://127.0.0.1:${port}/?presenter=1`);
+
+/**
+ * Whether the presenter page actually came up.
+ *
+ * Its first act on mounting is to ask the studio for state, so that request is the proof
+ * the page rendered. Before any beats arrive it still draws its toolbar, so a window that
+ * stays blank has not loaded, has crashed, or never painted — never a missed message.
+ * One reload recovers a transient failure; after that the studio says so, rather than
+ * leaving the creator to reopen it until it happens to work.
+ */
+const presenterWatch = { mounted: false, retried: false, reported: false, timer: null };
+
+function watchPresenter(target) {
+  presenterWatch.mounted = false;
+  presenterWatch.retried = false;
+  presenterWatch.reported = false;
+  const contents = target.webContents;
+
+  const fail = (reason) => {
+    clearTimeout(presenterWatch.timer);
+    if (target.isDestroyed() || presenterWatch.mounted) return;
+    if (!presenterWatch.retried) {
+      presenterWatch.retried = true;
+      contents.loadURL(presenterUrl());
+      return;
+    }
+    if (!target.isVisible()) target.show();
+    // A failed load can also finish as an error page; say so once, not once per event.
+    if (presenterWatch.reported) return;
+    presenterWatch.reported = true;
+    win?.webContents.send("presenter:failed", reason);
+  };
+
+  // Having mounted once says nothing about the page now loading, so each load must prove itself.
+  contents.on("did-start-loading", () => { presenterWatch.mounted = false; });
+  contents.on("did-finish-load", () => {
+    clearTimeout(presenterWatch.timer);
+    presenterWatch.timer = setTimeout(() => {
+      if (!presenterWatch.mounted) fail("its page loaded but never started");
+    }, 6000);
+  });
+  contents.on("did-fail-load", (_e, code, description, _url, isMainFrame) => {
+    // -3 is an aborted load, which is what our own retry does to the previous attempt.
+    if (isMainFrame && code !== -3) fail(`its page failed to load (${description || code})`);
+  });
+  contents.on("render-process-gone", (_e, details) => {
+    presenterWatch.mounted = false;
+    fail(`its page stopped (${details?.reason ?? "unknown"})`);
+  });
+}
+
 function openPresenter() {
   if (presenter && !presenter.isDestroyed()) {
     presenter.show();
@@ -91,19 +143,27 @@ function openPresenter() {
     skipTaskbar: false,
     backgroundColor: "#0b0d12",
     autoHideMenuBar: true,
+    // Shown once there is something to paint, so it never appears as an empty frame.
+    show: false,
     webPreferences: {
       preload: path.join(here, "preload.cjs"),
       contextIsolation: true,
       nodeIntegration: false,
     },
   });
+  const opened = presenter;
   // above full-screen apps too, or it would vanish the moment the studio goes full screen
-  presenter.setAlwaysOnTop(true, "screen-saver");
-  presenter.on("closed", () => {
-    presenter = null;
+  opened.setAlwaysOnTop(true, "screen-saver");
+  opened.once("ready-to-show", () => { if (!opened.isDestroyed()) opened.show(); });
+  // A page that never becomes ready must still be visible, or a failure looks like nothing.
+  setTimeout(() => { if (!opened.isDestroyed() && !opened.isVisible()) opened.show(); }, 3000);
+  opened.on("closed", () => {
+    clearTimeout(presenterWatch.timer);
+    if (presenter === opened) presenter = null;
     win?.webContents.send("presenter:closed");
   });
-  presenter.loadURL(DEV ? "http://127.0.0.1:5173/?presenter=1" : `http://127.0.0.1:${port}/?presenter=1`);
+  watchPresenter(opened);
+  opened.loadURL(presenterUrl());
 
   // Put it on a different display than the studio window when there is one.
   const others = screen.getAllDisplays().filter((d) => d.id !== screen.getDisplayMatching(win.getBounds()).id);
@@ -321,7 +381,16 @@ ipcMain.on("presenter:state", (_e, state) => {
   if (presenter && !presenter.isDestroyed()) presenter.webContents.send("presenter:state", state);
 });
 // The presenter window asks; the studio window acts.
-ipcMain.on("presenter:command", (_e, cmd) => win?.webContents.send("presenter:command", cmd));
+ipcMain.on("presenter:command", (e, cmd) => {
+  if (cmd?.type === "sync" && presenter && !presenter.isDestroyed() && e.sender === presenter.webContents) {
+    presenterWatch.mounted = true;
+    // A window that came up fine earns a fresh retry if it fails later in the session.
+    presenterWatch.retried = false;
+    presenterWatch.reported = false;
+    clearTimeout(presenterWatch.timer);
+  }
+  win?.webContents.send("presenter:command", cmd);
+});
 
 ipcMain.handle("studio:updateState", () => update);
 ipcMain.handle("studio:checkForUpdates", () => check());

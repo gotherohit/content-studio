@@ -2,6 +2,12 @@
 
 What changed in each release, newest first. Versions are the ones the app updates itself to.
 
+## 0.11.4
+
+- **Beats return to the right passage on sites with a fixed header.** In a wide pane, capture anchored to the site's own header — the first visible block at every scroll depth — so restoring the beat left the article wherever the previous beat had left it. Headers, sticky contents lists, hidden elements and empty blocks are no longer used as anchors, and repeated text such as a heading also listed in the contents resolves to the copy that was read.
+- Beats already captured against a header, or with an empty anchor, now return to their saved scroll distance instead of staying put or jumping to the top. Re-capture them once for an exact anchor.
+- **The presenter window recovers when its page does not come up.** It is shown only once its page can paint, reloads itself once if the page fails to load, crashes or never starts, and if that also fails the studio explains why. The original blank window was not reproduced, so this covers the failures that can cause one rather than a confirmed single cause.
+
 ## 0.11.3
 
 - Fixed highlights saved in the Highlights pane but missing from the article: hidden duplicates and script content no longer capture the match, and website styles cannot erase the selected colour.

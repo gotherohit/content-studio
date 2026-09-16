@@ -149,6 +149,20 @@ wait. The AI request aborts when the pane closes. Assume a recording is in progr
   document's scrolling element. A concealed iframe may suspend animation frames, so
   acknowledge its synchronous restore without waiting for one. Excalidraw can expose its
   API after the initial effect: restore again when that API arrives.
+- **A reading-position anchor must be article content.** Real sites put a fixed header and
+  a sticky contents list first in the DOM; both intersect the viewport at every depth, so
+  "first visible block" anchored to them and restoring "relative to the header" left the
+  page wherever it was. Capture skips zero-height, empty and fixed/sticky blocks and records
+  which copy of a repeated text it used. Test at desktop pane widths: below about 1000 px
+  such sites collapse their header to 0 px and the bug disappears.
+- **Beat rows are not clickable.** A beat is applied through its Show/Restore button or
+  its number, so a verification script clicking `.beat-row` silently tests nothing.
+- **The presenter proves it mounted by sending `sync`.** Main's watchdog resets that on every
+  `did-start-loading`, reloads once on a failed load, crash or silent page, and then sends
+  `presenter:failed` to the studio. A mounted flag that is never reset ignores later failures.
+- **Closing the studio window does not quit while the presenter is open.** Close the
+  presenter first when shutting down a verification instance, or its single-instance lock
+  makes the next launch exit immediately.
 - **A second server instance is not isolated.** Every instance shares
   `~/.content-studio/`, so a test server registering or deleting a project rewrites the
   *real* index. Deleting a clone of a project also unregisters the original, because the
