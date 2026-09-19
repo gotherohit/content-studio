@@ -171,6 +171,9 @@ wait. The AI request aborts when the pane closes. Assume a recording is in progr
   own list: `history.back()` in the frame walks the studio window's joint history.
 - **Anything drawn in the studio window can be recorded.** The source summary is hidden in
   Present mode and capture messages are not shown there; keep it that way for anything new.
+- **A click inside an article frame never reaches the studio document.** A popover closed by
+  an outside `mousedown` stays open when the click lands in the page; close it on the
+  window's `blur` too, as the Source pane's ⋯ menu does.
 - **Beat rows are not clickable.** A beat is applied through its Show/Restore button or
   its number, so a verification script clicking `.beat-row` silently tests nothing.
 - **The presenter proves it mounted by sending `sync`.** Main's watchdog resets that on every

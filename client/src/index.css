@@ -801,14 +801,8 @@ mark.hl:hover { filter: brightness(0.94); }
    Source summary, browsed pages, capture notices
    ============================================================ */
 .source-summary { flex: none; border-bottom: 1px solid var(--border); background: var(--panel); }
-.source-summary-head { display: flex; align-items: center; gap: 6px; padding: 3px 7px; }
-.source-summary-toggle {
-  flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; padding: 3px 4px;
-  background: transparent; border: 0; color: var(--text-2); font-size: 12px; cursor: pointer; text-align: left;
-}
-.source-summary-toggle:hover { color: var(--text); }
-.source-summary-toggle > span:first-of-type { font-weight: 600; flex: none; }
-.source-summary-toggle .muted { min-width: 0; }
+.source-summary-head { display: flex; align-items: center; gap: 7px; padding: 4px 7px 4px 11px; color: var(--text-2); }
+.source-summary-title { font-weight: 600; font-size: 12px; }
 .source-summary .seg button { font-size: 11px; }
 .source-summary-input {
   display: block; width: calc(100% - 16px); margin: 0 8px 8px; min-height: 52px; height: 88px; resize: vertical;
@@ -837,3 +831,24 @@ mark.hl:hover { filter: brightness(0.94); }
 .capture-notice.ok::before { content: "✓ "; color: var(--ok); font-weight: 700; }
 .capture-notice.warn { border-color: var(--warn); color: var(--warn); }
 .capture-notice.fail { border-color: var(--danger); color: var(--danger); }
+
+.summary-btn { position: relative; }
+.summary-dot { position: absolute; top: 5px; right: 5px; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+.scripts-off {
+  flex: none; display: inline-flex; align-items: center; gap: 4px; padding: 2px 7px; font-size: 11px;
+  border-radius: 999px; background: color-mix(in srgb, var(--warn) 14%, transparent); color: var(--warn);
+  border: 1px solid color-mix(in srgb, var(--warn) 35%, transparent);
+}
+.page-menu { position: relative; flex: none; }
+.page-menu-list {
+  position: absolute; right: 0; top: calc(100% + 4px); z-index: 40; min-width: 230px; padding: 4px;
+  display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--border);
+  border-radius: var(--r-md); box-shadow: var(--shadow-2);
+}
+.page-menu-list > button, .page-menu-list > a {
+  display: flex; align-items: center; justify-content: flex-start; gap: 8px; padding: 6px 9px;
+  background: transparent; border: 0; border-radius: var(--r-sm); color: var(--text); font-size: 12.5px;
+  font-weight: 450; text-decoration: none; cursor: pointer;
+}
+.page-menu-list > button:hover:not(:disabled), .page-menu-list > a:hover { background: var(--panel-2); }
+.page-menu-check { width: 13px; display: inline-flex; color: var(--accent); }

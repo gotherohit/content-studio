@@ -115,7 +115,7 @@ export default function App() {
   const [showNewProject, setShowNewProject] = useState(false);
   const [collapsed, setCollapsed] = useState(lsGet("collapsed", "0") === "1");
   /** Collapsing the source summary is the creator's choice, and nothing reopens it for them. */
-  const [summaryOpen, setSummaryOpen] = useState(lsGet("summaryOpen", "1") === "1");
+  const [summaryOpen, setSummaryOpen] = useState(lsGet("summaryOpen", "0") === "1");
   /** A short confirmation that a capture happened, or a warning about what it could not record. */
   const [notice, setNotice] = useState<{ text: string; kind: "ok" | "warn" | "fail" } | null>(null);
   const [dark, setDark] = useState(lsGet("dark", "1") === "1");

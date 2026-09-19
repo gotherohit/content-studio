@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, BookmarkPlus, ChevronLeft, ChevronRight, CornerUpLeft, ExternalLink, Maximize, Play, RefreshCw, Zap, ZapOff } from "lucide-react";
+import { ArrowLeft, ArrowRight, BookmarkPlus, Check, ChevronLeft, ChevronRight, CornerUpLeft, ExternalLink, Maximize, MoreHorizontal, NotebookText, Play, RefreshCw, ZapOff } from "lucide-react";
 import type { Highlight, PaneView, ReadingPosition, Source } from "../types";
 import { trackReadingPosition } from "../../../server/public/reading-position.js";
 import type { AppConfig } from "../api";
@@ -157,6 +157,19 @@ export function SourcePane(p: Props) {
   }
 
   const scripts = source.scripts !== false;
+  const hasSummary = Boolean(source.summary?.trim());
+  // Hidden in Present mode with the panel itself, so neither reaches a recording.
+  const summaryButton = !p.presenting && !page && (
+    <button
+      className={`icon-btn summary-btn ${p.summaryOpen ? "on" : ""}`}
+      onClick={() => p.onSummaryOpen(!p.summaryOpen)}
+      title={p.summaryOpen ? "Hide the summary" : hasSummary ? "Show your summary of this source" : "Write a summary of this source"}
+      aria-pressed={p.summaryOpen}
+    >
+      <NotebookText size={14} />
+      {hasSummary && <span className="summary-dot" />}
+    </button>
+  );
 
   return (
     <div className="source-pane">
@@ -183,6 +196,7 @@ export function SourcePane(p: Props) {
               </>
             )}
             <a className="icon-btn" href={`/api/projects/${p.projectId}/sources/${encodeURIComponent(source.file!.name)}`} download={source.file!.name} title="Download"><ExternalLink size={14} /></a>
+            {summaryButton}
           </>
         ) : (
           <>
@@ -208,23 +222,26 @@ export function SourcePane(p: Props) {
                 <BookmarkPlus size={13} /> Save as source
               </button>
             )}
-            {mode === "original" && (
-              <button
-                className={`icon-btn ${scripts ? "on" : ""}`}
-                onClick={p.onToggleScripts}
-                title={scripts ? "Page scripts are running — click to disable" : "Page scripts are off — click to enable"}
-              >{scripts ? <Zap size={14} /> : <ZapOff size={14} />}</button>
+            {!scripts && mode === "original" && (
+              <button className="scripts-off" onClick={p.onToggleScripts} title="This page's own scripts are off, which can leave parts of it blank. Click to turn them back on.">
+                <ZapOff size={12} /> scripts off
+              </button>
             )}
-            <button className="icon-btn" onClick={p.onRefresh} title="Re-download this page" disabled={p.busy}>
-              <RefreshCw size={14} className={p.busy ? "spin" : ""} />
-            </button>
-            <a className="icon-btn" href={source.url} target="_blank" rel="noreferrer" title="Open the real site in a new tab"><ExternalLink size={14} /></a>
+            {summaryButton}
+            <PageMenu
+              scripts={scripts}
+              canToggleScripts={mode === "original"}
+              onToggleScripts={p.onToggleScripts}
+              onRefresh={p.onRefresh}
+              busy={p.busy}
+              url={page ?? source.url}
+            />
           </>
         )}
       </div>
 
-      {!p.presenting && !page && (
-        <SourceSummary value={source.summary ?? ""} open={p.summaryOpen} onOpen={p.onSummaryOpen} onChange={p.onSummary} />
+      {!p.presenting && !page && p.summaryOpen && (
+        <SourceSummary value={source.summary ?? ""} onClose={() => p.onSummaryOpen(false)} onChange={p.onSummary} />
       )}
 
       <div ref={stageRef} className="source-stage">
@@ -273,6 +290,54 @@ export function SourcePane(p: Props) {
           />
         )}
       </div>
+    </div>
+  );
+}
+
+/** Things done to a page now and then, kept off the toolbar that every recording shows. */
+function PageMenu({ scripts, canToggleScripts, onToggleScripts, onRefresh, busy, url }: {
+  scripts: boolean;
+  canToggleScripts: boolean;
+  onToggleScripts: () => void;
+  onRefresh: () => void;
+  busy: boolean;
+  url: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const outside = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false); };
+    const key = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    // A click inside the article frame never reaches this document; the window losing focus does.
+    const blur = () => setOpen(false);
+    document.addEventListener("mousedown", outside);
+    document.addEventListener("keydown", key);
+    window.addEventListener("blur", blur);
+    return () => { document.removeEventListener("mousedown", outside); document.removeEventListener("keydown", key); window.removeEventListener("blur", blur); };
+  }, [open]);
+  const run = (fn: () => void) => () => { setOpen(false); fn(); };
+
+  return (
+    <div className="page-menu" ref={ref}>
+      <button className={`icon-btn ${open ? "on" : ""}`} onClick={() => setOpen((v) => !v)} title="More: page scripts, re-download, open in your browser" aria-expanded={open}>
+        {busy ? <RefreshCw size={14} className="spin" /> : <MoreHorizontal size={15} />}
+      </button>
+      {open && (
+        <div className="page-menu-list" role="menu">
+          {canToggleScripts && (
+            <button role="menuitemcheckbox" aria-checked={scripts} onClick={run(onToggleScripts)}>
+              <span className="page-menu-check">{scripts && <Check size={13} />}</span> Run the page's own scripts
+            </button>
+          )}
+          <button role="menuitem" onClick={run(onRefresh)} disabled={busy}>
+            <RefreshCw size={13} /> Re-download this page
+          </button>
+          <a role="menuitem" href={url} target="_blank" rel="noreferrer" onClick={() => setOpen(false)}>
+            <ExternalLink size={13} /> Open in your browser
+          </a>
+        </div>
+      )}
     </div>
   );
 }

@@ -2,6 +2,11 @@
 
 What changed in each release, newest first. Versions are the ones the app updates itself to.
 
+## 0.12.1
+
+- **A tidier Source toolbar.** Page scripts, Re-download and Open in your browser move into a **⋯** menu. When scripts are off, a **scripts off** marker stays visible and turns them back on.
+- **The summary opens from a toolbar button** instead of taking a row of its own. A dot shows which sources have one. It starts closed, stays closed until you open it, and neither button nor summary appears in Present mode.
+
 ## 0.12.0
 
 - **Beats keep their passage when the sidebar collapses or Present mode starts.** Both widen the article pane, and the page used to keep its old scroll distance while the text reflowed, so a beat that restored correctly drifted to a different passage a moment later — only sometimes, when the browser's own scroll anchoring happened not to cover it. The pane now puts the same passage back after any change of width, in Original and Reader views.

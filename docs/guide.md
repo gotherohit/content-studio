@@ -88,12 +88,17 @@ highlight it, press **Save as source**: it becomes a source of its own in the so
 source, shows **← *the page it came from*** in its toolbar; click it to go back. Sources
 added before 0.12.0 have no such link.
 
-**A summary for each source.** The **Summary** bar at the top of a Source pane holds your
+**A summary for each source.** The notebook button in a Source pane's toolbar opens your
 own Markdown summary of that source: the main claim, the number worth quoting, what it
-contradicts. It saves as you type, and its first line shows under the source's title in the
-sources list. Collapse the bar with its arrow and it stays collapsed — for every source,
-after a restart — until you open it again. It is hidden entirely in Present mode, so it
-does not reach a recording; outside Present mode it is inside the window like everything else.
+contradicts. It saves as you type, a dot on the button shows that a source has one, and its
+first line shows under the source's title in the sources list. Close it with its arrow and
+it stays closed — for every source, after a restart — until you open it again. The button
+and the summary are hidden entirely in Present mode, so they do not reach a recording.
+
+**The ⋯ menu** at the right of a web source's toolbar holds what you need now and then:
+turning the page's own scripts on or off, re-downloading the page, and opening it in your
+browser. When scripts are off, a small **scripts off** marker stays on the toolbar — some
+pages leave parts blank without their scripts — and clicking it turns them back on.
 
 **Every Source pane picks its own source.** The dropdown at the left of a Source pane's toolbar either follows the sidebar selection or pins one source, so a slide deck can sit in one pane and the article it discusses in another.
 
