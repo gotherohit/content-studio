@@ -1,3 +1,4 @@
+import type { SourceLink } from "./links";
 export type HighlightColor = "yellow" | "green" | "pink" | "blue";
 
 export interface Highlight {
@@ -63,7 +64,7 @@ export interface ChatMessage {
   content: string;
 }
 
-export type PaneKind = "source" | "highlights" | "notes" | "ai" | "code" | "canvas" | "terminal" | "jupyter" | "slides" | "window" | "browser" | "embed";
+export type PaneKind = "source" | "highlights" | "map" | "notes" | "ai" | "code" | "canvas" | "terminal" | "jupyter" | "slides" | "window" | "browser" | "embed";
 export type LayoutPreset = "1" | "2" | "3" | "4" | "1+2" | "2+1";
 /** One pane. A Source pane may pin its own source; otherwise it follows the sidebar selection. */
 export interface PaneConfig {
@@ -173,6 +174,8 @@ export interface Project {
   slides: string;
   layout: Layout;
   beats: Beat[];
+  /** Links between sources, usually from a highlighted passage. Backlinks are derived from these. */
+  links?: SourceLink[];
   settings: { jupyterUrl: string; viewMode?: "original" | "reader"; embedUrl?: string; browserUrl?: string };
 }
 

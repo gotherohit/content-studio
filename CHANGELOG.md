@@ -2,6 +2,13 @@
 
 What changed in each release, newest first. Versions are the ones the app updates itself to.
 
+## 0.13.0
+
+- **Link sources to each other.** Link a highlighted passage — or a whole source — to another source, or to one passage in it, as *supports*, *contradicts*, *cites*, *same claim as* or *related to*, with an optional note. The other source shows it as a backlink. Click either end to jump to the passage.
+- **The source map.** **Map** beside Sources shows every source and every link as a graph: click a source to open it, hover to see what it connects to, hover or click a line to read or open the passages behind it, drag, pan and zoom. **Source map** is also a pane kind, so the map can be part of a beat and shown on camera; it is laid out the same way every time.
+- Deleting a linked highlight keeps the link to the whole source; removing a source removes its links.
+- Regression tests for links, backlinks, pruning, the map's edges and its deterministic layout.
+
 ## 0.12.1
 
 - **A tidier Source toolbar.** Page scripts, Re-download and Open in your browser move into a **⋯** menu. When scripts are off, a **scripts off** marker stays visible and turns them back on.

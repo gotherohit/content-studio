@@ -174,6 +174,11 @@ wait. The AI request aborts when the pane closes. Assume a recording is in progr
 - **A click inside an article frame never reaches the studio document.** A popover closed by
   an outside `mousedown` stays open when the click lands in the page; close it on the
   window's `blur` too, as the Source pane's ⋯ menu does.
+- **Links live in `project.links`, not on highlights.** Backlinks are derived from the list, so
+  there is one place to change. Every delete of a source or a highlight must run `pruneLinks`
+  in the same `mutate`: a missing source removes the link, a missing highlight degrades it to
+  the whole source. The map's layout (`layoutGraph`) is deterministic on purpose — beats can
+  show it, so it must look the same every take; never seed it randomly.
 - **Beat rows are not clickable.** A beat is applied through its Show/Restore button or
   its number, so a verification script clicking `.beat-row` silently tests nothing.
 - **The presenter proves it mounted by sending `sync`.** Main's watchdog resets that on every

@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import { viewerForExt } from "./types";
 import { captureSummary, duplicateBeat, insertBeatAfter, moveBeatInList } from "./beats";
+import { pruneLinks, type LinkEnd, type Relation } from "./links";
 import { samePage } from "../../server/public/pages.js";
 import { desktop } from "./desktop";
 import type { Beat, CanvasView, Highlight, Layout, LayoutPreset, PaneConfig, PaneKind, PaneView, Project, ProjectSummary, ReadingPosition, Source, Stage } from "./types";
@@ -25,11 +26,14 @@ import { SlidesPane } from "./components/SlidesPane";
 import { WindowPane } from "./components/WindowPane";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { BeatScriptDialog } from "./components/BeatScriptDialog";
+import { LinkDialog } from "./components/LinkDialog";
+import { SourceMap } from "./components/SourceMap";
 import { NewProjectDialog } from "./components/NewProjectDialog";
 
 const KINDS: { id: PaneKind; label: string }[] = [
   { id: "source", label: "Source" },
   { id: "highlights", label: "Highlights" },
+  { id: "map", label: "Source map" },
   { id: "notes", label: "Notes" },
   { id: "ai", label: "AI" },
   { id: "code", label: "Code" },
@@ -74,6 +78,7 @@ function normalize(p: Project): Project {
       ),
     },
     // the script field was briefly called `note`
+    links: p.links ?? [],
     beats: (p.beats ?? []).map((b) => (b.note && !b.script ? { ...b, script: b.note, note: undefined } : b)),
     settings: { viewMode: "original", ...(p.settings ?? {}), jupyterUrl: p.settings?.jupyterUrl ?? "http://localhost:8888" },
   };
@@ -117,6 +122,9 @@ export default function App() {
   /** Collapsing the source summary is the creator's choice, and nothing reopens it for them. */
   const [summaryOpen, setSummaryOpen] = useState(lsGet("summaryOpen", "0") === "1");
   /** A short confirmation that a capture happened, or a warning about what it could not record. */
+  /** Where a link being made starts: a passage, or a whole source. */
+  const [linkFrom, setLinkFrom] = useState<LinkEnd | null>(null);
+  const [showMap, setShowMap] = useState(false);
   const [notice, setNotice] = useState<{ text: string; kind: "ok" | "warn" | "fail" } | null>(null);
   const [dark, setDark] = useState(lsGet("dark", "1") === "1");
   const [fontScale, setFontScale] = useState(Number(lsGet("font", "1.05")));
@@ -428,6 +436,21 @@ export default function App() {
     setNotice({ kind: "ok", text: existing ? "That page is already a source — showing it." : "Saved as a source." });
   }, [project, addSource]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ---- links between sources
+  function addLink(from: LinkEnd, to: LinkEnd, relation: Relation, note: string) {
+    const link = { id: `lk${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`, from, to, relation, ...(note ? { note } : {}), createdAt: new Date().toISOString() };
+    mutate((p) => ({ ...p, links: [...(p.links ?? []), link] }));
+    setNotice({ kind: "ok", text: "Linked — it shows on both sources and on the map." });
+  }
+  const removeLink = (id: string) => mutate((p) => ({ ...p, links: (p.links ?? []).filter((l) => l.id !== id) }));
+  /** Open one end of a link, scrolled to its passage when it has one. */
+  const goToEnd = useCallback((end: LinkEnd) => {
+    if (!project?.sources.some((s) => s.id === end.sourceId)) { setError("That source has been removed."); return; }
+    setActiveSourceId(end.sourceId);
+    setSelectedHl(end.highlightId ?? null);
+    if (end.highlightId) setScrollNonce((n) => n + 1);
+  }, [project?.sources]);
+
   function copyHighlights() {
     if (!source) return;
     const md = [`## ${source.title}`, source.url, "", ...source.highlights.map((h) => `> ${h.text}\n${h.comment ? `\n${h.comment}\n` : ""}`)].join("\n");
@@ -735,11 +758,29 @@ export default function App() {
         return (
           <HighlightsPanel
             source={source}
+            sources={project.sources}
+            links={project.links ?? []}
             selectedId={selectedHl}
             onSelect={selectFromCard}
             onUpdate={(h) => source && updateSource(source.id, (s) => ({ ...s, highlights: s.highlights.map((x) => (x.id === h.id ? h : x)) }))}
-            onDelete={(id) => source && updateSource(source.id, (s) => ({ ...s, highlights: s.highlights.filter((x) => x.id !== id) }))}
+            onDelete={(id) => source && mutate((p) => {
+              const sources = p.sources.map((s) => (s.id === source.id ? { ...s, highlights: s.highlights.filter((x) => x.id !== id) } : s));
+              return { ...p, sources, links: pruneLinks(p.links ?? [], sources) };
+            })}
             onCopyAll={copyHighlights}
+            onLink={setLinkFrom}
+            onRemoveLink={removeLink}
+            onGo={goToEnd}
+          />
+        );
+      case "map":
+        return (
+          <SourceMap
+            sources={project.sources}
+            links={project.links ?? []}
+            activeSourceId={activeSourceId}
+            onOpen={(id) => { setActiveSourceId(id); setSelectedHl(null); }}
+            onGo={goToEnd}
           />
         );
       case "notes": return <NotesPanel value={project.notes} onChange={(notes) => mutate((p) => ({ ...p, notes }))} />;
@@ -791,8 +832,12 @@ export default function App() {
           deletingId={deletingId}
           onRenameProject={(title) => mutate((p) => ({ ...p, title }))}
           onOpenSource={(id) => { setActiveSourceId(id); setSelectedHl(null); }}
-          onRemoveSource={(id) => { mutate((p) => ({ ...p, sources: p.sources.filter((s) => s.id !== id) })); if (activeSourceId === id) setActiveSourceId(null); }}
+          onRemoveSource={(id) => {
+            mutate((p) => { const sources = p.sources.filter((s) => s.id !== id); return { ...p, sources, links: pruneLinks(p.links ?? [], sources) }; });
+            if (activeSourceId === id) setActiveSourceId(null);
+          }}
           onSettings={() => setShowSettings(true)}
+          onShowMap={() => setShowMap(true)}
           beatIndex={beatIndex}
           onCaptureBeat={captureBeat}
           onGoToBeat={goToBeat}
@@ -916,6 +961,34 @@ export default function App() {
           onChange={(script) => editBeat(scriptFor, (b) => ({ ...b, script }))}
           onClose={() => setScriptFor(null)}
         />
+      )}
+
+      {linkFrom && project && (
+        <LinkDialog
+          from={linkFrom}
+          sources={project.sources}
+          onSave={(to, relation, note) => { addLink(linkFrom, to, relation, note); setLinkFrom(null); }}
+          onClose={() => setLinkFrom(null)}
+        />
+      )}
+
+      {showMap && project && (
+        <div className="modal-backdrop" onMouseDown={() => setShowMap(false)}>
+          <div className="modal map-modal" onMouseDown={(e) => e.stopPropagation()}>
+            <div className="modal-head">
+              <h3>Source map</h3>
+              <span className="muted small grow">Click a source to open it · drag to move · scroll to zoom · put it in a pane with “Source map” to show it in a beat</span>
+              <button className="icon-btn" onClick={() => setShowMap(false)}><X size={16} /></button>
+            </div>
+            <SourceMap
+              sources={project.sources}
+              links={project.links ?? []}
+              activeSourceId={activeSourceId}
+              onOpen={(id) => { setActiveSourceId(id); setSelectedHl(null); setShowMap(false); }}
+              onGo={(end) => { goToEnd(end); setShowMap(false); }}
+            />
+          </div>
+        </div>
       )}
 
       {showNewProject && (

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
   ArrowDown, ArrowUp, Camera, ChevronDown, ChevronRight, Clapperboard, FileCode2, FileText, FolderOpen,
-  Copy, Image, Plus, Presentation, ScrollText, Settings, Table2, Trash2, Undo2, X,
+  Copy, Image, Network, Plus, Presentation, ScrollText, Settings, Table2, Trash2, Undo2, X,
 } from "lucide-react";
 import type { Beat, Project, ProjectSummary } from "../types";
 
@@ -18,6 +18,8 @@ interface Props {
   onOpenSource: (id: string) => void;
   onRemoveSource: (id: string) => void;
   onSettings: () => void;
+  /** Show every source and how they connect. */
+  onShowMap: () => void;
   onRevealFolder: () => void;
   beatIndex: number;
   onCaptureBeat: () => void;
@@ -159,7 +161,12 @@ export function Sidebar(p: Props) {
             </button>
           </div>
 
-          <Section id="sources" title="Sources" count={p.project.sources.length}>
+          <Section
+            id="sources"
+            title="Sources"
+            count={p.project.sources.length}
+            actions={<button className="ghost small" title="See how your sources connect, and click through them" onClick={p.onShowMap} disabled={!p.project.sources.length}><Network size={13} /> Map</button>}
+          >
             {p.project.sources.map((s) => (
               <div key={s.id} className={`list-item ${p.activeSourceId === s.id ? "active" : ""}`} onClick={() => p.onOpenSource(s.id)} title={s.url}>
                 <SourceIcon viewer={s.kind === "file" ? s.file?.viewer : undefined} />

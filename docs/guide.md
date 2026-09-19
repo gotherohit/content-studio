@@ -100,6 +100,36 @@ turning the page's own scripts on or off, re-downloading the page, and opening i
 browser. When scripts are off, a small **scripts off** marker stays on the toolbar — some
 pages leave parts blank without their scripts — and clicking it turns them back on.
 
+### Linking sources
+
+Research is mostly *this says X, that says otherwise*. A **link** records that between two
+sources, usually from one highlighted passage to another.
+
+* **Link a passage:** in the Highlights pane, press the link icon on a highlight's card.
+  Choose how it relates — **supports**, **contradicts**, **cites**, **same claim as** or
+  **related to** — then the other source and, optionally, the passage in it, and a note.
+* **Link a whole source:** **Link source** at the top of the Highlights pane.
+* **Backlinks are automatic.** The other source shows the link from its side — *contradicted
+  by…*, *cited by…* — on the passage's card, or above the cards for a whole-source link. The
+  counts at the top say how many links and backlinks a source has.
+* **Click a link to go there:** it opens the other source, scrolled to its passage.
+* A link stores references, like a beat. Deleting a linked highlight keeps the link, now to
+  the whole source; removing a source removes its links.
+
+### The source map
+
+**Map**, beside Sources in the sidebar, shows every source as a circle and every link as a
+line coloured by how they relate; a dashed line means one source was opened from another.
+Bigger circles have more highlights and links.
+
+* **Click a source** to open it. **Hover** one to fade everything not connected to it.
+* **Hover a line** to read the passages and the note behind it; **click** it to open the
+  passage that made the link.
+* **Drag** a source to move it, drag the background to pan, **scroll** to zoom, and use the
+  fit button in the legend to reset. Moved sources go back when the map is reopened.
+* To show the map on camera, pick **Source map** as a pane's kind. It can be part of a beat
+  like any pane, and it is drawn the same way every time for the same sources and links.
+
 **Every Source pane picks its own source.** The dropdown at the left of a Source pane's toolbar either follows the sidebar selection or pins one source, so a slide deck can sit in one pane and the article it discusses in another.
 
 ### Slide decks

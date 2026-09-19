@@ -57,6 +57,11 @@ committing.
 - **Clean up.** Remove test projects, providers, beats and files you created, and say so.
   Close development app instances you launched for verification too: a hidden copy holds
   the single-instance lock and can prevent the installed app from appearing.
+- **Scope UI selectors to what you mean, and re-check the open project before every write.**
+  Project rows in the sidebar have their folder path as a tooltip, so matching `.list-item`
+  by title text finds a *project* whose path contains the word — this opened a real project
+  during a test. Select source rows by their own markup, and confirm `.title-input` still
+  names the scratch project before each action that could save.
 - **Add regression tests with every change.** A test that fails on the old code for each bug,
   tests for each new behaviour, and the full `npm test` suite passing. Re-run the existing
   flows the change touches in the running app, on a scratch project. See CLAUDE.md.
