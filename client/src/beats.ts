@@ -1,4 +1,4 @@
-import type { Beat } from "./types";
+import type { Beat, PaneConfig, Source, Stage } from "./types";
 
 /** Reordering changes the running order, never which beat is on screen. */
 export function moveBeatInList(beats: Beat[], id: string, to: number): Beat[] {
@@ -19,4 +19,28 @@ export function insertBeatAfter(beats: Beat[], afterId: string | null, beat: Bea
 
 export function duplicateBeat(beat: Beat, id: string): Beat {
   return { ...beat, id, point: beat.point ? `${beat.point} (copy)` : "", stage: structuredClone(beat.stage), createdAt: new Date().toISOString() };
+}
+
+const pathOf = (url: string) => { try { return new URL(url).pathname; } catch { return url; } };
+
+/**
+ * What a capture recorded for its article panes: where each one is, and which had not yet
+ * reported a reading position. Such a pane would restore to wherever it happened to be.
+ */
+export function captureSummary(stage: Stage, panes: PaneConfig[], sources: Source[]): { unplaced: number[]; where: string | null } {
+  const unplaced: number[] = [];
+  const places: string[] = [];
+  const articles = panes.flatMap((pane, i) => {
+    const source = pane.kind === "source" ? sources.find((s) => s.id === stage.views[i]?.sourceId) : undefined;
+    return source && source.kind !== "file" ? [i] : [];
+  });
+  for (const i of articles) {
+    const view = stage.views[i];
+    if (!view?.position) { unplaced.push(i); continue; }
+    const text = (view.position.seen || view.position.text)?.trim();
+    const place = !view.position.y ? "the top" : text ? `“${text.length > 40 ? text.slice(0, 40) + "…" : text}”` : `${Math.round(view.position.y)} px down`;
+    const page = view.page ? ` of ${pathOf(view.page)}` : "";
+    places.push(articles.length > 1 ? `pane ${i + 1} at ${place}${page}` : `at ${place}${page}`);
+  }
+  return { unplaced, where: places.length ? places.join(", ") : null };
 }

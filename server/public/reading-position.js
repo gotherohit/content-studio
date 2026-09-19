@@ -42,6 +42,13 @@ export function captureReadingPosition(root, scroller) {
     position.occurrence = candidates.slice(0, index).filter((item) => label(item) === text).length;
     position.offset = (top - rect.top) / rect.height;
   }
+  // The anchor can sit under a site's sticky bar; for telling the creator what was captured,
+  // name the passage actually showing a third of the way down instead.
+  const doc = root.ownerDocument;
+  const box = scroller === doc.scrollingElement ? { left: 0, width: scroller.clientWidth } : scroller.getBoundingClientRect();
+  const hit = doc.elementFromPoint?.(box.left + box.width / 2, top + scroller.clientHeight * 0.3);
+  const block = hit?.closest?.(blocks);
+  if (block && root.contains(block) && label(block) && !pinned(block, root, cache)) position.seen = label(block).slice(0, 80);
   return position;
 }
 
@@ -79,16 +86,30 @@ export function restoreReadingPosition(root, scroller, position) {
   scroller.scrollTo({ left: position.x, top: y, behavior: "instant" });
 }
 
-/** Reapply while late images/fonts settle, but never fight the creator's next action. */
+/**
+ * Reapply while late images/fonts settle, but never fight the creator's next action.
+ *
+ * After that, keep the passage on screen when the pane changes width. Collapsing the sidebar
+ * or entering Present mode reflows the text under an unchanged scroll offset, and the
+ * browser's own scroll anchoring does not reliably hold it, so a beat that restored
+ * correctly drifted to a different passage a moment later.
+ */
 export function trackReadingPosition(root, scroller, target, report) {
   let restoring = Boolean(target), frame = 0;
-  const capture = () => report(captureReadingPosition(root, scroller));
+  let held = target || null, width = scroller.clientWidth;
+  const capture = () => {
+    held = captureReadingPosition(root, scroller);
+    width = scroller.clientWidth;
+    report(held);
+  };
   const restore = () => { if (restoring) restoreReadingPosition(root, scroller, target); };
+  // Runs before any capture, so a scroll event caused by the reflow cannot overwrite the passage.
+  const keep = () => { if (held && scroller.clientWidth !== width) restoreReadingPosition(root, scroller, held); };
   const schedule = () => {
     cancelAnimationFrame(frame);
-    frame = requestAnimationFrame(() => { restore(); if (!restoring) capture(); });
+    frame = requestAnimationFrame(() => { restore(); if (!restoring) { keep(); capture(); } });
   };
-  const release = () => { restoring = false; capture(); };
+  const release = () => { restoring = false; keep(); capture(); };
   const scroll = () => { if (!restoring) schedule(); };
   const events = ["wheel", "touchstart", "pointerdown", "keydown"];
   const scrollTarget = scroller === scroller.ownerDocument.scrollingElement ? scroller.ownerDocument : scroller;
@@ -97,6 +118,9 @@ export function trackReadingPosition(root, scroller, target, report) {
   const resize = new ResizeObserver(schedule);
   resize.observe(root);
   if (root !== scroller) resize.observe(scroller);
+  // An iframe's body can keep its width while its viewport changes; the window always reports it.
+  const view = scroller.ownerDocument.defaultView;
+  view?.addEventListener("resize", schedule);
   const mutation = new MutationObserver(schedule);
   mutation.observe(root, { childList: true, subtree: true });
   root.addEventListener("load", schedule, true);
@@ -108,6 +132,7 @@ export function trackReadingPosition(root, scroller, target, report) {
     clearTimeout(timer);
     cancelAnimationFrame(frame);
     resize.disconnect();
+    view?.removeEventListener("resize", schedule);
     mutation.disconnect();
     root.removeEventListener("load", schedule, true);
     scroller.ownerDocument.fonts?.removeEventListener("loadingdone", schedule);

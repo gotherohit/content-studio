@@ -72,6 +72,29 @@ colours when page scripts refresh the article; hidden copies of text are ignored
 whitespace changes are tolerated, but a passage rewritten or removed by the publisher may
 no longer match even though its saved quote remains in Highlights.
 
+**Links in a web page.** A link to another page of the *same site* — a docs sidebar, a
+"next page" link — opens in the same pane, like a browser, without creating a source. The
+toolbar shows the page's address with **Back** and **Forward** for this pane. Beats remember
+which page a pane was on, and where, so you can capture a beat on a page you only browsed to.
+A link to a *different* site becomes a new source, as before, and **Ctrl+click** opens any
+link in your normal browser. A link to a section of the same page (`#heading`) just scrolls.
+
+A browsed page is not a source. It has no highlights or summary — highlights belong to the
+page they were made on, and would otherwise land on matching text somewhere else — and it
+opens in Original view only, because Reader shows a saved copy of the source's own page. To
+highlight it, press **Save as source**: it becomes a source of its own in the sources list.
+
+**A source remembers where it came from.** A source created from a link, or with Save as
+source, shows **← *the page it came from*** in its toolbar; click it to go back. Sources
+added before 0.12.0 have no such link.
+
+**A summary for each source.** The **Summary** bar at the top of a Source pane holds your
+own Markdown summary of that source: the main claim, the number worth quoting, what it
+contradicts. It saves as you type, and its first line shows under the source's title in the
+sources list. Collapse the bar with its arrow and it stays collapsed — for every source,
+after a restart — until you open it again. It is hidden entirely in Present mode, so it
+does not reach a recording; outside Present mode it is inside the window like everything else.
+
 **Every Source pane picks its own source.** The dropdown at the left of a Source pane's toolbar either follows the sidebar selection or pins one source, so a slide deck can sit in one pane and the article it discusses in another.
 
 ### Slide decks
@@ -92,7 +115,10 @@ A beat is one step in your argument, and the **stage** that serves it: which pan
 In **Present** mode, **→** (or Space) applies the next beat and **←** the previous one. That is the whole interface while recording: the panes rearrange themselves and the right highlight scrolls into view, so the only job left is talking.
 
 The **+ Beat** button saves the current arrangement immediately after the current beat
-(or at the end if none is selected). Each row gives the point its own line. Click its
+(or at the end if none is selected). A short message at the bottom of the window confirms
+it and names the passage each article pane was captured at. If a pane had not yet reported
+where it is, the message says so and names the pane: scroll that pane slightly and use the
+camera on that beat to capture it again. The camera on an existing beat reports the same way. Each row gives the point its own line. Click its
 number or **Show** to go there; **Restore** returns to its saved arrangement after you
 have scrolled or experimented. Use **Duplicate beat** to reuse its arrangement and script
 as a starting point. Moving a row keeps the same beat on screen, even if its number changes.
@@ -114,6 +140,9 @@ Things worth knowing:
   Beat changes jump directly, without an animated scroll through the article. Content anchors
   keep the passage in place when text reflows in a different pane width; late layout changes
   are corrected for a short settling period, until you interact with the page.
+* **Collapsing the sidebar or entering Present mode keeps the passage on screen.** Both make
+  the article pane wider, which reflows the text. The pane now puts the same passage back
+  after any change of width, at any time, rather than keeping the old scroll distance.
 * **Site headers and sticky contents lists are ignored when a position is captured.** They
   stay on screen however far you scroll, so they cannot say where you are. Beats captured
   before 0.11.4 in a wide pane may have saved one of them; those now return to their saved
@@ -367,6 +396,13 @@ deleted. Fix the arrangement and press the camera on that beat to re-capture it.
 **A beat shows the article wherever the previous beat left it.** It was captured before
 0.11.4 in a pane wide enough for the site's own header to be on screen, and anchored to the
 header instead of the article. Scroll to the passage and press the camera on that beat.
+
+**A beat drifts to a different passage when the sidebar is collapsed or Present mode
+starts.** Fixed in 0.12.0: the pane keeps its passage when its width changes. If it still
+happens, the beat was probably captured before 0.11.4 — press the camera on it once.
+
+**Clicking a link in a docs site created a new source.** Before 0.12.0 every link did. Now
+a link within the same site opens in the pane; only links to another site become sources.
 
 **The presenter window is blank.** It reloads itself once if its page fails to load or
 stops. If that also fails, the studio shows why in the error bar; close the presenter and

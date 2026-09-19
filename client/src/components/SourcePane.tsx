@@ -1,11 +1,13 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, ExternalLink, Maximize, Play, RefreshCw, Zap, ZapOff } from "lucide-react";
+import { ArrowLeft, ArrowRight, BookmarkPlus, ChevronLeft, ChevronRight, CornerUpLeft, ExternalLink, Maximize, Play, RefreshCw, Zap, ZapOff } from "lucide-react";
 import type { Highlight, PaneView, ReadingPosition, Source } from "../types";
 import { trackReadingPosition } from "../../../server/public/reading-position.js";
 import type { AppConfig } from "../api";
 import { Reader } from "./Reader";
 import { OriginalView } from "./OriginalView";
 import { FileView } from "./FileView";
+import { SourceSummary } from "./SourceSummary";
+import { samePage, stepPage, visitPage } from "../../../server/public/pages.js";
 
 interface Props {
   source: Source | null;
@@ -26,7 +28,16 @@ interface Props {
   restoreNonce: number;
   presenting: boolean;
   onPresentationKey: (key: string) => void;
-  onPosition: (position: ReadingPosition, mode: string) => void;
+  /** `page` is undefined on the source's own page. */
+  onPosition: (position: ReadingPosition, mode: string, page: string | undefined) => void;
+  /** Turn a browsed page into a source of its own. */
+  onSaveAsSource: (url: string) => void;
+  /** The source this one was opened from, when it still exists. */
+  fromSource: Source | null;
+  onShowSource: (id: string) => void;
+  summaryOpen: boolean;
+  onSummaryOpen: (open: boolean) => void;
+  onSummary: (summary: string) => void;
   /** Paging state, held by the app so a stage can capture and restore it. */
   view: PaneView;
   onView: (v: PaneView) => void;
@@ -40,7 +51,9 @@ const SLIDEABLE = new Set(["markdown", "pdf", "deck"]);
 
 export function SourcePane(p: Props) {
   const view = !p.view.sourceId || p.view.sourceId === p.source?.id ? p.view : {};
-  const mode = view.mode ?? p.mode;
+  const page = view.page && p.source && !samePage(view.page, p.source.url) ? view.page : undefined;
+  // Reader shows the saved article, which is only ever the source's own page.
+  const mode = page ? "original" : view.mode ?? p.mode;
   const setMode = (mode: "original" | "reader") => {
     p.onView({ ...view, sourceId: p.source?.id, mode, position: undefined });
     p.onMode(mode);
@@ -60,6 +73,27 @@ export function SourcePane(p: Props) {
 
   const report = useRef(p.onPosition);
   report.current = p.onPosition;
+
+  // The pane's own Back and Forward. The frame's history is shared with the studio window,
+  // so going back there could leave the app itself.
+  const home = p.source?.url ?? "";
+  const [trail, setTrail] = useState(() => visitPage({ list: [home], at: 0 }, page ?? home));
+  useEffect(() => { setTrail((t) => visitPage(t, page ?? home)); }, [page, home]);
+  const showPage = (url: string) => {
+    if (!p.source) return;
+    p.onView({ ...view, sourceId: p.source.id, mode: "original", page: samePage(url, p.source.url) ? undefined : url, position: undefined });
+  };
+  // Choosing a highlight card while browsing elsewhere goes back to the page it is on.
+  const mountedNonce = useRef(p.scrollNonce);
+  useEffect(() => {
+    if (p.scrollNonce !== mountedNonce.current && page && p.scrollToId) showPage(home);
+  }, [p.scrollNonce]); // eslint-disable-line react-hooks/exhaustive-deps
+  const step = (by: number) => {
+    const next = stepPage(trail, by);
+    if (next === trail) return;
+    setTrail(next);
+    showPage(next.list[next.at]);
+  };
   useLayoutEffect(() => {
     const host = stageRef.current;
     if (!host || (!isFile && mode === "original")) return;
@@ -70,7 +104,7 @@ export function SourcePane(p: Props) {
       if (!scroller || scroller === current) return;
       cleanup?.();
       current = scroller;
-      cleanup = trackReadingPosition(scroller, scroller, view.position, (position) => report.current(position, mode));
+      cleanup = trackReadingPosition(scroller, scroller, view.position, (position) => report.current(position, mode, undefined));
     };
     attach();
     const observer = new MutationObserver(attach);
@@ -152,11 +186,28 @@ export function SourcePane(p: Props) {
           </>
         ) : (
           <>
+            <button className="icon-btn" onClick={() => step(-1)} disabled={trail.at === 0} title="Back to the previous page in this pane"><ArrowLeft size={14} /></button>
+            <button className="icon-btn" onClick={() => step(1)} disabled={trail.at >= trail.list.length - 1} title="Forward"><ArrowRight size={14} /></button>
             <div className="seg">
               <button className={mode === "original" ? "active" : ""} onClick={() => setMode("original")}>Original</button>
-              <button className={mode === "reader" ? "active" : ""} onClick={() => setMode("reader")}>Reader</button>
+              <button
+                className={mode === "reader" ? "active" : ""}
+                onClick={() => setMode("reader")}
+                disabled={Boolean(page)}
+                title={page ? "Reader shows a saved source. Save this page as a source to read it here." : undefined}
+              >Reader</button>
             </div>
-            <span className="muted small grow ellipsis" title={source.url}>{source.url}</span>
+            {p.fromSource && !page && (
+              <button className="from-chip" onClick={() => p.onShowSource(p.fromSource!.id)} title={`Opened from ${p.fromSource.url}`}>
+                <CornerUpLeft size={12} /> <span className="ellipsis">{p.fromSource.title}</span>
+              </button>
+            )}
+            <span className="muted small grow ellipsis" title={page ?? source.url}>{page ?? source.url}</span>
+            {page && (
+              <button className="ghost small save-page" onClick={() => p.onSaveAsSource(page)} title="Keep this page as a source, so it can have highlights and a summary">
+                <BookmarkPlus size={13} /> Save as source
+              </button>
+            )}
             {mode === "original" && (
               <button
                 className={`icon-btn ${scripts ? "on" : ""}`}
@@ -171,6 +222,10 @@ export function SourcePane(p: Props) {
           </>
         )}
       </div>
+
+      {!p.presenting && !page && (
+        <SourceSummary value={source.summary ?? ""} open={p.summaryOpen} onOpen={p.onSummaryOpen} onChange={p.onSummary} />
+      )}
 
       <div ref={stageRef} className="source-stage">
         {isFile ? (
@@ -197,13 +252,15 @@ export function SourcePane(p: Props) {
             onAddHighlight={p.onAddHighlight}
             onSelectHighlight={p.onSelectHighlight}
             onOpenLink={p.onOpenLink}
+            page={page}
+            onPage={showPage}
             scrollToId={p.scrollToId}
             scrollNonce={p.scrollNonce}
             position={view.position}
             restoreNonce={p.restoreNonce}
             presenting={p.presenting}
             onPresentationKey={p.onPresentationKey}
-            onPosition={(position) => report.current(position, mode)}
+            onPosition={(position, url) => report.current(position, mode, samePage(url, source.url) ? undefined : url)}
           />
         ) : (
           <Reader

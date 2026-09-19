@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { duplicateBeat, insertBeatAfter, moveBeatInList } from "../client/src/beats.ts";
-import type { Beat } from "../client/src/types.ts";
+import { captureSummary, duplicateBeat, insertBeatAfter, moveBeatInList } from "../client/src/beats.ts";
+import type { Beat, Source } from "../client/src/types.ts";
 
 const makeBeat = (id: string): Beat => ({
   id, point: id, script: "Keep this script", createdAt: "2026-01-01",
@@ -40,4 +40,22 @@ test("out-of-range and missing beat moves leave the sequence unchanged", () => {
   assert.equal(moveBeatInList(beats, "hook", -1), beats);
   assert.equal(moveBeatInList(beats, "hook", 1), beats);
   assert.equal(moveBeatInList(beats, "missing", 0), beats);
+});
+
+const article = (id: string, kind?: "file"): Source => ({ id, kind, url: `https://example.com/${id}`, title: id, content: "", textContent: "", fetchedAt: "2026-01-01", highlights: [] });
+
+test("a capture says where each article pane is, including a browsed page", () => {
+  const stage = { ...makeBeat("a").stage, panes: [{ kind: "source" as const }, { kind: "source" as const, sourceId: "docs" }],
+    views: { 0: { sourceId: "article", position: { x: 0, y: 900, text: "GTG-16008: Distillation campaign by a laboratory" } }, 1: { sourceId: "docs", page: "https://example.com/docs/quickstart", position: { x: 0, y: 0 } } } };
+  const summary = captureSummary(stage, stage.panes, [article("article"), article("docs")]);
+  assert.deepEqual(summary.unplaced, []);
+  assert.equal(summary.where, "pane 1 at “GTG-16008: Distillation campaign by a la…”, pane 2 at the top of /docs/quickstart");
+});
+
+test("a capture names an article pane that had not reported its place, and ignores other panes", () => {
+  const stage = { ...makeBeat("a").stage, panes: [{ kind: "source" as const }, { kind: "notes" as const }, { kind: "source" as const, sourceId: "deck" }],
+    views: { 0: { sourceId: "article" }, 1: {}, 2: { sourceId: "deck" } } };
+  const summary = captureSummary(stage, stage.panes, [article("article"), article("deck", "file")]);
+  assert.deepEqual(summary.unplaced, [0]);
+  assert.equal(summary.where, null);
 });

@@ -2,6 +2,15 @@
 
 What changed in each release, newest first. Versions are the ones the app updates itself to.
 
+## 0.12.0
+
+- **Beats keep their passage when the sidebar collapses or Present mode starts.** Both widen the article pane, and the page used to keep its old scroll distance while the text reflowed, so a beat that restored correctly drifted to a different passage a moment later — only sometimes, when the browser's own scroll anchoring happened not to cover it. The pane now puts the same passage back after any change of width, in Original and Reader views.
+- **Capturing a beat says what it captured.** A short message confirms the beat and names the passage each article pane is at. If a pane had not reported its place, it says which one, so it is caught now rather than mid-take. A capture that fails says so.
+- **Links within a site open in the same pane.** Docs sidebars and "next page" links no longer create a source per click. The pane has its own Back and Forward, beats remember the page it was on and where, and **Save as source** keeps a page you want to highlight. Links to another site still become sources; Ctrl+click still opens your browser. Highlights only ever appear on the page they were made on.
+- **Sources remember where they came from.** One created from a link, or saved from a browsed page, links back to it from its toolbar.
+- **A summary for each source.** A Markdown summary bar at the top of the Source pane; its first line shows in the sources list. Once collapsed it stays collapsed until you open it, and it is hidden in Present mode.
+- Regression tests for pane width changes, page identity and the pane's own history, and capture reporting.
+
 ## 0.11.4
 
 - **Beats return to the right passage on sites with a fixed header.** In a wide pane, capture anchored to the site's own header — the first visible block at every scroll depth — so restoring the beat left the article wherever the previous beat had left it. Headers, sticky contents lists, hidden elements and empty blocks are no longer used as anchors, and repeated text such as a heading also listed in the contents resolves to the copy that was read.

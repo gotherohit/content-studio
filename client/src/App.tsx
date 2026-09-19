@@ -4,7 +4,8 @@ import {
   PanelLeftOpen, Paperclip, Plus, Presentation, Square, SquareSplitHorizontal, SquareSplitVertical, Sun, X,
 } from "lucide-react";
 import { viewerForExt } from "./types";
-import { duplicateBeat, insertBeatAfter, moveBeatInList } from "./beats";
+import { captureSummary, duplicateBeat, insertBeatAfter, moveBeatInList } from "./beats";
+import { samePage } from "../../server/public/pages.js";
 import { desktop } from "./desktop";
 import type { Beat, CanvasView, Highlight, Layout, LayoutPreset, PaneConfig, PaneKind, PaneView, Project, ProjectSummary, ReadingPosition, Source, Stage } from "./types";
 import { api, type AppConfig } from "./api";
@@ -52,6 +53,8 @@ const PRESETS: { id: LayoutPreset; label: string; count: number; Icon: typeof Sq
 
 const DEFAULT_LAYOUT: Layout = { preset: "2", panes: [{ kind: "source" }, { kind: "highlights" }], split: 58, rowSplit: 50 };
 
+/** Both on the source's own page (undefined), or both on the same browsed page. */
+const sameBrowsedPage = (a?: string, b?: string) => (!a && !b) || (Boolean(a && b) && samePage(a!, b!));
 const lsGet = (k: string, d: string) => { try { return localStorage.getItem(k) ?? d; } catch { return d; } };
 const lsSet = (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* ignore */ } };
 
@@ -89,7 +92,7 @@ export default function App() {
   const [present, setPresent] = useState(false);
   const [paneViews, setPaneViews] = useState<Record<number, PaneView>>({});
   const [stageNonce, setStageNonce] = useState(0);
-  const positions = useRef<Record<number, { projectId: string; sourceId: string; mode: string; position: ReadingPosition }>>({});
+  const positions = useRef<Record<number, { projectId: string; sourceId: string; mode: string; page?: string; position: ReadingPosition }>>({});
   const canvasViews = useRef<Record<number, CanvasView>>({});
   /** Where the canvas is looking now, and where a beat wants it pointed. */
   const canvasViewRef = useRef<CanvasView | null>(null);
@@ -111,6 +114,10 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [showNewProject, setShowNewProject] = useState(false);
   const [collapsed, setCollapsed] = useState(lsGet("collapsed", "0") === "1");
+  /** Collapsing the source summary is the creator's choice, and nothing reopens it for them. */
+  const [summaryOpen, setSummaryOpen] = useState(lsGet("summaryOpen", "1") === "1");
+  /** A short confirmation that a capture happened, or a warning about what it could not record. */
+  const [notice, setNotice] = useState<{ text: string; kind: "ok" | "warn" | "fail" } | null>(null);
   const [dark, setDark] = useState(lsGet("dark", "1") === "1");
   const [fontScale, setFontScale] = useState(Number(lsGet("font", "1.05")));
   const [saveState, setSaveState] = useState<"saved" | "saving" | "dirty">("saved");
@@ -160,6 +167,12 @@ export default function App() {
   useEffect(() => { document.documentElement.dataset.theme = dark ? "dark" : "light"; lsSet("dark", dark ? "1" : "0"); }, [dark]);
   useEffect(() => lsSet("font", String(fontScale)), [fontScale]);
   useEffect(() => lsSet("collapsed", collapsed ? "1" : "0"), [collapsed]);
+  useEffect(() => lsSet("summaryOpen", summaryOpen ? "1" : "0"), [summaryOpen]);
+  useEffect(() => {
+    if (!notice) return;
+    const timer = window.setTimeout(() => setNotice(null), notice.kind === "ok" ? 2500 : 6000);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
 
   async function openProject(id: string) {
     let p: Project;
@@ -300,10 +313,10 @@ export default function App() {
     refreshList();
   }
 
-  const addSource = useCallback(async (raw: string) => {
+  const addSource = useCallback(async (raw: string, from?: string): Promise<string | null> => {
     const target = raw.trim();
-    if (!target) return;
-    if (!project) { setError("Create or open a project first."); return; }
+    if (!target) return null;
+    if (!project) { setError("Create or open a project first."); return null; }
     setLoading(true); setError(null);
     try {
       const a = await api.fetchArticle(target);
@@ -311,12 +324,15 @@ export default function App() {
         id: `src${Date.now().toString(36)}`,
         url: target, title: a.title || target, byline: a.byline, siteName: a.siteName, excerpt: a.excerpt,
         content: a.content, textContent: a.textContent, fetchedAt: a.fetchedAt, highlights: [], scripts: true,
+        ...(from ? { from } : {}),
       };
       mutate((p) => ({ ...p, sources: [...p.sources, s] }));
       setActiveSourceId(s.id);
       setUrl("");
+      return s.id;
     } catch (e) {
       setError((e as Error).message);
+      return null;
     } finally {
       setLoading(false);
     }
@@ -394,12 +410,23 @@ export default function App() {
     setScrollNonce((n) => n + 1);
   }, []);
 
-  const openLink = useCallback((link: string, newTab: boolean) => {
+  const openLink = useCallback((link: string, newTab: boolean, from?: string) => {
     if (newTab) { window.open(link, "_blank", "noreferrer"); return; }
-    const existing = project?.sources.find((s) => s.url.split("#")[0] === link.split("#")[0]);
+    const existing = project?.sources.find((s) => samePage(s.url, link));
     if (existing) { setActiveSourceId(existing.id); return; }
-    addSource(link);
+    addSource(link, from);
   }, [project, addSource]);
+
+  /** Keep a page browsed inside a pane as a source of its own, and show it in that pane. */
+  const savePageAsSource = useCallback(async (link: string, from: string, paneIndex: number) => {
+    const existing = project?.sources.find((s) => samePage(s.url, link));
+    const id = existing?.id ?? await addSource(link, from);
+    if (!id) return;
+    setActiveSourceId(id);
+    // A pinned pane would otherwise keep showing the page it was browsing from.
+    setLayout((l) => ({ ...l, panes: l.panes.map((x, j) => (j === paneIndex && x.sourceId ? { ...x, sourceId: id } : x)) }));
+    setNotice({ kind: "ok", text: existing ? "That page is already a source — showing it." : "Saved as a source." });
+  }, [project, addSource]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function copyHighlights() {
     if (!source) return;
@@ -431,7 +458,7 @@ export default function App() {
       return [i, {
         ...view, sourceId, mode,
         canvasView: pane.kind === "canvas" ? canvasViews.current[i] : undefined,
-        position: pane.kind === "source" && live?.projectId === project?.id && live?.sourceId === sourceId && live?.mode === mode ? { ...live.position } : undefined,
+        position: pane.kind === "source" && live?.projectId === project?.id && live?.sourceId === sourceId && live?.mode === mode && sameBrowsedPage(live.page, view.page) ? { ...live.position } : undefined,
       }];
     })),
     split: layout.split,
@@ -531,15 +558,33 @@ export default function App() {
 
   useEffect(() => { if (presenterOpen) publishPresenter(); }, [presenterOpen, publishPresenter]);
 
+  /** Say what a capture recorded, so a pane that had not reported its place is found now, not mid-take. */
+  function reportCapture(stage: Stage, number: number, verb: string) {
+    const summary = captureSummary(stage, layout.panes, project?.sources ?? []);
+    if (summary.unplaced.length) {
+      const panes = summary.unplaced.map((i) => i + 1).join(" and ");
+      setNotice({ kind: "warn", text: `Beat ${number} ${verb}, but pane ${panes} had not reported where it is. Scroll it slightly, then use the camera on this beat to capture again.` });
+    } else {
+      setNotice({ kind: "ok", text: `Beat ${number} ${verb}${summary.where ? ` — ${summary.where}` : ""}` });
+    }
+  }
+
   function captureBeat() {
-    const beat: Beat = {
-      id: Math.random().toString(36).slice(2, 10),
-      point: "",
-      stage: captureStage(),
-      createdAt: new Date().toISOString(),
-    };
-    mutate((p) => ({ ...p, beats: insertBeatAfter(p.beats ?? [], activeBeatId, beat) }));
-    setActiveBeatId(beat.id);
+    if (!project) { setNotice({ kind: "fail", text: "Capture failed — open a project first." }); return; }
+    try {
+      const beat: Beat = {
+        id: Math.random().toString(36).slice(2, 10),
+        point: "",
+        stage: captureStage(),
+        createdAt: new Date().toISOString(),
+      };
+      const next = insertBeatAfter(project.beats ?? [], activeBeatId, beat);
+      mutate((p) => ({ ...p, beats: insertBeatAfter(p.beats ?? [], activeBeatId, beat) }));
+      setActiveBeatId(beat.id);
+      reportCapture(beat.stage, next.findIndex((b) => b.id === beat.id) + 1, "captured");
+    } catch (e) {
+      setNotice({ kind: "fail", text: `Capture failed: ${(e as Error).message}` });
+    }
   }
 
   const editBeat = (id: string, fn: (b: Beat) => Beat) =>
@@ -562,11 +607,16 @@ export default function App() {
   function recaptureBeat(id: string) {
     const beat = beats.find((item) => item.id === id);
     if (!beat || !project) return;
-    const previous = structuredClone(beat.stage);
-    setBeatUndo({ projectId: project.id, label: "Arrangement updated", apply: (p) => ({ ...p, beats: p.beats.map((b) => b.id === id ? { ...b, stage: previous } : b) }) });
-    const stage = captureStage();
-    editBeat(id, (b) => ({ ...b, stage }));
-    setActiveBeatId(id);
+    try {
+      const previous = structuredClone(beat.stage);
+      const stage = captureStage();
+      setBeatUndo({ projectId: project.id, label: "Arrangement updated", apply: (p) => ({ ...p, beats: p.beats.map((b) => b.id === id ? { ...b, stage: previous } : b) }) });
+      editBeat(id, (b) => ({ ...b, stage }));
+      setActiveBeatId(id);
+      reportCapture(stage, beats.findIndex((b) => b.id === id) + 1, "captured again");
+    } catch (e) {
+      setNotice({ kind: "fail", text: `Capture failed: ${(e as Error).message}` });
+    }
   }
 
   function removeBeat(id: string) {
@@ -659,7 +709,13 @@ export default function App() {
             onToggleScripts={() => paneSource && updateSource(paneSource.id, (s) => ({ ...s, scripts: s.scripts === false }))}
             onAddHighlight={(h) => paneSource && addHighlight(paneSource.id, h)}
             onSelectHighlight={(id) => paneSource && selectFromPage(paneSource.id, id)}
-            onOpenLink={openLink}
+            onOpenLink={(link, newTab) => openLink(link, newTab, paneSource?.id)}
+            onSaveAsSource={(link) => paneSource && savePageAsSource(link, paneSource.id, i)}
+            fromSource={paneSource?.from ? project.sources.find((s) => s.id === paneSource.from) ?? null : null}
+            onShowSource={(id) => { if (pane.sourceId) setLayout((l) => ({ ...l, panes: l.panes.map((x, j) => (j === i ? { ...x, sourceId: id } : x)) })); setActiveSourceId(id); setSelectedHl(null); }}
+            summaryOpen={summaryOpen}
+            onSummaryOpen={setSummaryOpen}
+            onSummary={(summary) => paneSource && updateSource(paneSource.id, (s) => ({ ...s, summary }))}
             onRefresh={() => paneSource && refreshSource(paneSource)}
             scrollToId={paneSource && paneSource.id === activeSourceId ? selectedHl : null}
             scrollNonce={scrollNonce}
@@ -668,7 +724,7 @@ export default function App() {
             onPresentationKey={(key) => { presentationKeyRef.current(key); }}
             view={paneViews[i] ?? {}}
             onView={(v) => setPaneViews((m) => ({ ...m, [i]: v }))}
-            onPosition={(position, mode) => { if (paneSource) positions.current[i] = { projectId: project.id, sourceId: paneSource.id, mode, position }; }}
+            onPosition={(position, mode, page) => { if (paneSource) positions.current[i] = { projectId: project.id, sourceId: paneSource.id, mode, page, position }; }}
             fontScale={fontScale}
             busy={loading}
             config={config}
@@ -803,6 +859,9 @@ export default function App() {
         )}
 
         {error && <div className="error-bar" onClick={() => setError(null)}>{error}<X size={14} /></div>}
+        {notice && !present && (
+          <div className={`capture-notice ${notice.kind}`} role="status" onClick={() => setNotice(null)}>{notice.text}</div>
+        )}
 
         <main
           ref={gridRef}

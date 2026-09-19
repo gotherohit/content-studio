@@ -155,6 +155,22 @@ wait. The AI request aborts when the pane closes. Assume a recording is in progr
   page wherever it was. Capture skips zero-height, empty and fixed/sticky blocks and records
   which copy of a repeated text it used. Test at desktop pane widths: below about 1000 px
   such sites collapse their header to 0 px and the bug disappears.
+- **A pane that changes width must put its passage back.** Collapsing the sidebar and entering
+  Present mode both widen the article pane; the scroll offset survives the reflow but the
+  passage does not, and Chromium's scroll anchoring only sometimes saves it. The tracker holds
+  the last captured position and restores it whenever the scroller's width differs from the
+  width it was captured at — checked *before* any capture, so the scroll event the reflow
+  itself causes cannot overwrite it. Reproduce by toggling the sidebar after the 2.5 s
+  restore window, not during it.
+- **A browsed page is not a source.** Same-site links navigate the Original frame and set
+  `PaneView.page`; the frame's `src` only changes when the app asks for a different page, or it
+  would reload pages that routed themselves. Page identity comes from `server/public/pages.js`,
+  shared by the frame and the app. Highlights are gated to the source's own page inside
+  `inject.js`, restore requests and acknowledgements carry the page, and live positions are
+  tagged with it, so nothing from one page is applied to another. Back/Forward are the pane's
+  own list: `history.back()` in the frame walks the studio window's joint history.
+- **Anything drawn in the studio window can be recorded.** The source summary is hidden in
+  Present mode and capture messages are not shown there; keep it that way for anything new.
 - **Beat rows are not clickable.** A beat is applied through its Show/Restore button or
   its number, so a verification script clicking `.beat-row` silently tests nothing.
 - **The presenter proves it mounted by sending `sync`.** Main's watchdog resets that on every
@@ -202,6 +218,12 @@ wait. The AI request aborts when the pane closes. Assume a recording is in progr
   project's name before acting**: a selector that misses falls through to whatever was
   already open, which is how a saved snippet was overwritten and then deleted here. There
   are no backups of `project.json` and no shadow copies on this machine.
+- **Every change comes with regression tests, and must not break what already works.** Add a
+  test that fails on the old code for each bug fixed, and tests for each new behaviour; run the
+  whole `npm test` suite, not only the new file. Where a unit test cannot reach — a real site in
+  the Original frame, a pane resizing — repeat the scenario in the running app against a scratch
+  project, including the existing flows the change touches (beat switching, highlights,
+  Present mode), and report what was and was not covered.
 - **Report honestly.** If something is untested, say which part. If a limit is real —
   approximate timestamps, a log that is not persisted — write it down rather than letting
   it be discovered mid-recording.

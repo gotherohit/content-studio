@@ -174,3 +174,86 @@ test("user scrolling takes over after a restore, and an obsolete tracker stops r
   flush();
   assert.equal(reports.length, count);
 });
+
+/** A pane whose width can change, like one beside a sidebar that collapses. */
+function resizable(fixtureResult, width) {
+  const box = { width };
+  Object.defineProperty(fixtureResult.scroller, "clientWidth", { get: () => box.width, configurable: true });
+  return box;
+}
+
+test("collapsing the sidebar keeps the passage on screen instead of the pixel offset", (t) => {
+  const f = fixture(t);
+  const pane = resizable(f, 700);
+  const reports = [];
+  f.cleanups.push(trackReadingPosition(f.root, f.scroller, undefined, (position) => reports.push(position)));
+  f.scroller.scrollTop = 500;
+  f.scroller.dispatchEvent(new f.dom.window.Event("scroll"));
+  f.flush();
+  assert.equal(reports.at(-1).text, "Second passage");
+
+  // Wider pane: the text above reflows into fewer lines, and the passage moves up the page.
+  pane.width = 900;
+  f.geometry[1] = { y: 350, height: 150 };
+  f.dom.window.dispatchEvent(new f.dom.window.Event("resize"));
+  f.flush();
+  assert.equal(f.scroller.scrollTop, 395);
+  assert.equal(reports.at(-1).text, "Second passage");
+});
+
+test("a scroll event caused by the reflow cannot replace the passage being held", (t) => {
+  const f = fixture(t);
+  const pane = resizable(f, 700);
+  f.cleanups.push(trackReadingPosition(f.root, f.scroller, undefined, () => {}));
+  f.scroller.scrollTop = 500;
+  f.scroller.dispatchEvent(new f.dom.window.Event("scroll"));
+  f.flush();
+  pane.width = 900;
+  f.geometry[1] = { y: 350, height: 150 };
+  // The browser clamps or anchors first and reports a scroll before the resize is seen.
+  f.scroller.dispatchEvent(new f.dom.window.Event("scroll"));
+  f.flush();
+  assert.equal(f.scroller.scrollTop, 395);
+});
+
+test("a beat restored before the pane changes width keeps its passage after the restore window", (t) => {
+  const f = fixture(t);
+  const pane = resizable(f, 700);
+  f.scroller.scrollTop = 500;
+  const saved = captureReadingPosition(f.root, f.scroller);
+  f.scroller.scrollTop = 0;
+  f.cleanups.push(trackReadingPosition(f.root, f.scroller, saved, () => {}));
+  assert.equal(f.scroller.scrollTop, 500);
+  f.doc.dispatchEvent(new f.dom.window.Event("keydown"));
+  pane.width = 900;
+  f.geometry[1] = { y: 350, height: 150 };
+  f.dom.window.dispatchEvent(new f.dom.window.Event("resize"));
+  f.flush();
+  assert.equal(f.scroller.scrollTop, 395);
+});
+
+test("content changing height without a width change never moves the reader", (t) => {
+  const f = fixture(t);
+  resizable(f, 700);
+  const reports = [];
+  f.cleanups.push(trackReadingPosition(f.root, f.scroller, undefined, (position) => reports.push(position)));
+  f.scroller.scrollTop = 500;
+  f.scroller.dispatchEvent(new f.dom.window.Event("scroll"));
+  f.flush();
+  f.geometry[1] = { y: 350, height: 150 };
+  f.root.appendChild(f.doc.createElement("p"));
+  f.dom.window.dispatchEvent(new f.dom.window.Event("resize"));
+  f.flush();
+  assert.equal(f.scroller.scrollTop, 500);
+});
+
+test("a capture names the passage showing on screen, not an anchor hidden under a sticky bar", (t) => {
+  const { root, scroller, doc } = article(t,
+    `<p id="hidden">Scale of distillation attacks</p><p id="shown">We also uncovered a campaign</p>`,
+    { "#hidden": { y: 0, height: 120 }, "#shown": { y: 130, height: 400 } });
+  scroller.scrollTop = 100;
+  doc.elementFromPoint = () => doc.querySelector("#shown").firstChild.parentElement;
+  const saved = captureReadingPosition(root, scroller);
+  assert.equal(saved.text, "Scale of distillation attacks");
+  assert.equal(saved.seen, "We also uncovered a campaign");
+});

@@ -113,6 +113,9 @@ function BeatRow({ beat, index, active, last, onGo, onPoint, onRecapture, onMove
   );
 }
 
+/** The summary's first line, without Markdown markers, as the source's one-line note. */
+const firstLine = (summary?: string) => summary?.split("\n").map((line) => line.replace(/^[#>*\-\s]+/, "").trim()).find(Boolean) ?? "";
+
 export function Sidebar(p: Props) {
   return (
     <aside className="sidebar">
@@ -160,7 +163,10 @@ export function Sidebar(p: Props) {
             {p.project.sources.map((s) => (
               <div key={s.id} className={`list-item ${p.activeSourceId === s.id ? "active" : ""}`} onClick={() => p.onOpenSource(s.id)} title={s.url}>
                 <SourceIcon viewer={s.kind === "file" ? s.file?.viewer : undefined} />
-                <span className="grow ellipsis">{s.title}</span>
+                <span className="grow source-title">
+                  <span className="ellipsis">{s.title}</span>
+                  {firstLine(s.summary) && <span className="source-summary-line ellipsis">{firstLine(s.summary)}</span>}
+                </span>
                 <span className="badge">{s.highlights.length}</span>
                 <button className="icon-btn danger hover-only" title="Remove source" onClick={(e) => { e.stopPropagation(); p.onRemoveSource(s.id); }}><X size={13} /></button>
               </div>

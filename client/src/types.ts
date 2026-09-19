@@ -44,6 +44,10 @@ export interface Source {
   highlights: Highlight[];
   /** Run the page's own JavaScript in Original view. Defaults to true. */
   scripts?: boolean;
+  /** The source whose link, or whose browsed page, this one was created from. */
+  from?: string;
+  /** The creator's own Markdown summary of what this source says. Never shown in Present mode. */
+  summary?: string;
 }
 
 export interface Snippet {
@@ -88,6 +92,11 @@ export interface PaneView {
   sourceId?: string;
   mode?: "original" | "reader";
   position?: ReadingPosition;
+  /**
+   * Another page of the same site, browsed to inside the pane without becoming a source.
+   * Undefined means the source's own page. Highlights only ever apply to the source's page.
+   */
+  page?: string;
   slideshow?: boolean;
   slideIndex?: number;
 }
@@ -101,6 +110,8 @@ export interface ReadingPosition {
   /** Which copy of `text` the anchor was, since pages repeat headings in their contents lists. */
   occurrence?: number;
   offset?: number;
+  /** A passage visible when captured, for saying what was captured. Never used to restore. */
+  seen?: string;
 }
 
 /**
