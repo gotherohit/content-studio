@@ -92,8 +92,17 @@ export const api = {
     fetch(`/api/fs/stat?${new URLSearchParams({ root, path })}`).then((r) => j<{ mtime: number; size: number }>(r)),
   fsRead: (root: string, path: string) =>
     fetch(`/api/fs/read?${new URLSearchParams({ root, path })}`).then((r) => j<FsText>(r)),
+  /** The text goes as the body itself, so a large file is not held to the JSON size limit. */
   fsWrite: (root: string, path: string, file: { content: string; mtime: number; eol: string; bom: boolean }) =>
-    fetch("/api/fs/write", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ root, path, ...file }) }).then((r) => j<{ mtime: number }>(r)),
+    fetch(`/api/fs/write?${new URLSearchParams({ root, path, mtime: String(file.mtime), eol: file.eol === "\r\n" ? "crlf" : "lf", bom: file.bom ? "1" : "0" })}`, {
+      method: "PUT", headers: { "content-type": "text/plain; charset=utf-8" }, body: file.content,
+    }).then((r) => j<{ mtime: number }>(r)),
+  fsCreate: (root: string, path: string, dir: boolean) =>
+    fetch("/api/fs/create", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ root, path, dir }) }).then((r) => j<{ path: string; dir: boolean }>(r)),
+  fsRename: (root: string, from: string, to: string) =>
+    fetch("/api/fs/rename", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ root, from, to }) }).then((r) => j<{ from: string; path: string }>(r)),
+  fsDelete: (root: string, path: string) =>
+    fetch("/api/fs/delete", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ root, path }) }).then((r) => j<{ path: string }>(r)),
   reveal: (dir: string) =>
     fetch("/api/reveal", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ dir }) }).then((r) => j<{ ok: true }>(r)),
 

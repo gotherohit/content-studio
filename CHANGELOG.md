@@ -2,6 +2,14 @@
 
 What changed in each release, newest first. Versions are the ones the app updates itself to.
 
+## 0.15.0
+
+- **Create, rename and delete in the Files pane.** New file and new folder buttons above the tree, a right-click menu, **F2** to rename and **Delete** to delete. A name with slashes makes the folders on the way, and a rename can move a file. A create or rename never replaces an existing file. Deletes ask first and go to the Recycle Bin.
+- **Renames carry everything along.** A renamed file or folder takes its highlights, links and beats with it, and an open file keeps its unsaved edits under the new name. If the new name is one an older code source still points at, the two merge.
+- **Files up to 50 MB open**, up from 2 MB. Above 5 MB they are shown without syntax colours to keep editing quick. Binary files are still refused, with a clearer reason.
+- The padlock now blocks create, rename and delete as well as saving. Ctrl+S works wherever focus is in the Files pane.
+- Regression tests for creating, renaming and deleting inside the folder only, invalid Windows names, never overwriting, large files, highlight and beat renames, merging duplicate code sources and the Recycle Bin command.
+
 ## 0.14.0
 
 - **The Files pane.** Browse the project's folder, or any folder you choose, and view or edit its text files with syntax colours. Saving is only ever Ctrl+S; a file changed on disk reloads by itself, or — if you have unsaved changes — asks before either version is lost. A padlock opens the folder read-only. Line endings and byte-order marks are kept.

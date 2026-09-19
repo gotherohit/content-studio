@@ -45,8 +45,8 @@ this passage *supports*, *contradicts*, *cites*, is *the same claim as*, or is *
 another source or passage. The other side gets a backlink. **Map**, beside Sources, shows it all
 as a graph you can click through. → [Linking sources](#linking-sources), [The source map](#the-source-map)
 
-**6. Bring in code.** Choose **Files** as a pane type, open a file, select lines, and highlight or
-link them like any passage. **Focus** (the crosshair) dims everything but those lines.
+**6. Bring in code.** Choose **Files** as a pane type — make, rename or delete files there as you
+go — open a file, select lines, and highlight or link them like any passage. **Focus** (the crosshair) dims everything but those lines.
 → [Files and code](#files-and-code)
 
 **7. Build the running order.** For each point you want to make, arrange the panes — which
@@ -324,18 +324,34 @@ The log lives in the presenter window and is not saved — copy it before closin
 
 The **Files** pane shows a folder — the project's own, or any other you choose with the
 folder button — as a tree on the left and the chosen file on the right, with syntax colours
-for most languages. It is for showing code on camera and making small changes; for real
-development keep using your editor.
+for most languages. It covers the everyday file work around a video — making, editing,
+renaming and deleting files — so you only need a full editor for heavy development.
 
 * **Saving is only ever Ctrl+S** (or **Save**). A dot after the file name means unsaved
-  changes. Nothing is saved by itself, and nothing here creates, renames or deletes a file.
+  changes. Nothing is saved by itself.
+* **New file and new folder:** the two buttons above the tree, or right-click a folder. Type
+  the name and press Enter; a name with slashes, such as `utils/helpers.py`, makes the folders
+  on the way. A new file opens straight away. A name that already exists is refused, so
+  nothing is ever overwritten.
+* **Rename:** select an entry and press **F2**, or right-click → **Rename**. Only the name is
+  selected, not the extension. Typing a path moves it, for example `lib/fit.py`. Unsaved edits
+  to an open file keep going under its new name. Highlights, links and beats on a renamed file
+  follow it.
+* **Delete:** select an entry and press **Delete**, or right-click → **Delete**. It asks first,
+  then moves the file or folder to the **Recycle Bin**, so it can be restored. If it has
+  highlights, the question says so; they stay in the project, marked as missing, and return if
+  you restore the file.
+* Right-click also offers **Show in Explorer**, and the refresh button above the tree picks up
+  files added outside the app.
 * **Changes made elsewhere show up.** If another editor, git or the AI pane changes the open
   file, it reloads by itself when you have no unsaved changes. If you do, a bar says so and
   lets you load the other version or keep yours, which overwrites it on the next save.
-* **The padlock opens the folder read-only**, so nothing in it can be saved — use it for a
-  repository you only want to show. It is remembered per project.
-* A file keeps its own line endings and byte-order mark when saved. Files over 2 MB and
-  binary files are not opened.
+* **The padlock opens the folder read-only**: nothing in it can be saved, created, renamed or
+  deleted. Use it for a repository you only want to show. It is remembered per project.
+* A file keeps its own line endings and byte-order mark when saved.
+* **Files up to 50 MB open**, logs and data files included. Above 5 MB they are shown without
+  syntax colours, which keeps typing quick; a note after the file name says so. Binary files —
+  images, `.bin`, `.pkl` — are not opened, because saving one as text would corrupt it.
 
 **Highlighting code.** Select lines and a small bar offers the highlight colours, and a link
 button that highlights and opens the link dialog in one go. The first highlight turns the
@@ -498,6 +514,7 @@ A key that cannot be decrypted is **kept, not discarded** — the provider simpl
 | `→` `←` `Space` | Navigate slides, when not presenting |
 | `Ctrl+Enter` | Run the current code snippet |
 | `Ctrl+S` | Save the open file, in the Files pane |
+| `F2` / `Delete` | Rename / delete the selected file or folder, in the Files pane |
 | `Ctrl+F` | Find in the open file, in the Files pane |
 | `Ctrl+click` a link | Open it in your normal browser instead of the pane |
 
@@ -588,8 +605,14 @@ can be made again from the new highlight.
 **Ctrl+S does nothing in the Files pane.** The padlock is closed: the folder is read-only. Click
 it to allow saving.
 
-**A file will not open in the Files pane.** Files over 2 MB and binary files are refused; the
+**A file will not open in the Files pane.** Files over 50 MB and binary files are refused; the
 error bar says which. Open those in another program.
+
+**A deleted file needs to come back.** It is in the Windows Recycle Bin: right-click it there
+and choose **Restore**. Its highlights reappear in the Files pane once it is back.
+
+**New file, Rename or Delete is greyed out.** The padlock in the Files toolbar is closed: the
+folder is read-only. Click it to allow changes.
 
 **A site refuses to load in the Embed pane.** In the desktop app, both Embed and Browser use real Chromium views. Check the address and that the app is running. Embed is suited to local
 apps you are running yourself.

@@ -6,7 +6,7 @@ import {
 import { viewerForExt } from "./types";
 import { captureSummary, duplicateBeat, insertBeatAfter, moveBeatInList } from "./beats";
 import { pruneLinks, type LinkEnd, type Relation } from "./links";
-import { codeHighlight, codeSourceFor, joinPath } from "./code";
+import { codeHighlight, codeSourceFor, joinPath, renameCodeRefs, renamedPath, samePath } from "./code";
 import { samePage } from "../../server/public/pages.js";
 import { desktop } from "./desktop";
 import type { Beat, CanvasView, CodeView, Highlight, HighlightColor, Layout, LayoutPreset, PaneConfig, PaneKind, PaneView, Project, ProjectSummary, ReadingPosition, Source, Stage } from "./types";
@@ -465,6 +465,27 @@ export default function App() {
     if (link) setLinkFrom({ sourceId, highlightId: h.id });
   }
 
+  /**
+   * A file or folder renamed in a Files pane. Its code sources, every beat showing it, and any
+   * pane that has it open follow, so nothing is left pointing at the old name.
+   */
+  function renameFiles(root: string, from: string, to: string) {
+    mutate((p) => ({ ...p, ...renameCodeRefs(p, root, from, to) }));
+    // The selected source may have been merged into an older one for the same file.
+    const active = project?.sources.find((s) => s.id === activeSourceId);
+    const movedTo = active?.code && samePath(active.code.root, root) ? renamedPath(active.code.path, from, to) : null;
+    if (project && movedTo) {
+      const survivor = codeSourceFor(renameCodeRefs(project, root, from, to).sources, root, movedTo);
+      if (survivor && survivor.id !== activeSourceId) setActiveSourceId(survivor.id);
+    }
+    const follow = (code?: CodeView) => {
+      const moved = code && samePath(code.root, root) ? renamedPath(code.path, from, to) : null;
+      return moved ? { ...code!, path: moved } : code;
+    };
+    setPaneViews((m) => Object.fromEntries(Object.entries(m).map(([i, v]) => [i, v.code ? { ...v, code: follow(v.code) } : v])));
+    for (const [i, c] of Object.entries(codeViews.current)) codeViews.current[Number(i)] = follow(c)!;
+  }
+
   // ---- links between sources
   function addLink(from: LinkEnd, to: LinkEnd, relation: Relation, note: string) {
     const link = { id: `lk${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`, from, to, relation, ...(note ? { note } : {}), createdAt: new Date().toISOString() };
@@ -843,6 +864,8 @@ export default function App() {
               setSelectedHl(highlightId);
               requestAnimationFrame(() => document.getElementById(`hlcard-${highlightId}`)?.scrollIntoView({ behavior: "smooth", block: "center" }));
             }}
+            onRenamed={renameFiles}
+            onNotice={(text) => setNotice({ kind: "ok", text })}
             onError={setError}
           />
         );

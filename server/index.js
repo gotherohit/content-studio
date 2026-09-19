@@ -16,7 +16,7 @@ import { createInput } from "./input.js";
 import { TYPES, viewerFor, safeName, uniqueName } from "./assets.js";
 import { renderDeck, openSlideshow, hasPowerPoint, findSoffice } from "./slides.js";
 import { pickFolder } from "./picker.js";
-import { FilesError, listDir, readText, statFile, writeText } from "./files.js";
+import { FilesError, MAX_BYTES, createEntry, deleteEntry, listDir, readText, renameEntry, statFile, writeText } from "./files.js";
 import { createBrowser } from "./browser.js";
 import { createVault } from "./vault.js";
 import { createResearchSearch } from "./research-search.js";
@@ -73,6 +73,20 @@ app.put("/api/projects/:id/sources/:name", express.raw({ type: "*/*", limit: "1g
   await fs.writeFile(path.join(dir, name), req.body);
   res.json(await describeSource(req.params.id, name));
 });
+
+// ---------- files pane ----------
+/** Every Files route answers, even when the disk says no, so the pane can say why. */
+const files = (fn) => async (req, res) => {
+  try { res.json(await fn(req)); }
+  catch (e) { res.status(e instanceof FilesError ? e.status : 500).json({ error: e instanceof FilesError ? e.message : `Could not do that: ${e.message}` }); }
+};
+// Also before the JSON parser: a file up to the size the pane opens is sent as it is, not
+// wrapped in JSON under a smaller limit.
+app.put("/api/fs/write", express.text({ type: "*/*", limit: MAX_BYTES + 1024 * 1024 }), files((req) =>
+  writeText(String(req.query.root || ""), String(req.query.path || ""), {
+    content: typeof req.body === "string" ? req.body : undefined,
+    mtime: Number(req.query.mtime), eol: req.query.eol === "crlf" ? "\r\n" : "\n", bom: req.query.bom === "1",
+  })));
 
 app.use(express.json({ limit: "20mb" }));
 app.use((err, _req, res, next) => (err instanceof SyntaxError ? res.status(400).json({ error: "Invalid JSON body" }) : next(err)));
@@ -277,16 +291,12 @@ app.post("/api/reveal", async (req, res) => {
   res.json({ ok: true });
 });
 
-// ---------- files pane ----------
-/** Every Files route answers, even when the disk says no, so the pane can say why. */
-const files = (fn) => async (req, res) => {
-  try { res.json(await fn(req)); }
-  catch (e) { res.status(e instanceof FilesError ? e.status : 500).json({ error: e instanceof FilesError ? e.message : `Could not read that folder: ${e.message}` }); }
-};
 app.get("/api/fs/list", files((req) => listDir(String(req.query.root || ""), String(req.query.path || ""))));
 app.get("/api/fs/stat", files((req) => statFile(String(req.query.root || ""), String(req.query.path || ""))));
 app.get("/api/fs/read", files((req) => readText(String(req.query.root || ""), String(req.query.path || ""))));
-app.put("/api/fs/write", files((req) => writeText(String(req.body?.root || ""), String(req.body?.path || ""), req.body || {})));
+app.post("/api/fs/create", files((req) => createEntry(String(req.body?.root || ""), String(req.body?.path || ""), { dir: Boolean(req.body?.dir) })));
+app.post("/api/fs/rename", files((req) => renameEntry(String(req.body?.root || ""), String(req.body?.from || ""), String(req.body?.to || ""))));
+app.post("/api/fs/delete", files((req) => deleteEntry(String(req.body?.root || ""), String(req.body?.path || ""))));
 
 /** Ask the target what it says, so the Embed pane can explain a refusal instead of framing a blank. */
 app.post("/api/site/probe", async (req, res) => {

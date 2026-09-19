@@ -48,7 +48,7 @@ than `file://`. That is why websockets, cookies and the `<sub>.localhost` proxy 
 | `server/agent-model.js` / `server/agent-tools.js` | provider tool calls and reviewed local tools |
 | `server/research-search.js` | search credentials and Tavily requests |
 | `server/slides.js` | PowerPoint COM, per-slide export |
-| `server/files.js` | the Files pane: folder listing, reading and saving, confined to the chosen folder |
+| `server/files.js` | the Files pane: list, read, save, create, rename and delete, confined to the chosen folder |
 | `client/src/App.tsx` | project state, layout, beats, the presenter bridge |
 | `client/src/Presenter.tsx` | the second window; holds no project state |
 
@@ -180,13 +180,25 @@ wait. The AI request aborts when the pane closes. Assume a recording is in progr
   in the same `mutate`: a missing source removes the link, a missing highlight degrades it to
   the whole source. The map's layout (`layoutGraph`) is deterministic on purpose — beats can
   show it, so it must look the same every take; never seed it randomly.
-- **The Files pane can write anywhere the creator points it, so it only overwrites.** Every
-  path goes through `resolveInside`, which checks the folder before *and after* following
-  links — a junction inside the folder can point anywhere. Saves carry the mtime the file was
-  opened at and are refused on a mismatch; never add a "just overwrite" path, and never add
-  create, rename or delete here without the same confinement and a test.
-- **CodeMirror normalises line endings to `
-`.** The server reports each file's EOL and BOM
+- **The Files pane can write anywhere the creator points it.** Existing paths go through
+  `resolveInside` and new names through `resolveNew`; both check the folder before *and after*
+  following links, because a junction inside the folder can point anywhere. Saves carry the
+  mtime the file was opened at and are refused on a mismatch. Create and rename never replace
+  an existing name (`wx` for files; a case-only rename is the one exception). Delete only ever
+  goes to the Recycle Bin. Never add a "just overwrite" or permanent-delete path.
+- **The Recycle Bin is reached through PowerShell with the path in the environment**, never in
+  the command text. `RECYCLE_SCRIPT` is a single `if … else` statement: joined with `; `, an
+  `else` on its own is invalid PowerShell and every delete failed. A test parses the script
+  without running it, because running it would fill the real Recycle Bin on every test run.
+- **The editor's text is read, never copied per keystroke.** `onChange` carries no text and
+  `handle.getDoc()` reads it when a save or highlight needs it — at 50 MB a copy per keystroke
+  stalls typing. Highlights are located against `file.content` while there are no unsaved
+  edits: right after a load the editor still holds the previous file until it renders.
+- **A rename must move every reference.** `renameCodeRefs` moves code sources, beat views,
+  pinned panes and links, and merges a source into an older one for the same file; `App`
+  also moves live pane views and the selected source. Anything new that stores a file path
+  belongs in it.
+- **CodeMirror normalises line endings to `\n`.** The server reports each file's EOL and BOM
   and a save puts them back; without that a one-line edit rewrites every line of a CRLF file.
   The editor's document is only replaced when `docKey` changes, never from the `doc` prop on
   every render, or typing would be undone.
@@ -236,7 +248,7 @@ wait. The AI request aborts when the pane closes. Assume a recording is in progr
   canvas that was zero pixels tall and had been invisible all along. Take a screenshot of
   anything a person is meant to see.
 - **Never test against a real project.** This machine develops the app *and* uses it for
-  real videos. All testing goes in `D:	est content studio` — create the folder if it is
+  real videos. All testing goes in `D:\test content studio` — create the folder if it is
   not there, make a scratch project inside it, and delete it when done. **Confirm the open
   project's name before acting**: a selector that misses falls through to whatever was
   already open, which is how a saved snippet was overwritten and then deleted here. There
@@ -247,6 +259,9 @@ wait. The AI request aborts when the pane closes. Assume a recording is in progr
   the Original frame, a pane resizing — repeat the scenario in the running app against a scratch
   project, including the existing flows the change touches (beat switching, highlights,
   Present mode), and report what was and was not covered.
+- **If CDP key events stop reaching a dev instance, restart it.** Once, mid-session, typed text
+  still arrived but no keydown did — not even to a capture listener on `document` — until the
+  instance was restarted. Check with such a listener before debugging the app.
 - **Report honestly.** If something is untested, say which part. If a limit is real —
   approximate timestamps, a log that is not persisted — write it down rather than letting
   it be discovered mid-recording.

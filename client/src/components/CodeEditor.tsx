@@ -23,7 +23,12 @@ interface Props {
   focus: [number, number] | null;
   /** Scroll and select here whenever `nonce` changes, and when a new document loads. */
   restore?: CodePlace & { nonce: number };
-  onChange?: (doc: string) => void;
+  /** Called on every edit, without the text: copying a large file per keystroke is too slow. */
+  onChange?: () => void;
+  /** Read the current text when it is needed — to save, or to find highlights again. */
+  handle?: { current: { getDoc: () => string } | null };
+  /** Skip syntax colours, for files too large to parse comfortably. */
+  plain?: boolean;
   onSave?: () => void;
   onPlace?: (place: CodePlace) => void;
   onMarkClick?: (id: string) => void;
@@ -101,7 +106,7 @@ export function CodeEditor(p: Props) {
       },
     }),
     EditorView.updateListener.of((u) => {
-      if (u.docChanged) latest.current.onChange?.(u.state.doc.toString());
+      if (u.docChanged) latest.current.onChange?.();
       if (u.docChanged || u.selectionSet) report();
     }),
   ];
@@ -134,6 +139,7 @@ export function CodeEditor(p: Props) {
   useEffect(() => {
     const v = new EditorView({ parent: host.current!, state: EditorState.create({ doc: p.doc, extensions: extensions() }) });
     view.current = v;
+    if (p.handle) p.handle.current = { getDoc: () => view.current?.state.doc.toString() ?? "" };
     let frame = 0;
     const scroll = () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(report); };
     v.scrollDOM.addEventListener("scroll", scroll, { passive: true });
@@ -148,7 +154,7 @@ export function CodeEditor(p: Props) {
     v.dispatch({ effects: setMarks.of({ marks: latest.current.marks, focus: latest.current.focus }) });
     if (latest.current.restore) place(latest.current.restore);
     let cancelled = false;
-    const description = LanguageDescription.matchFilename(languages, p.fileName);
+    const description = latest.current.plain ? null : LanguageDescription.matchFilename(languages, p.fileName);
     description?.load().then((support) => {
       if (!cancelled && view.current === v) v.dispatch({ effects: language.current.reconfigure(support) });
     }).catch(() => { /* plain text is still readable */ });

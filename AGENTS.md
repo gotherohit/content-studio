@@ -62,6 +62,13 @@ committing.
   by title text finds a *project* whose path contains the word — this opened a real project
   during a test. Select source rows by their own markup, and confirm `.title-input` still
   names the scratch project before each action that could save.
+- **Write scripts and edits that contain backslashes with the file tool, not a heredoc.** On
+  this machine the shell collapses `\\` in heredocs and Python turned `\\r\\n` into real line
+  breaks inside source files; the file tool also turned `\u` escapes such as the byte-order mark into raw characters. Build
+  a backslash as `String.fromCharCode(92)` / `bytes([92])` when a script must emit one, and check
+  edited files for raw control characters before committing.
+- **Deleting in a Files test puts a real file in the Recycle Bin.** Only delete scratch files
+  inside the sandbox, and say so in the report.
 - **Add regression tests with every change.** A test that fails on the old code for each bug,
   tests for each new behaviour, and the full `npm test` suite passing. Re-run the existing
   flows the change touches in the running app, on a scratch project. See CLAUDE.md.
