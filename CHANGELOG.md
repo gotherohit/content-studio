@@ -2,6 +2,13 @@
 
 What changed in each release, newest first. Versions are the ones the app updates itself to.
 
+## 0.15.1
+
+A regression pass over every existing flow: articles and beats, sidebar collapse and Present mode, browsing inside a pane, Save as source, the Source toolbar and summary, links, backlinks and the map, file sources, highlights in articles, text files and Reader, Notes, the Code runner, Terminal, Canvas, Jupyter, the beat list, beat scripts, the presenter window, Settings, project rename and delete, and the Files pane.
+
+- **Arrow keys page through a Markdown source's slides again.** In Slides mode, → stopped at slide two and ← went back to the first, because the key handler kept the slide number from when it was attached. The toolbar buttons were unaffected.
+- A beat captured straight after a file became a code source could miss where that source was scrolled. It now always sees the current sources.
+
 ## 0.15.0
 
 - **Create, rename and delete in the Files pane.** New file and new folder buttons above the tree, a right-click menu, **F2** to rename and **Delete** to delete. A name with slashes makes the folders on the way, and a rename can move a file. A create or rename never replaces an existing file. Deletes ask first and go to the Recycle Bin.

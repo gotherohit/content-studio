@@ -126,10 +126,10 @@ export default function App() {
   const [collapsed, setCollapsed] = useState(lsGet("collapsed", "0") === "1");
   /** Collapsing the source summary is the creator's choice, and nothing reopens it for them. */
   const [summaryOpen, setSummaryOpen] = useState(lsGet("summaryOpen", "0") === "1");
-  /** A short confirmation that a capture happened, or a warning about what it could not record. */
   /** Where a link being made starts: a passage, or a whole source. */
   const [linkFrom, setLinkFrom] = useState<LinkEnd | null>(null);
   const [showMap, setShowMap] = useState(false);
+  /** A short confirmation that a capture happened, or a warning about what it could not record. */
   const [notice, setNotice] = useState<{ text: string; kind: "ok" | "warn" | "fail" } | null>(null);
   const [dark, setDark] = useState(lsGet("dark", "1") === "1");
   const [fontScale, setFontScale] = useState(Number(lsGet("font", "1.05")));
@@ -552,7 +552,8 @@ export default function App() {
     embedUrl: project?.settings.embedUrl,
     browserUrl: project?.settings.browserUrl,
     canvasView: canvasViewRef.current ?? undefined,
-  }), [layout, paneViews, activeSourceId, selectedHl, project?.settings]);
+    // The whole project: a code source created since the last render must be found by codeFor.
+  }), [layout, paneViews, activeSourceId, selectedHl, project]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /**
    * Put a stage back on screen. References that have gone — a deleted source, a highlight

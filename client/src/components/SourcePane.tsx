@@ -67,6 +67,10 @@ export function SourcePane(p: Props) {
   const setSlideshow = (v: boolean) => p.onView({ ...view, sourceId: p.source?.id, slideshow: v });
   const setSlideIndex = (v: number | ((i: number) => number)) =>
     p.onView({ ...view, sourceId: p.source?.id, slideIndex: typeof v === "function" ? v(slideIndex) : v });
+  // The key handler below outlives renders; through this it always pages from the slide on
+  // screen, not the one showing when it was attached — which stopped the arrows at slide two.
+  const pageSlides = useRef(setSlideIndex);
+  pageSlides.current = setSlideIndex;
   const [slideCount, setSlideCount] = useState(1);
   const stageRef = useRef<HTMLDivElement>(null);
 
@@ -123,8 +127,8 @@ export function SourcePane(p: Props) {
       if (document.querySelector(".app.present")) return;
       const t = e.target as HTMLElement;
       if (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable) return;
-      if (["ArrowRight", "PageDown", " "].includes(e.key)) { setSlideIndex((i) => Math.min(slideCount - 1, i + 1)); e.preventDefault(); }
-      if (["ArrowLeft", "PageUp"].includes(e.key)) { setSlideIndex((i) => Math.max(0, i - 1)); e.preventDefault(); }
+      if (["ArrowRight", "PageDown", " "].includes(e.key)) { pageSlides.current((i) => Math.min(slideCount - 1, i + 1)); e.preventDefault(); }
+      if (["ArrowLeft", "PageUp"].includes(e.key)) { pageSlides.current((i) => Math.max(0, i - 1)); e.preventDefault(); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);

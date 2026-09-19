@@ -206,6 +206,11 @@ wait. The AI request aborts when the pane closes. Assume a recording is in progr
   links, backlinks, the map and beats work unchanged. It quotes its lines and relocates by
   them (`locateLines`). A focused beat restores without a text selection, so its lines live
   only in the saved view — `codeFor` keeps them on re-capture.
+- **A key handler attached in an effect sees the state of the render that attached it.** The
+  Markdown slide keys called a setter that computed "next" from the slide number captured at
+  attach time, so → could never get past slide two. Read current state through a ref that is
+  updated every render (`pageSlides` in `SourcePane`), or list what the handler reads as
+  dependencies so it is re-attached.
 - **Beat rows are not clickable.** A beat is applied through its Show/Restore button or
   its number, so a verification script clicking `.beat-row` silently tests nothing.
 - **The presenter proves it mounted by sending `sync`.** Main's watchdog resets that on every
