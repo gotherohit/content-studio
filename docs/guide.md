@@ -3,18 +3,69 @@
 Everything the app does, and how to do it. [README](../README.md) covers installing it;
 this is the reference you come back to.
 
+- [A video, step by step](#a-video-step-by-step) — start here
 - [Projects are folders](#projects-are-folders)
-- [Sources](#sources)
+- [Sources](#sources) — web pages, files, browsing a site, summaries
+  - [Linking sources](#linking-sources) and [the source map](#the-source-map)
 - [Beats](#beats) — the running order for a video
-- [The presenter window](#the-presenter-window)
+  - [What to say on a beat](#what-to-say-on-a-beat) and [the presenter window](#the-presenter-window)
+- [Files and code](#files-and-code) — browse, edit, highlight and show code
 - [Layout](#layout)
-- [Models and keys](#models-and-keys)
 - [Embedding a running app](#embedding-a-running-app)
+- [Jupyter notebooks](#jupyter-notebooks)
 - [Controlling a window](#controlling-a-window)
+- [Research with AI](#research-with-ai)
+- [Models and keys](#models-and-keys)
 - [Shortcuts](#shortcuts)
 - [Settings that live in `.env`](#settings-that-live-in-env)
 - [Where everything is stored](#where-everything-is-stored)
 - [When something goes wrong](#when-something-goes-wrong)
+
+## A video, step by step
+
+The whole workflow once, in order. Each step links to the section with the details.
+
+**1. Make a project.** The **+** beside Projects names it and picks a folder; the project gets
+its own folder inside. → [Projects are folders](#projects-are-folders)
+
+**2. Add your sources.** Paste an article URL in the top bar and press Enter, or click **File**
+or drop files on the window for PDFs, decks, notebooks and images. → [Sources](#sources)
+
+**3. Read, and browse around.** In a docs site, sidebar and "next page" links open in the same
+pane, with Back and Forward in the pane's toolbar, without adding sources. When a page is worth
+keeping, press **Save as source**. Links to other sites become sources, and remember which
+source they came from. → [Sources](#sources)
+
+**4. Mark what matters.** Select text to highlight it and add a comment. Open a source's
+**summary** with the notebook button in its toolbar and write the gist in your own words; the
+first line appears under its name in the sources list.
+
+**5. Connect the evidence.** On a highlight's card in the Highlights pane, press the link icon:
+this passage *supports*, *contradicts*, *cites*, is *the same claim as*, or is *related to*
+another source or passage. The other side gets a backlink. **Map**, beside Sources, shows it all
+as a graph you can click through. → [Linking sources](#linking-sources), [The source map](#the-source-map)
+
+**6. Bring in code.** Choose **Files** as a pane type, open a file, select lines, and highlight or
+link them like any passage. **Focus** (the crosshair) dims everything but those lines.
+→ [Files and code](#files-and-code)
+
+**7. Build the running order.** For each point you want to make, arrange the panes — which
+source, scrolled where, which file and lines, which part of the canvas or map — and press
+**+ Beat**. A message confirms what was captured, or tells you which pane to scroll and capture
+again. Write the point on the beat's row, and what to say in its **script**.
+→ [Beats](#beats), [What to say on a beat](#what-to-say-on-a-beat)
+
+**8. Rehearse.** Open the **Presenter** window on your other monitor: it shows the current point,
+what comes next, your script and a clock. **Present** (Alt+P) hides everything but the panes;
+**→** and **←** move between beats. → [The presenter window](#the-presenter-window)
+
+**9. Record.** Start your recorder on the studio window and the presenter's clock together. Talk,
+press **→**, repeat; **f** marks a moment to redo. Afterwards **Copy log** gives you chapters and
+an edit list.
+
+Nothing drawn only for you reaches the recording in Present mode: summaries, capture messages,
+file-editing tools and the folder tree are hidden, and scripts only ever appear in the presenter
+window.
 
 ## Projects are folders
 
@@ -31,7 +82,7 @@ Each project is a self-contained folder:
 
 ```
 <project folder>/
-  project.json      sources, highlights, notes, slides, canvas, layout
+  project.json      sources, highlights, links, summaries, beats, notes, slides, canvas, layout
   sources/          every file you add as a source
   .rendered/        slide images generated from decks (safe to delete)
   <anything else>   notebooks and scratch files you create
@@ -72,6 +123,10 @@ colours when page scripts refresh the article; hidden copies of text are ignored
 whitespace changes are tolerated, but a passage rewritten or removed by the publisher may
 no longer match even though its saved quote remains in Highlights.
 
+**Highlighting.** Select text in an article; a small bar offers four colours and a comment box.
+The highlight appears as a card in the **Highlights** pane — click a card to scroll the article
+to it, or click the highlight in the article to find its card.
+
 **Links in a web page.** A link to another page of the *same site* — a docs sidebar, a
 "next page" link — opens in the same pane, like a browser, without creating a source. The
 toolbar shows the page's address with **Back** and **Forward** for this pane. Beats remember
@@ -104,6 +159,18 @@ pages leave parts blank without their scripts — and clicking it turns them bac
 
 Research is mostly *this says X, that says otherwise*. A **link** records that between two
 sources, usually from one highlighted passage to another.
+
+To link, step by step:
+
+1. Put a **Highlights** pane beside the source, and highlight the passage you are making a
+   point about.
+2. On its card, press the **link icon**.
+3. Choose how it relates, then the other **Source**, then — if you highlighted it there too — the
+   **Passage in it**. Add a note if the reason is not obvious, and press **Add link**.
+4. The card now shows *→ contradicts Paper X — "…"*. Open Paper X and its passage shows
+   *← contradicted by…*. Click either to jump to the other end.
+
+In more detail:
 
 * **Link a passage:** in the Highlights pane, press the link icon on a highlight's card.
   Choose how it relates — **supports**, **contradicts**, **cites**, **same claim as** or
@@ -192,6 +259,9 @@ Things worth knowing:
   positions to beats. Highly dynamic pages or sites with their own nested scrolling areas
   may need Reader view for reliable passage restoration. A page that cannot confirm restoration
   shows a visible error instead of staying concealed.
+* **Code and the map are part of a beat too.** A Files pane or code source restores its file,
+  scroll position, selected lines and focus; a Source map pane is drawn the same way every
+  time; a browsed page returns to that page. See [Files and code](#files-and-code).
 * **Source slides keep their captured page when a pane mounts.** In Present mode, the arrow
   keys advance the beat rather than also advancing a slide inside it.
 * **The canvas is one drawing per project, framed per beat.** A stage remembers the canvas
@@ -275,10 +345,33 @@ gutter marks highlighted lines; click it to see the highlight's card and links i
 Highlights pane. Highlights follow their code when lines are added or removed above them;
 if the code itself is rewritten, the bar turns faint to say the highlight may be stale.
 
+To highlight and link code, step by step:
+
+1. Choose **Files** as a pane type. It opens the project's folder; use the folder button at the
+   top left of the pane to show another, such as a demo repository.
+2. Click a file in the tree. Edit it if you need to and press **Ctrl+S** to save.
+3. Select the lines you will talk about. The bar that appears offers four colours and a link
+   button.
+4. Pick a colour to highlight them, or press the link button to highlight them and open the link
+   dialog straight away.
+5. The file now appears in the sources list, and its highlights in the Highlights pane when you
+   click the coloured bar beside the line numbers.
+
 **Pointing at code on camera.** Select lines and press the crosshair to dim everything else.
 A beat captured then remembers the file, where it was scrolled, the lines and the dimming,
 and puts all of it back — so beat 4 can open `train.py` on the loss function and beat 5 on
 the optimiser. In Present mode the folder tree and editing tools are hidden.
+
+To put code in a beat:
+
+1. Open the file in the Files pane and scroll to where the explanation starts.
+2. Select the lines and press the **crosshair**; everything else dims. Press it again to undo.
+3. Press **+ Beat**. The message says, for example, *train.py at lines 3–5, focused*.
+4. In Present mode, **→** to that beat opens the file, scrolled and dimmed exactly as captured.
+   The file itself is not copied into the beat: edit the code and the beat shows the new version.
+
+The Files pane remembers which folder it shows and whether it is read-only, per project. A folder
+you pick stays on your disk where it is; nothing is copied into the project.
 
 ## Layout
 
@@ -294,7 +387,12 @@ Everything is a **pane**. Pick 1 to 4 panes from the layout buttons in the top b
 └──────────┴──────────────────────────┴─────────────────────────┘
 ```
 
-Pane types: **Source**, **Highlights**, **Notes**, **AI**, **Code**, **Terminal**, **Jupyter**, **Slides** (a scratch markdown deck), **Canvas** (Excalidraw), **Window**, **Embed**.
+Pane types: **Source**, **Highlights**, **Source map**, **Files**, **Notes**, **AI**, **Code** (runnable snippets), **Terminal**, **Jupyter**, **Slides** (a scratch markdown deck), **Canvas** (Excalidraw), **Browser**, **Window**, **Embed**.
+
+Each Source pane's toolbar has, from left to right: which source it shows, Back and Forward for
+pages browsed inside it, Original or Reader, the **←** link to the source it came from, its
+address, **Save as source** when browsing, the summary button, and the **⋯** menu (page
+scripts, re-download, open in your browser).
 
 **Present mode** (Alt+P) hides the sidebar, top bar and pane headers so only your panes are on screen for recording.
 
@@ -399,6 +497,9 @@ A key that cannot be decrypted is **kept, not discarded** — the provider simpl
 | `h` | Hide or show the beat strip |
 | `→` `←` `Space` | Navigate slides, when not presenting |
 | `Ctrl+Enter` | Run the current code snippet |
+| `Ctrl+S` | Save the open file, in the Files pane |
+| `Ctrl+F` | Find in the open file, in the Files pane |
+| `Ctrl+click` a link | Open it in your normal browser instead of the pane |
 
 
 ## Odds and ends
@@ -406,7 +507,7 @@ A key that cannot be decrypted is **kept, not discarded** — the provider simpl
 * Launching Studio again brings its existing window forward, including when that window was hidden. Development copies share the installed app's single-instance lock; close them after testing.
 
 * Code snippets, the terminal and window control all act with your user's permissions; see [Security](../README.md#security).
-* Pages are downloaded once and cached in `~/.content-studio/cache`. Use the refresh button in the Source toolbar to re-download.
+* Pages are downloaded once and cached in `~/.content-studio/cache`. **Re-download this page**, in the Source toolbar's **⋯** menu, fetches it again.
 * The proxy relies on every `*.localhost` name resolving to 127.0.0.1, which Chrome, Edge and Firefox do by default.
 * Sites that need a login, or that block server-side fetching, will not render. Try the print version, or use Reader.
 * The API server deliberately runs without `node --watch`: node-pty's console worker crashes under watch mode on Windows. Restart `npm run dev` after changing server files.
@@ -430,6 +531,8 @@ Optional, and nothing in it is needed to use the app.
 | What | Where | Safe to delete? |
 |---|---|---|
 | Your material | the project folder you chose | no — this is your work |
+| Links, summaries, code highlights | inside `project.json` | no — part of your work |
+| Code shown in the Files pane | wherever that folder is; never copied | — |
 | Which projects exist | `~/.content-studio/config.json` | yes, but the app forgets where your projects are; the folders survive |
 | Cached web pages | `~/.content-studio/cache/sites/` | yes — pages are fetched again as needed |
 | API keys | `~/.content-studio/credentials.json` | yes — you would re-add your providers |
@@ -473,6 +576,20 @@ a link within the same site opens in the pane; only links to another site become
 **The presenter window is blank.** It reloads itself once if its page fails to load or
 stops. If that also fails, the studio shows why in the error bar; close the presenter and
 open it again.
+
+**A highlight on code has a faint bar.** The lines it quoted were rewritten, so it could not be
+found again and sits on its old line numbers. Delete it and highlight the new lines; its links
+can be made again from the new highlight.
+
+**The Files pane says the file changed on disk.** Something else — your editor, git, the AI pane
+— saved it while you had unsaved changes here. **Load theirs, drop mine** discards your edits;
+**Keep mine** makes the next save overwrite theirs.
+
+**Ctrl+S does nothing in the Files pane.** The padlock is closed: the folder is read-only. Click
+it to allow saving.
+
+**A file will not open in the Files pane.** Files over 2 MB and binary files are refused; the
+error bar says which. Open those in another program.
 
 **A site refuses to load in the Embed pane.** In the desktop app, both Embed and Browser use real Chromium views. Check the address and that the app is running. Embed is suited to local
 apps you are running yourself.

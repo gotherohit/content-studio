@@ -61,7 +61,7 @@ The whole studio is one window, and panes inside it are real Chromium views rath
 
 Jupyter, a terminal, an Excalidraw canvas, code snippets and an AI chat are panes too.
 
-**[The full guide](docs/guide.md)** documents all of it. **[Changelog](CHANGELOG.md)** lists what changed in each release.
+New to it? **[A video, step by step](docs/guide.md#a-video-step-by-step)** walks through the whole workflow once. **[The full guide](docs/guide.md)** documents all of it. **[Changelog](CHANGELOG.md)** lists what changed in each release.
 
 ## Security
 
