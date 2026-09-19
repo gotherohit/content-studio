@@ -169,7 +169,7 @@ export function Sidebar(p: Props) {
           >
             {p.project.sources.map((s) => (
               <div key={s.id} className={`list-item ${p.activeSourceId === s.id ? "active" : ""}`} onClick={() => p.onOpenSource(s.id)} title={s.url}>
-                <SourceIcon viewer={s.kind === "file" ? s.file?.viewer : undefined} />
+                <SourceIcon viewer={s.kind === "code" ? "notebook" : s.kind === "file" ? s.file?.viewer : undefined} />
                 <span className="grow source-title">
                   <span className="ellipsis">{s.title}</span>
                   {firstLine(s.summary) && <span className="source-summary-line ellipsis">{firstLine(s.summary)}</span>}

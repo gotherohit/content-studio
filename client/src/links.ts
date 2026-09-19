@@ -89,7 +89,7 @@ export function buildGraph(sources: Source[], links: SourceLink[]): { nodes: Gra
   const nodes = sources.map((s) => ({
     id: s.id,
     title: s.kind === "file" ? s.file?.name ?? s.title : s.title,
-    file: s.kind === "file",
+    file: s.kind === "file" || s.kind === "code",
     weight: s.highlights.length + (degree.get(s.id) ?? 0),
   }));
   return { nodes, edges: [...edges.values()] };

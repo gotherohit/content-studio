@@ -56,6 +56,8 @@ The whole studio is one window, and panes inside it are real Chromium views rath
 | [Models and keys](docs/guide.md#models-and-keys) | Anthropic- or OpenAI-compatible providers; research requires a tool-capable model. Keys encrypted at rest, never shown again. |
 | [A real browser pane](docs/guide.md#embedding-a-running-app) | Colab, Drive, Kaggle and your own local harnesses, signed in, in a pane. |
 | [Controlling a window](docs/guide.md#controlling-a-window) | Capture and drive another desktop application from inside the studio. |
+| [Linking sources](docs/guide.md#linking-sources) | Link passages across sources — supports, contradicts, cites — with backlinks and a clickable source map. |
+| [Files and code](docs/guide.md#files-and-code) | Browse a folder, edit and save its files, highlight lines, link them to sources, and put exact lines in a beat. |
 
 Jupyter, a terminal, an Excalidraw canvas, code snippets and an AI chat are panes too.
 
@@ -69,7 +71,8 @@ the machine. To make that safe it is deliberately unreachable from anywhere else
 * The server binds to `127.0.0.1` and refuses any connection that did not come from this
   computer, so nobody on your network or WiFi can reach it.
 * That matters because the app deliberately does powerful things on your behalf: the
-  Terminal pane is a real shell, the Code pane runs scripts, and the Window pane can move
+  Terminal pane is a real shell, the Code pane runs scripts, the Files pane can overwrite any
+  file in the folder you give it, and the Window pane can move
   your mouse and type for you. Those would be a remote takeover if they were exposed.
 * `HOST` can override the bind address, and the server prints a warning when you do. Only
   set it if you understand that it hands a shell and desktop control to your network.

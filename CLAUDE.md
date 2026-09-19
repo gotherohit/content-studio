@@ -48,6 +48,7 @@ than `file://`. That is why websockets, cookies and the `<sub>.localhost` proxy 
 | `server/agent-model.js` / `server/agent-tools.js` | provider tool calls and reviewed local tools |
 | `server/research-search.js` | search credentials and Tavily requests |
 | `server/slides.js` | PowerPoint COM, per-slide export |
+| `server/files.js` | the Files pane: folder listing, reading and saving, confined to the chosen folder |
 | `client/src/App.tsx` | project state, layout, beats, the presenter bridge |
 | `client/src/Presenter.tsx` | the second window; holds no project state |
 
@@ -179,6 +180,20 @@ wait. The AI request aborts when the pane closes. Assume a recording is in progr
   in the same `mutate`: a missing source removes the link, a missing highlight degrades it to
   the whole source. The map's layout (`layoutGraph`) is deterministic on purpose — beats can
   show it, so it must look the same every take; never seed it randomly.
+- **The Files pane can write anywhere the creator points it, so it only overwrites.** Every
+  path goes through `resolveInside`, which checks the folder before *and after* following
+  links — a junction inside the folder can point anywhere. Saves carry the mtime the file was
+  opened at and are refused on a mismatch; never add a "just overwrite" path, and never add
+  create, rename or delete here without the same confinement and a test.
+- **CodeMirror normalises line endings to `
+`.** The server reports each file's EOL and BOM
+  and a save puts them back; without that a one-line edit rewrites every line of a CRLF file.
+  The editor's document is only replaced when `docKey` changes, never from the `doc` prop on
+  every render, or typing would be undone.
+- **A code highlight is a highlight on a `kind: "code"` source**, created on first use, so
+  links, backlinks, the map and beats work unchanged. It quotes its lines and relocates by
+  them (`locateLines`). A focused beat restores without a text selection, so its lines live
+  only in the saved view — `codeFor` keeps them on re-capture.
 - **Beat rows are not clickable.** A beat is applied through its Show/Restore button or
   its number, so a verification script clicking `.beat-row` silently tests nothing.
 - **The presenter proves it mounted by sending `sync`.** Main's watchdog resets that on every

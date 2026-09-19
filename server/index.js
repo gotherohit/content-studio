@@ -16,6 +16,7 @@ import { createInput } from "./input.js";
 import { TYPES, viewerFor, safeName, uniqueName } from "./assets.js";
 import { renderDeck, openSlideshow, hasPowerPoint, findSoffice } from "./slides.js";
 import { pickFolder } from "./picker.js";
+import { FilesError, listDir, readText, statFile, writeText } from "./files.js";
 import { createBrowser } from "./browser.js";
 import { createVault } from "./vault.js";
 import { createResearchSearch } from "./research-search.js";
@@ -275,6 +276,17 @@ app.post("/api/reveal", async (req, res) => {
   else spawn(process.platform === "darwin" ? "open" : "xdg-open", [path.resolve(dir)], { detached: true }).unref();
   res.json({ ok: true });
 });
+
+// ---------- files pane ----------
+/** Every Files route answers, even when the disk says no, so the pane can say why. */
+const files = (fn) => async (req, res) => {
+  try { res.json(await fn(req)); }
+  catch (e) { res.status(e instanceof FilesError ? e.status : 500).json({ error: e instanceof FilesError ? e.message : `Could not read that folder: ${e.message}` }); }
+};
+app.get("/api/fs/list", files((req) => listDir(String(req.query.root || ""), String(req.query.path || ""))));
+app.get("/api/fs/stat", files((req) => statFile(String(req.query.root || ""), String(req.query.path || ""))));
+app.get("/api/fs/read", files((req) => readText(String(req.query.root || ""), String(req.query.path || ""))));
+app.put("/api/fs/write", files((req) => writeText(String(req.body?.root || ""), String(req.body?.path || ""), req.body || {})));
 
 /** Ask the target what it says, so the Embed pane can explain a refusal instead of framing a blank. */
 app.post("/api/site/probe", async (req, res) => {

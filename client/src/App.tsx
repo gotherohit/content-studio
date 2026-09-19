@@ -6,9 +6,10 @@ import {
 import { viewerForExt } from "./types";
 import { captureSummary, duplicateBeat, insertBeatAfter, moveBeatInList } from "./beats";
 import { pruneLinks, type LinkEnd, type Relation } from "./links";
+import { codeHighlight, codeSourceFor, joinPath } from "./code";
 import { samePage } from "../../server/public/pages.js";
 import { desktop } from "./desktop";
-import type { Beat, CanvasView, Highlight, Layout, LayoutPreset, PaneConfig, PaneKind, PaneView, Project, ProjectSummary, ReadingPosition, Source, Stage } from "./types";
+import type { Beat, CanvasView, CodeView, Highlight, HighlightColor, Layout, LayoutPreset, PaneConfig, PaneKind, PaneView, Project, ProjectSummary, ReadingPosition, Source, Stage } from "./types";
 import { api, type AppConfig } from "./api";
 import { UpdateBanner } from "./components/UpdateBanner";
 import { Sidebar } from "./components/Sidebar";
@@ -28,12 +29,14 @@ import { SettingsDialog } from "./components/SettingsDialog";
 import { BeatScriptDialog } from "./components/BeatScriptDialog";
 import { LinkDialog } from "./components/LinkDialog";
 import { SourceMap } from "./components/SourceMap";
+import { FilesPane } from "./components/FilesPane";
 import { NewProjectDialog } from "./components/NewProjectDialog";
 
 const KINDS: { id: PaneKind; label: string }[] = [
   { id: "source", label: "Source" },
   { id: "highlights", label: "Highlights" },
   { id: "map", label: "Source map" },
+  { id: "files", label: "Files" },
   { id: "notes", label: "Notes" },
   { id: "ai", label: "AI" },
   { id: "code", label: "Code" },
@@ -99,6 +102,8 @@ export default function App() {
   const [stageNonce, setStageNonce] = useState(0);
   const positions = useRef<Record<number, { projectId: string; sourceId: string; mode: string; page?: string; position: ReadingPosition }>>({});
   const canvasViews = useRef<Record<number, CanvasView>>({});
+  /** Where each Files pane or code source is scrolled; reported on every scroll, so a ref. */
+  const codeViews = useRef<Record<number, CodeView>>({});
   /** Where the canvas is looking now, and where a beat wants it pointed. */
   const canvasViewRef = useRef<CanvasView | null>(null);
   const [canvasTarget, setCanvasTarget] = useState<CanvasView | null>(null);
@@ -391,7 +396,7 @@ export default function App() {
     mutate((p) => ({ ...p, sources: p.sources.map((s) => (s.id === id ? fn(s) : s)) })), [mutate]);
 
   async function refreshSource(target: Source) {
-    if (target.kind === "file") return;
+    if (target.kind === "file" || target.kind === "code") return;
     setLoading(true);
     try {
       const a = await api.fetchArticle(target.url, true);
@@ -436,6 +441,30 @@ export default function App() {
     setNotice({ kind: "ok", text: existing ? "That page is already a source — showing it." : "Saved as a source." });
   }, [project, addSource]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ---- code
+  /**
+   * Highlight lines in the Files pane. The file becomes a code source the first time, so its
+   * highlights can be linked, mapped and put in beats like any other.
+   */
+  function addCodeHighlight(root: string, path: string, doc: string, lines: [number, number], color: HighlightColor, link: boolean) {
+    if (!project) return;
+    const h = codeHighlight(doc, lines, color, `h${Date.now().toString(36)}`);
+    const existing = codeSourceFor(project.sources, root, path);
+    const sourceId = existing?.id ?? `src${Date.now().toString(36)}c`;
+    mutate((p) => {
+      const found = codeSourceFor(p.sources, root, path);
+      if (found) return { ...p, sources: p.sources.map((s) => (s.id === found.id ? { ...s, highlights: [...s.highlights, h] } : s)) };
+      const s: Source = {
+        id: sourceId, kind: "code", code: { root, path }, url: joinPath(root, path), title: path,
+        content: "", textContent: "", fetchedAt: new Date().toISOString(), highlights: [h],
+      };
+      return { ...p, sources: [...p.sources, s] };
+    });
+    const span = lines[0] === lines[1] ? `Line ${lines[0]}` : `Lines ${lines[0]}–${lines[1]}`;
+    setNotice({ kind: "ok", text: `${span} highlighted${existing ? "" : " — the file is now a source, so it can be linked"}` });
+    if (link) setLinkFrom({ sourceId, highlightId: h.id });
+  }
+
   // ---- links between sources
   function addLink(from: LinkEnd, to: LinkEnd, relation: Relation, note: string) {
     const link = { id: `lk${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`, from, to, relation, ...(note ? { note } : {}), createdAt: new Date().toISOString() };
@@ -469,6 +498,15 @@ export default function App() {
   // stage is captured from whatever is on screen rather than filled in on a form, so
   // building one is: get it looking right, then save it.
 
+  /** A Files pane's or code source's live place, with the focus setting it was given. */
+  const codeFor = (pane: PaneConfig, i: number, sourceId: string | undefined, saved?: CodeView): CodeView | undefined => {
+    const live = codeViews.current[i];
+    const code = pane.kind === "source" ? project?.sources.find((s) => s.id === sourceId)?.code : undefined;
+    const matches = live && (pane.kind === "files" || (code && live.path === code.path && live.root === code.root));
+    // A focused beat is restored without a text selection, so its lines live only in the saved view.
+    return matches ? { ...live, sel: live.sel ?? (saved?.focus ? saved.sel : undefined), focus: saved?.focus } : saved;
+  };
+
   /** Everything about the current arrangement that can be put back later. */
   const captureStage = useCallback((): Stage => ({
     preset: layout.preset,
@@ -481,6 +519,7 @@ export default function App() {
       return [i, {
         ...view, sourceId, mode,
         canvasView: pane.kind === "canvas" ? canvasViews.current[i] : undefined,
+        code: codeFor(pane, i, sourceId, view.code),
         position: pane.kind === "source" && live?.projectId === project?.id && live?.sourceId === sourceId && live?.mode === mode && sameBrowsedPage(live.page, view.page) ? { ...live.position } : undefined,
       }];
     })),
@@ -739,6 +778,8 @@ export default function App() {
             summaryOpen={summaryOpen}
             onSummaryOpen={setSummaryOpen}
             onSummary={(summary) => paneSource && updateSource(paneSource.id, (s) => ({ ...s, summary }))}
+            onCodePlace={(code) => { codeViews.current[i] = code; }}
+            dark={dark}
             onRefresh={() => paneSource && refreshSource(paneSource)}
             scrollToId={paneSource && paneSource.id === activeSourceId ? selectedHl : null}
             scrollNonce={scrollNonce}
@@ -773,6 +814,39 @@ export default function App() {
             onGo={goToEnd}
           />
         );
+      case "files": {
+        const root = paneViews[i]?.code?.root ?? project.settings.filesRoot ?? project.dir ?? "";
+        return (
+          <FilesPane
+            key={`files-${i}-${project.id}`}
+            root={root}
+            readOnly={Boolean(project.settings.filesReadOnly)}
+            view={paneViews[i] ?? {}}
+            onView={(v) => setPaneViews((m) => ({ ...m, [i]: v }))}
+            restoreNonce={stageNonce}
+            onPlace={(code) => { codeViews.current[i] = code; }}
+            sources={project.sources}
+            selectedHl={selectedHl}
+            scrollNonce={scrollNonce}
+            presenting={present}
+            dark={dark}
+            fontScale={fontScale}
+            onRoot={(dir) => {
+              mutate((p) => ({ ...p, settings: { ...p.settings, filesRoot: dir } }));
+              setPaneViews((m) => ({ ...m, [i]: { ...(m[i] ?? {}), code: undefined } }));
+              delete codeViews.current[i];
+            }}
+            onReadOnly={(readOnly) => mutate((p) => ({ ...p, settings: { ...p.settings, filesReadOnly: readOnly } }))}
+            onHighlight={addCodeHighlight}
+            onMarkClick={(sourceId, highlightId) => {
+              setActiveSourceId(sourceId);
+              setSelectedHl(highlightId);
+              requestAnimationFrame(() => document.getElementById(`hlcard-${highlightId}`)?.scrollIntoView({ behavior: "smooth", block: "center" }));
+            }}
+            onError={setError}
+          />
+        );
+      }
       case "map":
         return (
           <SourceMap

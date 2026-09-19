@@ -2,6 +2,13 @@
 
 What changed in each release, newest first. Versions are the ones the app updates itself to.
 
+## 0.14.0
+
+- **The Files pane.** Browse the project's folder, or any folder you choose, and view or edit its text files with syntax colours. Saving is only ever Ctrl+S; a file changed on disk reloads by itself, or — if you have unsaved changes — asks before either version is lost. A padlock opens the folder read-only. Line endings and byte-order marks are kept.
+- **Highlight lines of code** and they become a code source: linkable to any other source, shown on the map and in the Highlights pane, and viewable read-only in a Source pane. Highlights move with their code when lines are added above them, and say so when the code they quoted has been rewritten.
+- **Focus on lines for the camera.** Dim everything but the selected lines. Beats remember the file, scroll position, lines and focus, and capture messages name them.
+- Regression tests for folder containment (including links that point outside it), line endings, refusing to overwrite a file changed on disk, relocating code highlights and capture messages.
+
 ## 0.13.0
 
 - **Link sources to each other.** Link a highlighted passage — or a whole source — to another source, or to one passage in it, as *supports*, *contradicts*, *cites*, *same claim as* or *related to*, with an optional note. The other source shows it as a backlink. Click either end to jump to the passage.

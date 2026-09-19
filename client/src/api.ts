@@ -10,6 +10,9 @@ async function j<T>(r: Response): Promise<T> {
   return body as T;
 }
 
+export interface FsEntry { name: string; path: string; dir: boolean }
+export interface FsText { content: string; mtime: number; size: number; eol: string; bom: boolean }
+
 export interface JupyterStatus { installed: boolean | null; running: boolean; url: string | null; log: string; port: number; rootDir?: string | null }
 
 /** POST and read a text/event-stream, calling onText for each text chunk. Resolves with the final event. */
@@ -83,6 +86,14 @@ export const api = {
     fetch(`/api/projects/${id}/folder`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ dir }) }).then((r) => j<{ dir: string }>(r)),
   openProjectFolder: (dir: string) =>
     fetch("/api/projects/open", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ dir }) }).then((r) => j<{ id: string; title: string; dir: string }>(r)),
+  fsList: (root: string, path = "") =>
+    fetch(`/api/fs/list?${new URLSearchParams({ root, path })}`).then((r) => j<{ items: FsEntry[]; truncated: boolean }>(r)),
+  fsStat: (root: string, path: string) =>
+    fetch(`/api/fs/stat?${new URLSearchParams({ root, path })}`).then((r) => j<{ mtime: number; size: number }>(r)),
+  fsRead: (root: string, path: string) =>
+    fetch(`/api/fs/read?${new URLSearchParams({ root, path })}`).then((r) => j<FsText>(r)),
+  fsWrite: (root: string, path: string, file: { content: string; mtime: number; eol: string; bom: boolean }) =>
+    fetch("/api/fs/write", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ root, path, ...file }) }).then((r) => j<{ mtime: number }>(r)),
   reveal: (dir: string) =>
     fetch("/api/reveal", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ dir }) }).then((r) => j<{ ok: true }>(r)),
 

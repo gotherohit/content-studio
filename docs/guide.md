@@ -127,6 +127,7 @@ Bigger circles have more highlights and links.
   passage that made the link.
 * **Drag** a source to move it, drag the background to pan, **scroll** to zoom, and use the
   fit button in the legend to reset. Moved sources go back when the map is reopened.
+* Code sources appear on the map like any other source.
 * To show the map on camera, pick **Source map** as a pane's kind. It can be part of a beat
   like any pane, and it is drawn the same way every time for the same sources and links.
 
@@ -248,6 +249,36 @@ It shows the beat you are on, its point in large type, what comes next, and a cl
 Chapters and an edit map, from the take you just did. Start the clock when you start recording; the two agree to within a second or so. Exact timecodes need OBS itself to be driven by the app, which is not built yet.
 
 The log lives in the presenter window and is not saved — copy it before closing.
+
+## Files and code
+
+The **Files** pane shows a folder — the project's own, or any other you choose with the
+folder button — as a tree on the left and the chosen file on the right, with syntax colours
+for most languages. It is for showing code on camera and making small changes; for real
+development keep using your editor.
+
+* **Saving is only ever Ctrl+S** (or **Save**). A dot after the file name means unsaved
+  changes. Nothing is saved by itself, and nothing here creates, renames or deletes a file.
+* **Changes made elsewhere show up.** If another editor, git or the AI pane changes the open
+  file, it reloads by itself when you have no unsaved changes. If you do, a bar says so and
+  lets you load the other version or keep yours, which overwrites it on the next save.
+* **The padlock opens the folder read-only**, so nothing in it can be saved — use it for a
+  repository you only want to show. It is remembered per project.
+* A file keeps its own line endings and byte-order mark when saved. Files over 2 MB and
+  binary files are not opened.
+
+**Highlighting code.** Select lines and a small bar offers the highlight colours, and a link
+button that highlights and opens the link dialog in one go. The first highlight turns the
+file into a **code source** in the sources list, so its lines can be linked, shown on the
+map, and opened in a Source pane (read-only, with its highlights). A coloured bar in the
+gutter marks highlighted lines; click it to see the highlight's card and links in the
+Highlights pane. Highlights follow their code when lines are added or removed above them;
+if the code itself is rewritten, the bar turns faint to say the highlight may be stale.
+
+**Pointing at code on camera.** Select lines and press the crosshair to dim everything else.
+A beat captured then remembers the file, where it was scrolled, the lines and the dimming,
+and puts all of it back — so beat 4 can open `train.py` on the loss function and beat 5 on
+the optimiser. In Present mode the folder tree and editing tools are hidden.
 
 ## Layout
 

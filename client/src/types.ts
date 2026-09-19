@@ -9,9 +9,11 @@ export interface Highlight {
   color: HighlightColor;
   comment: string;
   createdAt: string;
+  /** For code: the first and last line, 1-based. `text` holds those lines, to find them again after edits. */
+  lines?: [number, number];
 }
 
-export type SourceKind = "web" | "file";
+export type SourceKind = "web" | "file" | "code";
 export type FileViewer = "markdown" | "notebook" | "pdf" | "deck" | "image" | "video" | "audio" | "html" | "table" | "office" | "text";
 
 export interface SourceFile {
@@ -45,6 +47,8 @@ export interface Source {
   highlights: Highlight[];
   /** Run the page's own JavaScript in Original view. Defaults to true. */
   scripts?: boolean;
+  /** A code source: a file in a folder shown by the Files pane, never copied into the project. */
+  code?: { root: string; path: string };
   /** The source whose link, or whose browsed page, this one was created from. */
   from?: string;
   /** The creator's own Markdown summary of what this source says. Never shown in Present mode. */
@@ -64,7 +68,7 @@ export interface ChatMessage {
   content: string;
 }
 
-export type PaneKind = "source" | "highlights" | "map" | "notes" | "ai" | "code" | "canvas" | "terminal" | "jupyter" | "slides" | "window" | "browser" | "embed";
+export type PaneKind = "source" | "highlights" | "map" | "files" | "notes" | "ai" | "code" | "canvas" | "terminal" | "jupyter" | "slides" | "window" | "browser" | "embed";
 export type LayoutPreset = "1" | "2" | "3" | "4" | "1+2" | "2+1";
 /** One pane. A Source pane may pin its own source; otherwise it follows the sidebar selection. */
 export interface PaneConfig {
@@ -98,8 +102,20 @@ export interface PaneView {
    * Undefined means the source's own page. Highlights only ever apply to the source's page.
    */
   page?: string;
+  /** A Files pane, or a code source: which file, the top visible line, and the lines picked out. */
+  code?: CodeView;
   slideshow?: boolean;
   slideIndex?: number;
+}
+
+export interface CodeView {
+  root: string;
+  path: string;
+  /** The first line in view, 1-based. */
+  line: number;
+  sel?: [number, number];
+  /** Dim every line outside `sel`, for pointing at code on camera. */
+  focus?: boolean;
 }
 
 /** A content anchor plus its position within the viewport, rather than just pixels. */
@@ -176,7 +192,13 @@ export interface Project {
   beats: Beat[];
   /** Links between sources, usually from a highlighted passage. Backlinks are derived from these. */
   links?: SourceLink[];
-  settings: { jupyterUrl: string; viewMode?: "original" | "reader"; embedUrl?: string; browserUrl?: string };
+  settings: {
+    jupyterUrl: string; viewMode?: "original" | "reader"; embedUrl?: string; browserUrl?: string;
+    /** The Files pane's folder; the project's own folder when unset. */
+    filesRoot?: string;
+    /** Opened read-only: nothing in the Files pane can be saved. */
+    filesReadOnly?: boolean;
+  };
 }
 
 export interface ProjectSummary {

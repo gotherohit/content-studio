@@ -59,3 +59,13 @@ test("a capture names an article pane that had not reported its place, and ignor
   assert.deepEqual(summary.unplaced, [0]);
   assert.equal(summary.where, null);
 });
+
+test("a capture names the file and lines a Files pane shows", () => {
+  const stage = { ...makeBeat("a").stage, panes: [{ kind: "files" as const }],
+    views: { 0: { code: { root: "D:/demo", path: "src/train.py", line: 1, sel: [3, 5] as [number, number], focus: true } } } };
+  assert.equal(captureSummary(stage, stage.panes, []).where, "train.py at lines 3–5, focused");
+  const scrolled = { ...stage, views: { 0: { code: { root: "D:/demo", path: "utils.py", line: 56 } } } };
+  assert.equal(captureSummary(scrolled, stage.panes, []).where, "utils.py at line 56");
+  const windows = { ...stage, views: { 0: { code: { root: "D:/demo", path: ["src", "model.py"].join(String.fromCharCode(92)), line: 2 } } } };
+  assert.equal(captureSummary(windows, stage.panes, []).where, "model.py at line 2");
+});

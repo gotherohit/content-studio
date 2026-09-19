@@ -73,7 +73,12 @@ export function HighlightsPanel({ source, sources, links, selectedId, onSelect, 
           >
             <div className="hl-card-head">
               <span className="hl-index">{i + 1}</span>
-              <blockquote>{h.text}</blockquote>
+              {h.lines ? (
+                <div className="hl-code">
+                  <span className="muted small">{h.lines[0] === h.lines[1] ? `Line ${h.lines[0]}` : `Lines ${h.lines[0]}–${h.lines[1]}`}</span>
+                  <pre>{h.text}</pre>
+                </div>
+              ) : <blockquote>{h.text}</blockquote>}
             </div>
             <textarea
               placeholder="Your comment / analysis…"

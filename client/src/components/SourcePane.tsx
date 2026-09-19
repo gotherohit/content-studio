@@ -1,12 +1,13 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, BookmarkPlus, Check, ChevronLeft, ChevronRight, CornerUpLeft, ExternalLink, Maximize, MoreHorizontal, NotebookText, Play, RefreshCw, ZapOff } from "lucide-react";
-import type { Highlight, PaneView, ReadingPosition, Source } from "../types";
+import type { CodeView, Highlight, PaneView, ReadingPosition, Source } from "../types";
 import { trackReadingPosition } from "../../../server/public/reading-position.js";
 import type { AppConfig } from "../api";
 import { Reader } from "./Reader";
 import { OriginalView } from "./OriginalView";
 import { FileView } from "./FileView";
 import { SourceSummary } from "./SourceSummary";
+import { CodeSourceView } from "./FilesPane";
 import { samePage, stepPage, visitPage } from "../../../server/public/pages.js";
 
 interface Props {
@@ -38,6 +39,9 @@ interface Props {
   summaryOpen: boolean;
   onSummaryOpen: (open: boolean) => void;
   onSummary: (summary: string) => void;
+  /** A code source reports where it is scrolled, for a beat to capture. */
+  onCodePlace: (code: CodeView) => void;
+  dark: boolean;
   /** Paging state, held by the app so a stage can capture and restore it. */
   view: PaneView;
   onView: (v: PaneView) => void;
@@ -68,6 +72,7 @@ export function SourcePane(p: Props) {
 
   const source = p.source;
   const isFile = source?.kind === "file" && !!source.file;
+  const isCode = source?.kind === "code" && !!source.code;
   const viewer = isFile ? source!.file!.viewer : null;
   const canSlide = !!viewer && SLIDEABLE.has(viewer);
 
@@ -96,7 +101,7 @@ export function SourcePane(p: Props) {
   };
   useLayoutEffect(() => {
     const host = stageRef.current;
-    if (!host || (!isFile && mode === "original")) return;
+    if (!host || isCode || (!isFile && mode === "original")) return;
     let cleanup: (() => void) | undefined;
     let current: Element | null = null;
     const attach = () => {
@@ -175,7 +180,13 @@ export function SourcePane(p: Props) {
     <div className="source-pane">
       <div className="pane-toolbar">
         {picker}
-        {isFile ? (
+        {isCode ? (
+          <>
+            <span className="file-chip">code</span>
+            <span className="muted small grow ellipsis" title={source.url}>{source.url}</span>
+            {summaryButton}
+          </>
+        ) : isFile ? (
           <>
             <span className="file-chip">{source.file!.ext.replace(".", "") || "file"}</span>
             <span className="muted small grow ellipsis" title={source.file!.name}>{source.file!.name}</span>
@@ -245,7 +256,20 @@ export function SourcePane(p: Props) {
       )}
 
       <div ref={stageRef} className="source-stage">
-        {isFile ? (
+        {isCode ? (
+          <CodeSourceView
+            source={source}
+            sources={p.sources}
+            dark={p.dark}
+            fontScale={p.fontScale}
+            selectedHl={p.scrollToId}
+            scrollNonce={p.scrollNonce}
+            view={view}
+            restoreNonce={p.restoreNonce}
+            onPlace={p.onCodePlace}
+            onMarkClick={p.onSelectHighlight}
+          />
+        ) : isFile ? (
           <FileView
             source={source}
             projectId={p.projectId}

@@ -32,7 +32,7 @@ export function captureSummary(stage: Stage, panes: PaneConfig[], sources: Sourc
   const places: string[] = [];
   const articles = panes.flatMap((pane, i) => {
     const source = pane.kind === "source" ? sources.find((s) => s.id === stage.views[i]?.sourceId) : undefined;
-    return source && source.kind !== "file" ? [i] : [];
+    return source && (source.kind ?? "web") === "web" ? [i] : [];
   });
   for (const i of articles) {
     const view = stage.views[i];
@@ -42,5 +42,13 @@ export function captureSummary(stage: Stage, panes: PaneConfig[], sources: Sourc
     const page = view.page ? ` of ${pathOf(view.page)}` : "";
     places.push(articles.length > 1 ? `pane ${i + 1} at ${place}${page}` : `at ${place}${page}`);
   }
+  // Files panes and code sources name the file and the lines picked out.
+  panes.forEach((pane, i) => {
+    const code = stage.views[i]?.code;
+    if (!code || (pane.kind !== "files" && pane.kind !== "source")) return;
+    const name = code.path.split(/[\\/]/).pop();
+    const lines = code.sel ? (code.sel[0] === code.sel[1] ? `line ${code.sel[0]}` : `lines ${code.sel[0]}–${code.sel[1]}`) : `line ${code.line}`;
+    places.push(`${name} at ${lines}${code.focus && code.sel ? ", focused" : ""}`);
+  });
   return { unplaced, where: places.length ? places.join(", ") : null };
 }
