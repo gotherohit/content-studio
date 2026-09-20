@@ -639,6 +639,11 @@ open until it says *ready*, then click **Restart and install**. If you would rat
 wait, download the installer from
 [Releases](https://github.com/gotherohit/content-studio/releases) and run it over the top.
 
+**"The studio server did not start in time".** The app gave up waiting for its own server.
+From 0.20.1 it waits a minute rather than twenty seconds, and on a check that does no work, so
+this should not happen; the usual cause was the first launch straight after an update, while
+Windows was still scanning the new files. Launching Content Studio again is the fix.
+
 **The update downloads, you press Restart and install, and nothing happens.** Windows is
 refusing to run the installer. Content Studio now says so in **Settings → Updates** and stays
 open instead of quitting, and it writes what happened to `~/.content-studio/update.log`.

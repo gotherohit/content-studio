@@ -39,7 +39,10 @@ async function freePort(from) {
   throw new Error("No free port for the Content Studio server");
 }
 
+let serverExited = false;
+
 async function startServer() {
+  serverExited = false;
   port = await freePort(4700);
   server = fork(path.join(ROOT, "server", "index.js"), [], {
     cwd: ROOT,
@@ -51,20 +54,26 @@ async function startServer() {
   server.stdout?.on("data", (b) => process.stdout.write(`[server] ${b}`));
   server.stderr?.on("data", (b) => process.stderr.write(`[server] ${b}`));
   server.on("exit", (code) => {
+    serverExited = true;
     if (code !== 0 && !app.isQuitting) {
       dialog.showErrorBox("Content Studio", `The studio server stopped unexpectedly (code ${code}).`);
       app.quit();
     }
   });
 
-  for (let i = 0; i < 100; i++) {
+  // /api/health answers as soon as the server is listening and does nothing else. The wait
+  // used to be on /api/config, which looks for browsers, PowerPoint and LibreOffice; on a
+  // cold start — a fresh install being scanned, a machine still busy — that discovery took
+  // longer than the app was prepared to wait, and it quit saying the server never started.
+  for (let i = 0; i < 300; i++) {
     await new Promise((r) => setTimeout(r, 200));
     try {
-      const r = await fetch(`http://127.0.0.1:${port}/api/config`);
+      const r = await fetch(`http://127.0.0.1:${port}/api/health`);
       if (r.ok) return;
     } catch { /* still coming up */ }
+    if (serverExited) throw new Error("The studio server stopped while starting up");
   }
-  throw new Error("The studio server did not start in time");
+  throw new Error("The studio server did not answer in a minute. Try launching Content Studio again.");
 }
 
 /**

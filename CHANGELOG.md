@@ -2,6 +2,15 @@
 
 What changed in each release, newest first. Versions are the ones the app updates itself to.
 
+## 0.20.1
+
+- **"The studio server did not start in time" on a cold start.** The app waited for
+  `/api/config`, which goes looking for browsers, PowerPoint and LibreOffice — around four and
+  a half seconds even on a warm machine, and far longer right after an install while the new
+  files are still being scanned. It now waits for a health check that does nothing but answer,
+  gives the server a minute rather than twenty seconds, and says so plainly if the server stops
+  while starting.
+
 ## 0.20.0
 
 - **Link to a passage that has not been highlighted yet.** The link dialog has **Pick it in the

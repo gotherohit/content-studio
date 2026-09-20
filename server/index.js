@@ -92,6 +92,10 @@ app.use(express.json({ limit: "20mb" }));
 app.use((err, _req, res, next) => (err instanceof SyntaxError ? res.status(400).json({ error: "Invalid JSON body" }) : next(err)));
 
 // ---------- app settings ----------
+// Cheap on purpose: the desktop app waits on this to know the server is up, so it must not
+// depend on anything that goes looking around the machine.
+app.get("/api/health", (_req, res) => res.json({ ok: true }));
+
 app.get("/api/config", async (_req, res) => {
   const cfg = config.get();
   res.json({

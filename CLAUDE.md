@@ -311,6 +311,11 @@ wait. The AI request aborts when the pane closes. Assume a recording is in progr
 - **Quitting is asynchronous.** `before-quit` calls `preventDefault()`, asks the server to
   shut down over IPC, and quits for real when it exits or after 8s. Without that, Jupyter
   is orphaned every time the app closes.
+- **The readiness check must be cheap.** `startServer()` waits for `/api/health`, which only
+  answers. It used to wait for `/api/config`, which detects browsers, PowerPoint and
+  LibreOffice — 4.5 s warm, and long enough on a freshly installed copy being scanned that the
+  app gave up with "The studio server did not start in time" and quit. Never put discovery,
+  the vault, or anything that spawns a process behind the route the app starts up against.
 - **An update can be refused after the app has already quit.** electron-updater asks Windows
   to run the installer and quits immediately, so anything that refuses it afterwards looks
   like the button doing nothing. Windows 11 Smart App Control refuses unsigned installers —
