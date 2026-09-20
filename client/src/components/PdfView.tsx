@@ -6,8 +6,9 @@ import { Minus, Plus } from "lucide-react";
 import type { Highlight, HighlightColor, Shape, ShapeKind } from "../types";
 import { applyHighlights, captureSelection } from "../highlighter";
 import { HighlightPopup } from "./HighlightPopup";
-import { ShapeLayer } from "./ShapeLayer";
+import { ShapeLayer, type LayerItem } from "./ShapeLayer";
 import { fromDrag, shapeHighlights, textHighlights } from "../shapes";
+import { boxWithin } from "../../../server/public/shapes-dom.js";
 import { PAGE_GAP, clampPage, fitScale, highlightsOnPage, layoutPages, offsetOf, pageAt, pageOf, stepZoom, visiblePages, type PageSize } from "../pdf";
 
 GlobalWorkerOptions.workerSrc = workerUrl;
@@ -41,7 +42,8 @@ interface Props {
   tool?: ShapeKind | null;
   drawColor?: HighlightColor;
   showNotes?: boolean;
-  onNote?: (id: string) => void;
+  linkedIds?: string[];
+  onNote?: (id: string, at: { x: number; y: number }) => void;
 }
 
 /**
@@ -64,6 +66,9 @@ export function PdfView(p: Props) {
   const [err, setErr] = useState<string | null>(null);
   const [box, setBox] = useState({ width: 0, height: 0 });
   const [zoom, setZoom] = useState(1);
+  // Markers for quotes: their marks only exist once a page has been drawn, so they are
+  // measured after painting rather than worked out from the highlight list.
+  const [quoteMarks, setQuoteMarks] = useState<Record<number, LayerItem[]>>({});
   const [popup, setPopup] = useState<{
     x: number; y: number; flip: boolean; page: number;
     anchor?: NonNullable<ReturnType<typeof captureSelection>>;
@@ -127,6 +132,8 @@ export function PdfView(p: Props) {
   }, [count, box, p.slideshow, page, sizes, widest, zoom]);
   const layout = useMemo(() => layoutPages(sizes, scale), [sizes, scale]);
 
+  // paint() is memoised on the scale; the marks it lays must still be measured afterwards.
+  const placeMarks = useRef(() => {});
   const paint = useCallback(async (i: number) => {
     const pdf = docRef.current, host = pageEls.current.get(i);
     if (!pdf || !host || !scale) return;
@@ -161,6 +168,7 @@ export function PdfView(p: Props) {
       el.append(text);
       textEls.current.set(i, text);
       applyHighlights(text, textHighlights(highlightsOnPage(marks.current, i)));
+      placeMarks.current();
     } catch {
       // A cancelled render is the normal way a scroll interrupts one.
       painted.current.delete(i);
@@ -214,7 +222,29 @@ export function PdfView(p: Props) {
   // A highlight added, recoloured or deleted must show on the pages already drawn.
   useEffect(() => {
     for (const [i, text] of textEls.current) applyHighlights(text, textHighlights(highlightsOnPage(highlights, i)));
+    placeQuoteMarks();
   }, [highlights]);
+
+  const placeQuoteMarks = useCallback(() => {
+    const next: Record<number, LayerItem[]> = {};
+    for (const [i, text] of textEls.current) {
+      const host = pageEls.current.get(i);
+      if (!host) continue;
+      const items: LayerItem[] = [];
+      for (const h of highlightsOnPage(highlights, i)) {
+        const linked = p.linkedIds?.includes(h.id);
+        if (h.shape || (!h.comment?.trim() && !linked)) continue;
+        const marks = text.querySelectorAll<HTMLElement>(`mark.hl[data-hid="${h.id}"]`);
+        const last = marks[marks.length - 1];
+        if (last) items.push({ id: h.id, color: h.color, comment: h.comment, linked, host: boxWithin(host, last) });
+      }
+      if (items.length) next[i] = items;
+    }
+    setQuoteMarks(next);
+  }, [highlights, p.linkedIds]);
+
+  placeMarks.current = placeQuoteMarks;
+  useEffect(() => { placeQuoteMarks(); }, [placeQuoteMarks, scale, page, doc]);
 
   const frame = useRef(0);
   const onScroll = () => {
@@ -340,13 +370,16 @@ export function PdfView(p: Props) {
           >
             <div className="pdf-page" ref={setEl(i)} />
             <ShapeLayer
-              items={shapeHighlights(highlightsOnPage(highlights, i)).map((h) => ({ id: h.id, shape: h.shape!, color: h.color, comment: h.comment }))}
+              items={[
+                ...shapeHighlights(highlightsOnPage(highlights, i)).map((h) => ({ id: h.id, shape: h.shape!, color: h.color, comment: h.comment, linked: p.linkedIds?.includes(h.id) })),
+                ...(quoteMarks[i] ?? []),
+              ]}
               tool={p.onAddHighlight ? p.tool ?? null : null}
               color={p.drawColor ?? "yellow"}
               selectedId={p.scrollToId}
               showNotes={p.showNotes !== false && !p.presenting}
               onSelect={(id) => p.onSelectHighlight?.(id)}
-              onNote={(id) => p.onNote?.(id)}
+              onNote={p.onNote}
               onDraw={(drag) => {
                 const shape = fromDrag(p.tool!, drag.from, drag.to, { width: layout.widths[i], height: layout.heights[i] });
                 if (!shape) return;

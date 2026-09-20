@@ -786,6 +786,8 @@ export default function App() {
             key={`${project.id}:${paneSource?.id ?? "empty"}`}
             source={paneSource}
             sources={project.sources}
+            links={project.links ?? []}
+            onGoEnd={goToEnd}
             pinnedId={pane.sourceId ?? null}
             onPin={(sourceId) => setLayout((l) => ({ ...l, panes: l.panes.map((x, j) => (j === i ? { ...x, sourceId } : x)) }))}
             projectId={project.id}

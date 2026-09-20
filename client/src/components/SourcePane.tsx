@@ -9,6 +9,8 @@ import { FileView } from "./FileView";
 import { SourceSummary } from "./SourceSummary";
 import { CodeSourceView } from "./FilesPane";
 import { DrawMenu } from "./DrawMenu";
+import { NotePopover } from "./NotePopover";
+import { linksOf, type LinkEnd, type SourceLink } from "../links";
 import { samePage, stepPage, visitPage } from "../../../server/public/pages.js";
 
 interface Props {
@@ -43,6 +45,9 @@ interface Props {
   /** A code source reports where it is scrolled, for a beat to capture. */
   onCodePlace: (code: CodeView) => void;
   dark: boolean;
+  /** Links between sources, so a marker on this one can show where it leads. */
+  links: SourceLink[];
+  onGoEnd: (end: LinkEnd) => void;
   /** Paging state, held by the app so a stage can capture and restore it. */
   view: PaneView;
   onView: (v: PaneView) => void;
@@ -78,7 +83,8 @@ export function SourcePane(p: Props) {
   const [tool, setTool] = useState<ShapeKind | null>(null);
   const [drawColor, setDrawColor] = useState<HighlightColor>("yellow");
   const [notes, setNotes] = useState(true);
-  useEffect(() => { setTool(null); }, [p.source?.id]);
+  const [notePop, setNotePop] = useState<{ id: string; x: number; y: number; flip: boolean } | null>(null);
+  useEffect(() => { setTool(null); setNotePop(null); }, [p.source?.id]);
   const stageRef = useRef<HTMLDivElement>(null);
 
   const source = p.source;
@@ -178,7 +184,25 @@ export function SourcePane(p: Props) {
     <DrawMenu tool={tool} onTool={setTool} color={drawColor} onColor={setDrawColor} notes={notes} onNotes={setNotes} />
   );
   // A tool left out cannot stay armed into a take: the overlay would swallow every click.
-  const draw = { tool: p.presenting || !canDraw ? null : tool, drawColor, showNotes: notes && !p.presenting, onNote: p.onSelectHighlight };
+  const linkedIds = p.links.flatMap((l) => [
+    l.from.sourceId === p.source?.id ? l.from.highlightId : undefined,
+    l.to.sourceId === p.source?.id ? l.to.highlightId : undefined,
+  ]).filter(Boolean) as string[];
+  /** A marker opens its note beside itself, in the stage's own coordinates. */
+  const openNote = (id: string, at: { x: number; y: number }) => {
+    const host = stageRef.current?.getBoundingClientRect();
+    if (!host) return;
+    p.onSelectHighlight(id);
+    const below = at.y - host.top + 6;
+    setNotePop({ id, x: Math.min(Math.max(at.x - host.left, 150), Math.max(151, host.width - 150)), y: below, flip: true });
+  };
+  const draw = {
+    tool: p.presenting || !canDraw ? null : tool,
+    drawColor,
+    showNotes: notes && !p.presenting,
+    linkedIds,
+    onNote: openNote,
+  };
 
   const scripts = source.scripts !== false;
   const hasSummary = Boolean(source.summary?.trim());
@@ -325,9 +349,7 @@ export function SourcePane(p: Props) {
             presenting={p.presenting}
             onPresentationKey={p.onPresentationKey}
             onPosition={(position, url) => report.current(position, mode, samePage(url, source.url) ? undefined : url)}
-            tool={tool}
-            drawColor={drawColor}
-            showNotes={notes && !p.presenting}
+            {...draw}
           />
         ) : (
           <Reader
@@ -338,6 +360,19 @@ export function SourcePane(p: Props) {
             onSelectHighlight={p.onSelectHighlight}
             fontScale={p.fontScale}
             {...draw}
+          />
+        )}
+        {notePop && source.highlights.some((h) => h.id === notePop.id) && (
+          <NotePopover
+            highlight={source.highlights.find((h) => h.id === notePop.id)!}
+            source={source}
+            sources={p.sources}
+            links={linksOf(p.links, source.id, notePop.id)}
+            x={notePop.x}
+            y={notePop.y}
+            flip={notePop.flip}
+            onGo={(end) => { setNotePop(null); p.onGoEnd(end); }}
+            onClose={() => setNotePop(null)}
           />
         )}
       </div>

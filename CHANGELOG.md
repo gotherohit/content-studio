@@ -2,6 +2,19 @@
 
 What changed in each release, newest first. Versions are the ones the app updates itself to.
 
+## 0.19.0
+
+- **Links now open on the source itself.** A marker sits on anything with a comment or a link —
+  at the corner of a drawing, at the end of a quote — and clicking it shows the note and every
+  link on that passage, each one clickable to jump to the other end. It works in articles,
+  Reader and PDFs, including inside a live page.
+- **Two passages of the same source can be linked.** Choose the source marked *(this source)*
+  and then the passage: a claim on one page answering one on another, or a drawing against the
+  paragraph it is about. Both cards show it; the map leaves it out, since an arrow from a
+  source to itself says nothing there.
+- Drawings are named properly wherever a link is listed — *Rectangle · page 3* — and a link to
+  a passage of the source you are reading says *this source*.
+
 ## 0.18.0
 
 - **Draw on a source.** A pencil in the Source toolbar draws a rectangle, an oval or an arrow

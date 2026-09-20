@@ -31,6 +31,20 @@ export interface SourceLink {
   createdAt: string;
 }
 
+/** Every link touching one passage, whichever end it is. */
+export function linksOf(links: SourceLink[], sourceId: string, highlightId: string) {
+  return links.filter(
+    (l) => (l.from.sourceId === sourceId && l.from.highlightId === highlightId) ||
+      (l.to.sourceId === sourceId && l.to.highlightId === highlightId),
+  );
+}
+
+/** The far end of a link, seen from one passage. */
+export function otherEnd(link: SourceLink, sourceId: string, highlightId: string): { end: LinkEnd; outgoing: boolean } {
+  const outgoing = link.from.sourceId === sourceId && link.from.highlightId === highlightId;
+  return { end: outgoing ? link.to : link.from, outgoing };
+}
+
 export function linksFor(links: SourceLink[], sourceId: string) {
   return {
     outgoing: links.filter((l) => l.from.sourceId === sourceId),
@@ -72,6 +86,8 @@ export interface GraphEdge { key: string; source: string; target: string; kind: 
 export function buildGraph(sources: Source[], links: SourceLink[]): { nodes: GraphNode[]; edges: GraphEdge[] } {
   const ids = new Set(sources.map((s) => s.id));
   const edges = new Map<string, GraphEdge>();
+  // A link between two passages of the same source is a note about that source, not an edge
+  // between two of them; the map would draw it as a dot on itself.
   const add = (source: string, target: string, kind: EdgeKind, link?: SourceLink) => {
     if (source === target || !ids.has(source) || !ids.has(target)) return;
     const key = `${source}>${target}:${kind}`;

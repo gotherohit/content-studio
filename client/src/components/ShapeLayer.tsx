@@ -5,10 +5,13 @@ import { arrowHead, arrowLine, badgeAt, toBox, type Box } from "../shapes";
 
 export interface LayerItem {
   id: string;
-  shape: Shape;
+  /** Absent for a marked quote: it has no drawing, only a marker at the end of its text. */
+  shape?: Shape;
   color: HighlightColor;
   comment?: string;
-  /** What the shape is drawn on, in pixels within this layer. The whole layer when absent. */
+  /** Whether it is one end of a link, which earns a marker even without a note. */
+  linked?: boolean;
+  /** What it is drawn on, in pixels within this layer. The whole layer when absent. */
   host?: Box;
 }
 
@@ -26,7 +29,8 @@ interface Props {
   /** The drag in pixels within this layer; the caller decides what it was drawn on. */
   onDraw?: (drag: Drag) => void;
   onSelect?: (id: string) => void;
-  onNote?: (id: string) => void;
+  /** The marker was clicked, at this point on screen, so the note can open beside it. */
+  onNote?: (id: string, at: { x: number; y: number }) => void;
 }
 
 /**
@@ -120,20 +124,27 @@ export function ShapeLayer(p: Props) {
       onPointerUp={onPointerUp}
     >
       <svg className="shape-svg" width={size.width} height={size.height}>
-        {p.items.map((item) => draw(item.shape, item.host ?? whole, item.id, item))}
+        {p.items.map((item) => (item.shape ? draw(item.shape, item.host ?? whole, item.id, item) : null))}
         {preview && draw(preview.kind === "arrow" ? preview : { ...preview, ...normalise(preview) }, whole, "preview")}
       </svg>
-      {p.showNotes !== false && p.items.filter((i) => i.comment?.trim()).map((item) => {
+      {p.showNotes !== false && p.items.filter((i) => i.comment?.trim() || i.linked).map((item) => {
         const host = item.host ?? whole;
-        const spot = badgeAt(item.shape, { width: host.width, height: host.height });
+        // A drawing carries its marker on itself; a quote carries it at the end of its text.
+        const spot = item.shape
+          ? badgeAt(item.shape, { width: host.width, height: host.height })
+          : { x: host.width, y: 0 };
         return (
           <button
             key={item.id}
             className={`shape-note hl-${item.color}`}
             style={{ left: host.left + spot.x, top: host.top + spot.y }}
-            title={item.comment}
+            title={item.comment || "Linked"}
             onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => { e.stopPropagation(); p.onNote?.(item.id); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+              p.onNote?.(item.id, { x: r.left + r.width / 2, y: r.bottom });
+            }}
           >
             <MessageSquareText size={11} />
           </button>

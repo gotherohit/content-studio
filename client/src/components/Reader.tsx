@@ -4,7 +4,7 @@ import type { Highlight, HighlightColor, Shape, ShapeKind, Source } from "../typ
 import { applyHighlights, captureSelection } from "../highlighter";
 import { HighlightPopup } from "./HighlightPopup";
 import { ShapeLayer, type LayerItem } from "./ShapeLayer";
-import { fromDrag, shapeHighlights, textHighlights } from "../shapes";
+import { fromDrag, textHighlights } from "../shapes";
 import { anchorAt, boxWithin, hostFor } from "../../../server/public/shapes-dom.js";
 
 interface Props {
@@ -17,11 +17,12 @@ interface Props {
   tool?: ShapeKind | null;
   drawColor?: HighlightColor;
   showNotes?: boolean;
-  onNote?: (id: string) => void;
+  linkedIds?: string[];
+  onNote?: (id: string, at: { x: number; y: number }) => void;
 }
 
 /** Clean, text-only rendering of the article. */
-export function Reader({ source, scrollToId, scrollNonce, onAddHighlight, onSelectHighlight, fontScale, tool, drawColor, showNotes, onNote }: Props) {
+export function Reader({ source, scrollToId, scrollNonce, onAddHighlight, onSelectHighlight, fontScale, tool, drawColor, showNotes, linkedIds, onNote }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   // The layer covers the stage, so every box it is given is measured against the stage too.
   const stageRef = useRef<HTMLDivElement>(null);
@@ -45,17 +46,28 @@ export function Reader({ source, scrollToId, scrollNonce, onAddHighlight, onSele
     if (ref.current) applyHighlights(ref.current, textHighlights(source.highlights));
   }, [source.highlights]);
 
-  /** Shapes follow the paragraph they were drawn over, so they are placed after every reflow. */
+  /**
+   * Shapes follow the paragraph they were drawn over, so they are placed after every reflow.
+   * A quote with a note or a link earns a marker too, at the end of its last line.
+   */
   const place = useCallback(() => {
-    const el = ref.current;
-    if (!el) return;
-    const stage = stageRef.current;
-    if (!stage) return;
-    setItems(shapeHighlights(source.highlights).map((h) => {
-      const host = hostFor(el, h);
-      return host ? { id: h.id, shape: h.shape!, color: h.color, comment: h.comment, host: boxWithin(stage, host) } : null;
-    }).filter(Boolean) as LayerItem[]);
-  }, [source.highlights]);
+    const el = ref.current, stage = stageRef.current;
+    if (!el || !stage) return;
+    const next: LayerItem[] = [];
+    for (const h of source.highlights) {
+      const linked = linkedIds?.includes(h.id);
+      if (h.shape) {
+        const host = hostFor(el, h);
+        if (host) next.push({ id: h.id, shape: h.shape, color: h.color, comment: h.comment, linked, host: boxWithin(stage, host) });
+        continue;
+      }
+      if (!h.comment?.trim() && !linked) continue;
+      const marks = el.querySelectorAll<HTMLElement>(`mark.hl[data-hid="${h.id}"]`);
+      const last = marks[marks.length - 1];
+      if (last) next.push({ id: h.id, color: h.color, comment: h.comment, linked, host: boxWithin(stage, last) });
+    }
+    setItems(next);
+  }, [source.highlights, linkedIds]);
 
   useEffect(() => {
     place();
@@ -136,7 +148,7 @@ export function Reader({ source, scrollToId, scrollNonce, onAddHighlight, onSele
           selectedId={scrollToId}
           showNotes={showNotes}
           onSelect={onSelectHighlight}
-          onNote={(id) => onNote?.(id)}
+          onNote={onNote}
           onDraw={(drag) => {
             const el = ref.current, stage = stageRef.current;
             if (!el || !stage || !tool) return;

@@ -95,8 +95,7 @@
     return svg;
   }
 
-  function shapeNote(h, size) {
-    var spot = geomModule.badgeAt(h.shape, size);
+  function shapeNote(h, size, spot) {
     var dot = document.createElement("button");
     dot.type = "button";
     dot.title = h.comment;
@@ -105,7 +104,11 @@
       "box-shadow:0 1px 3px rgba(0,0,0,.35);pointer-events:auto;cursor:pointer;display:flex;align-items:center;justify-content:center;" +
       "font:600 11px system-ui,sans-serif;color:#333";
     dot.textContent = "i";
-    dot.addEventListener("click", function (e) { e.preventDefault(); e.stopPropagation(); send({ type: "hlclick", id: h.id }); });
+    dot.addEventListener("click", function (e) {
+      e.preventDefault(); e.stopPropagation();
+      var r = dot.getBoundingClientRect();
+      send({ type: "noteClick", id: h.id, at: { x: r.left + r.width / 2, y: r.bottom } });
+    });
     return dot;
   }
 
@@ -125,11 +128,28 @@
       wrap.style.cssText = "position:absolute;pointer-events:none;left:" + (r.left + docX) + "px;top:" + (r.top + docY) +
         "px;width:" + r.width + "px;height:" + r.height + "px";
       wrap.appendChild(shapeSvg(h, size));
-      if (showNotes && h.comment && h.comment.trim()) wrap.appendChild(shapeNote(h, size));
+      if (showNotes && marked(h)) wrap.appendChild(shapeNote(h, size, geomModule.badgeAt(h.shape, size)));
       root.appendChild(wrap);
     });
+    if (onHome()) {
+      currentList.forEach(function (h) {
+        if (!showNotes || !marked(h)) return;
+        var marks = document.querySelectorAll('mark.rs-hl[data-hid="' + h.id + '"]');
+        var last = marks[marks.length - 1];
+        if (!last) return;
+        var r = last.getBoundingClientRect();
+        var wrap = document.createElement("div");
+        wrap.style.cssText = "position:absolute;pointer-events:none;left:" + (r.left + docX) + "px;top:" + (r.top + docY) +
+          "px;width:" + r.width + "px;height:" + r.height + "px";
+        wrap.appendChild(shapeNote(h, { width: r.width, height: r.height }, { x: r.width, y: 0 }));
+        root.appendChild(wrap);
+      });
+    }
     if (shapeWatcher) watchShapes();
   }
+
+  /** A note or a link is worth a marker on the page; a bare highlight is not. */
+  function marked(h) { return Boolean((h.comment && h.comment.trim()) || h.linked); }
 
   function schedulePlace() { clearTimeout(placeTimer); placeTimer = setTimeout(placeShapes, 60); }
 

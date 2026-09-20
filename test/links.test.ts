@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { buildGraph, layoutGraph, linksFor, pruneLinks, type SourceLink } from "../client/src/links.ts";
+import { buildGraph, layoutGraph, linksFor, linksOf, otherEnd, pruneLinks, type SourceLink } from "../client/src/links.ts";
 import type { Source } from "../client/src/types.ts";
 
 const source = (id: string, highlights: string[] = [], extra: Partial<Source> = {}): Source => ({
@@ -67,4 +67,32 @@ test("a source with no links does not squeeze the connected ones into a corner",
   const width = Math.max(...linked.map((p) => p.x)) - Math.min(...linked.map((p) => p.x));
   const height = Math.max(...linked.map((p) => p.y)) - Math.min(...linked.map((p) => p.y));
   assert.ok(Math.max(width, height) > 0.8, `connected sources span ${width.toFixed(2)} × ${height.toFixed(2)}`);
+});
+
+test("a link within one source is kept, but the map has no edge for it", () => {
+  const sources = [
+    { id: "a", title: "One", kind: "web", highlights: [{ id: "h1" }, { id: "h2" }] },
+    { id: "b", title: "Two", kind: "web", highlights: [] },
+  ] as unknown as Source[];
+  const links = [
+    { id: "l1", from: { sourceId: "a", highlightId: "h1" }, to: { sourceId: "a", highlightId: "h2" }, relation: "supports", createdAt: "" },
+    { id: "l2", from: { sourceId: "a", highlightId: "h1" }, to: { sourceId: "b" }, relation: "cites", createdAt: "" },
+  ] as unknown as SourceLink[];
+  assert.equal(pruneLinks(links, sources).length, 2);
+  const graph = buildGraph(sources, links);
+  assert.deepEqual(graph.edges.map((e) => `${e.source}>${e.target}`), ["a>b"]);
+});
+
+test("the links touching one passage are found from either end", () => {
+  const links = [
+    { id: "l1", from: { sourceId: "a", highlightId: "h1" }, to: { sourceId: "a", highlightId: "h2" }, relation: "supports", createdAt: "" },
+    { id: "l2", from: { sourceId: "b", highlightId: "h9" }, to: { sourceId: "a", highlightId: "h1" }, relation: "cites", createdAt: "" },
+    { id: "l3", from: { sourceId: "a", highlightId: "h2" }, to: { sourceId: "b" }, relation: "related", createdAt: "" },
+  ] as unknown as SourceLink[];
+  assert.deepEqual(linksOf(links, "a", "h1").map((l) => l.id), ["l1", "l2"]);
+  assert.equal(otherEnd(links[0], "a", "h1").outgoing, true);
+  assert.deepEqual(otherEnd(links[0], "a", "h1").end, { sourceId: "a", highlightId: "h2" });
+  // Seen from the other passage, the same link points the other way.
+  assert.equal(otherEnd(links[0], "a", "h2").outgoing, false);
+  assert.deepEqual(otherEnd(links[0], "a", "h2").end, { sourceId: "a", highlightId: "h1" });
 });

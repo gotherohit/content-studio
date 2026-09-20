@@ -13,16 +13,26 @@ interface Props {
 
 const clip = (text: string, n = 90) => (text.length > n ? text.slice(0, n) + "…" : text);
 
+/** A drawing has no quote, so it is listed by what it is and where. */
+const label = (h: Highlight) =>
+  h.shape ? `${h.shape.kind === "rect" ? "Rectangle" : h.shape.kind === "oval" ? "Oval" : "Arrow"}${h.page ? ` · page ${h.page}` : ""}${h.text.trim() ? ` — ${clip(h.text, 40)}` : ""}` : clip(h.text);
+
 /** Say how a passage bears on another source, or on one passage in it. */
 export function LinkDialog({ from, sources, onSave, onClose }: Props) {
   const origin = sources.find((s) => s.id === from.sourceId);
   const passage: Highlight | undefined = origin?.highlights.find((h) => h.id === from.highlightId);
-  const others = sources.filter((s) => s.id !== from.sourceId);
+  // The same source is a fair target: one passage can answer another a few paragraphs down.
+  const others = [...sources].sort((a, b) => Number(b.id !== from.sourceId) - Number(a.id !== from.sourceId));
   const [target, setTarget] = useState(others[0]?.id ?? "");
   const [targetHl, setTargetHl] = useState("");
   const [relation, setRelation] = useState<Relation>("supports");
   const [note, setNote] = useState("");
   const targetSource = others.find((s) => s.id === target);
+  const sameSource = targetSource?.id === from.sourceId;
+  // Within one source the link is between two passages, so one has to be chosen, and never
+  // the passage doing the linking.
+  const choices = (targetSource?.highlights ?? []).filter((h) => h.id !== from.highlightId);
+  const ready = Boolean(targetSource) && (!sameSource || Boolean(targetHl));
 
   return (
     <div className="modal-backdrop" onMouseDown={onClose}>
@@ -51,16 +61,25 @@ export function LinkDialog({ from, sources, onSave, onClose }: Props) {
             <label className="field">
               <span>Source</span>
               <select value={target} onChange={(e) => { setTarget(e.target.value); setTargetHl(""); }}>
-                {others.map((s) => <option key={s.id} value={s.id}>{s.kind === "file" ? s.file?.name ?? s.title : s.title}</option>)}
+                {others.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {(s.kind === "file" ? s.file?.name ?? s.title : s.title) + (s.id === from.sourceId ? " (this source)" : "")}
+                  </option>
+                ))}
               </select>
             </label>
             <label className="field">
-              <span>Passage in it <span className="muted">(optional)</span></span>
-              <select value={targetHl} onChange={(e) => setTargetHl(e.target.value)} disabled={!targetSource?.highlights.length}>
-                <option value="">The whole source</option>
-                {targetSource?.highlights.map((h) => <option key={h.id} value={h.id}>{clip(h.text)}</option>)}
+              <span>Passage in it <span className="muted">{sameSource ? "(required)" : "(optional)"}</span></span>
+              <select value={targetHl} onChange={(e) => setTargetHl(e.target.value)} disabled={!choices.length}>
+                {!sameSource && <option value="">The whole source</option>}
+                {sameSource && <option value="">Choose a passage…</option>}
+                {choices.map((h) => <option key={h.id} value={h.id}>{label(h)}</option>)}
               </select>
-              {targetSource && !targetSource.highlights.length && <span className="muted small">Highlight a passage in that source to link to it exactly.</span>}
+              {targetSource && !choices.length && (
+                <span className="muted small">
+                  {sameSource ? "This source has nothing else to link to yet." : "Highlight a passage in that source to link to it exactly."}
+                </span>
+              )}
             </label>
             <label className="field">
               <span>Note <span className="muted">(optional)</span></span>
@@ -73,7 +92,7 @@ export function LinkDialog({ from, sources, onSave, onClose }: Props) {
           <button className="ghost" onClick={onClose}>Cancel</button>
           <button
             className="primary"
-            disabled={!targetSource}
+            disabled={!ready}
             onClick={() => onSave({ sourceId: target, ...(targetHl ? { highlightId: targetHl } : {}) }, relation, note.trim())}
           >Add link</button>
         </div>

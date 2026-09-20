@@ -212,6 +212,15 @@ wait. The AI request aborts when the pane closes. Assume a recording is in progr
   near the viewport, and reports the page through `PaneView.slideIndex` — the same field a
   Markdown deck uses, so beats, capture and restore work unchanged. Its geometry lives in
   `client/src/pdf.ts` and is unit-tested; the component holds no page maths of its own.
+- **A link may have both ends in one source.** `buildGraph` already skips an edge whose ends
+  are the same source, so the map ignores those links; they live on the cards and in the note
+  markers. The link dialog demands a passage in that case — a source linked to itself with no
+  passage would say nothing.
+- **A marker is the only thing on a source that says "there is more here".** It appears for a
+  comment or for either end of a link, in the app's own overlay and in `inject.js`; the app
+  tells the frame which passages are linked by flagging them in the list it posts. Clicking one
+  opens `NotePopover` in the pane, so the live page never draws the note itself — it sends the
+  marker's position and the app puts the card over the frame.
 - **A drawn shape is a highlight with a `shape` on it.** Same trick as code and PDF
   highlights: cards, comments, colours, links, the map, beats and Copy as markdown all work
   with no new plumbing. Everything that lays marks over text must therefore filter the list

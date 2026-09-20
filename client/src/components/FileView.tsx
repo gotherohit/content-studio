@@ -28,7 +28,8 @@ interface Props {
   tool?: ShapeKind | null;
   drawColor?: HighlightColor;
   showNotes?: boolean;
-  onNote?: (id: string) => void;
+  linkedIds?: string[];
+  onNote?: (id: string, at: { x: number; y: number }) => void;
 }
 
 function parseDelimited(text: string, sep: string) {
@@ -139,6 +140,7 @@ export function FileView(p: Props) {
         tool={p.tool}
         drawColor={p.drawColor}
         showNotes={p.showNotes}
+        linkedIds={p.linkedIds}
         onNote={p.onNote}
       />
     );
@@ -150,13 +152,13 @@ export function FileView(p: Props) {
         <div className="media-frame" ref={imageFrame}>
           <img src={url} alt={file.name} />
           <ShapeLayer
-            items={shapeHighlights(source.highlights).map((h) => ({ id: h.id, shape: h.shape!, color: h.color, comment: h.comment }))}
+            items={shapeHighlights(source.highlights).map((h) => ({ id: h.id, shape: h.shape!, color: h.color, comment: h.comment, linked: p.linkedIds?.includes(h.id) }))}
             tool={p.tool ?? null}
             color={p.drawColor ?? "yellow"}
             selectedId={p.scrollToId}
             showNotes={p.showNotes !== false && !p.presenting}
             onSelect={p.onSelectHighlight}
-            onNote={(id) => p.onNote?.(id)}
+            onNote={p.onNote}
             onDraw={(drag) => {
               const frame = imageFrame.current;
               if (!frame || !p.tool) return;

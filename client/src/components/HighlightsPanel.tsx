@@ -26,10 +26,16 @@ export function HighlightsPanel({ source, sources, links, selectedId, onSelect, 
   const list = source.highlights;
   const { outgoing, incoming } = linksFor(links, source.id);
   const titleOf = (id: string) => {
+    if (id === source.id) return "this source";
     const s = sources.find((x) => x.id === id);
     return s ? (s.kind === "file" ? s.file?.name ?? s.title : s.title) : "a removed source";
   };
-  const passageOf = (end: LinkEnd) => sources.find((x) => x.id === end.sourceId)?.highlights.find((h) => h.id === end.highlightId)?.text;
+  /** A drawing has no quote, so it is named by what it is. */
+  const passageOf = (end: LinkEnd) => {
+    const h = sources.find((x) => x.id === end.sourceId)?.highlights.find((x) => x.id === end.highlightId);
+    if (!h) return undefined;
+    return h.shape ? `${shapeLabel(h.shape.kind)}${h.text.trim() ? ` — ${h.text}` : ""}` : h.text;
+  };
 
   /** One link as seen from this source: which way it points decides the wording. */
   const chip = (l: SourceLink, out: boolean) => {
@@ -64,7 +70,10 @@ export function HighlightsPanel({ source, sources, links, selectedId, onSelect, 
       {sourceLinks.length > 0 && <div className="link-list source-links">{sourceLinks}</div>}
       {list.length === 0 && <div className="panel-empty">Select text in the article to add one.</div>}
       {list.map((h, i) => {
-        const chips = [...outgoing.filter((l) => l.from.highlightId === h.id).map((l) => chip(l, true)), ...incoming.filter((l) => l.to.highlightId === h.id).map((l) => chip(l, false))];
+        const chips = [
+          ...outgoing.filter((l) => l.from.highlightId === h.id).map((l) => chip(l, true)),
+          ...incoming.filter((l) => l.to.highlightId === h.id).map((l) => chip(l, false)),
+        ];
         return (
           <div
             key={h.id}

@@ -176,6 +176,11 @@ In more detail:
   Choose how it relates — **supports**, **contradicts**, **cites**, **same claim as** or
   **related to** — then the other source and, optionally, the passage in it, and a note.
 * **Link a whole source:** **Link source** at the top of the Highlights pane.
+* **Link two passages of the same source.** Pick the source marked *(this source)* and then the
+  passage — a claim on page 2 answering one on page 9, a drawing against the paragraph it is
+  about. It shows on both cards like any other link; the map leaves it out, because an arrow
+  from a source to itself says nothing there.
+* **Drawings link too**, and are listed by what they are — *Rectangle · page 3*.
 * **Backlinks are automatic.** The other source shows the link from its side — *contradicted
   by…*, *cited by…* — on the passage's card, or above the cards for a whole-source link. The
   counts at the top say how many links and backlinks a source has.
@@ -215,9 +220,11 @@ Some things are easier pointed at than quoted. The pencil in the Source toolbar 
 * A drawing is anchored to what it was drawn over — a PDF page, a picture, or the paragraph
   underneath it — so it stays put when you zoom, resize the pane, or collapse the sidebar, and
   an article drawn on in Reader keeps its drawings in Original view as well.
-* Where a drawing or a highlight has a comment, a small marker sits at its corner; clicking it
-  selects that card. The pencil menu can hide all the markers, and Present mode hides them for
-  you while leaving the drawings on screen.
+* **A marker shows where there is more to see.** Anything with a comment, and anything that is
+  one end of a link, carries a small marker — at the corner of a drawing, at the end of a
+  quote. Click it and the note opens on the source itself: the comment, and every link, each
+  one clickable to jump to the other end. The pencil menu hides all the markers, and Present
+  mode hides them for you while leaving the drawings on screen.
 * To remove one, delete its card in Highlights.
 
 Drawing works on articles (Original and Reader), PDFs and images. Markdown, notebooks, tables
