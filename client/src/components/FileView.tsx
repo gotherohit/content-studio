@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
-import type { Highlight, HighlightColor, Source } from "../types";
+import type { Highlight, HighlightColor, Shape, ShapeKind, Source } from "../types";
 import { applyHighlights, captureSelection } from "../highlighter";
 import { HighlightPopup } from "./HighlightPopup";
 import { NotebookView } from "./NotebookView";
 import { DeckView } from "./DeckView";
 import { PdfView } from "./PdfView";
+import { ShapeLayer } from "./ShapeLayer";
+import { fromDrag, shapeHighlights, textHighlights } from "../shapes";
 import type { AppConfig } from "../api";
 
 interface Props {
@@ -23,6 +25,10 @@ interface Props {
   onAddHighlight: (h: Highlight) => void;
   onSelectHighlight: (id: string) => void;
   presenting: boolean;
+  tool?: ShapeKind | null;
+  drawColor?: HighlightColor;
+  showNotes?: boolean;
+  onNote?: (id: string) => void;
 }
 
 function parseDelimited(text: string, sep: string) {
@@ -50,7 +56,12 @@ export function FileView(p: Props) {
   const [text, setText] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
-  const [popup, setPopup] = useState<{ x: number; y: number; flip: boolean; anchor: NonNullable<ReturnType<typeof captureSelection>> } | null>(null);
+  const imageFrame = useRef<HTMLDivElement>(null);
+  const [popup, setPopup] = useState<{
+    x: number; y: number; flip: boolean;
+    anchor: NonNullable<ReturnType<typeof captureSelection>>;
+    shape?: Shape;
+  } | null>(null);
 
   const needsText = ["markdown", "text", "table"].includes(viewer);
   useEffect(() => {
@@ -75,7 +86,7 @@ export function FileView(p: Props) {
   useEffect(() => {
     const el = bodyRef.current;
     if (!el || !["markdown", "text"].includes(viewer)) return;
-    applyHighlights(el, source.highlights);
+    applyHighlights(el, textHighlights(source.highlights));
   }, [markdownHtml, text, source.highlights, viewer]);
 
   useEffect(() => {
@@ -103,7 +114,7 @@ export function FileView(p: Props) {
 
   function commit(color: HighlightColor, comment: string) {
     if (!popup) return;
-    p.onAddHighlight({ id: `h${Date.now().toString(36)}`, ...popup.anchor, color, comment, createdAt: new Date().toISOString() });
+    p.onAddHighlight({ id: `h${Date.now().toString(36)}`, ...popup.anchor, shape: popup.shape, color, comment, createdAt: new Date().toISOString() });
     window.getSelection()?.removeAllRanges();
     setPopup(null);
   }
@@ -125,11 +136,47 @@ export function FileView(p: Props) {
         onSelectHighlight={p.onSelectHighlight}
         scrollToId={p.scrollToId}
         scrollNonce={p.scrollNonce}
+        tool={p.tool}
+        drawColor={p.drawColor}
+        showNotes={p.showNotes}
+        onNote={p.onNote}
       />
     );
   }
   if (viewer === "html") return <iframe className="file-frame" src={url} title={file.name} sandbox="allow-scripts allow-same-origin allow-forms" />;
-  if (viewer === "image") return <div className="file-media"><img src={url} alt={file.name} /></div>;
+  if (viewer === "image") {
+    return (
+      <div className="file-media">
+        <div className="media-frame" ref={imageFrame}>
+          <img src={url} alt={file.name} />
+          <ShapeLayer
+            items={shapeHighlights(source.highlights).map((h) => ({ id: h.id, shape: h.shape!, color: h.color, comment: h.comment }))}
+            tool={p.tool ?? null}
+            color={p.drawColor ?? "yellow"}
+            selectedId={p.scrollToId}
+            showNotes={p.showNotes !== false && !p.presenting}
+            onSelect={p.onSelectHighlight}
+            onNote={(id) => p.onNote?.(id)}
+            onDraw={(drag) => {
+              const frame = imageFrame.current;
+              if (!frame || !p.tool) return;
+              const box = frame.getBoundingClientRect();
+              const shape = fromDrag(p.tool, drag.from, drag.to, box);
+              if (!shape) return;
+              setPopup({
+                x: Math.min(Math.max((drag.from.x + drag.to.x) / 2, 170), Math.max(171, box.width - 170)),
+                y: Math.max(drag.from.y, drag.to.y) + 10,
+                flip: true,
+                anchor: { text: "", prefix: "", suffix: "" },
+                shape,
+              });
+            }}
+          />
+          {popup && <HighlightPopup x={popup.x} y={popup.y} flip={popup.flip} onCommit={commit} onCancel={() => setPopup(null)} />}
+        </div>
+      </div>
+    );
+  }
   if (viewer === "video") return <div className="file-media"><video src={url} controls /></div>;
   if (viewer === "audio") return <div className="file-media"><audio src={url} controls /></div>;
   if (viewer === "notebook") return <div className="file-scroll"><NotebookView url={url} /></div>;

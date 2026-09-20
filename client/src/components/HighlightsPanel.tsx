@@ -1,4 +1,5 @@
 import { ArrowLeft, ArrowRight, ClipboardCopy, Link2, Trash2, X } from "lucide-react";
+import { shapeLabel } from "../shapes";
 import type { Highlight, Source } from "../types";
 import { linksFor, relationOf, type LinkEnd, type SourceLink } from "../links";
 
@@ -73,7 +74,14 @@ export function HighlightsPanel({ source, sources, links, selectedId, onSelect, 
           >
             <div className="hl-card-head">
               <span className="hl-index">{i + 1}</span>
-              {h.page ? (
+              {h.shape ? (
+                <div className="hl-code">
+                  <span className="muted small">
+                    {shapeLabel(h.shape.kind)}{h.page ? ` · page ${h.page}` : ""}
+                  </span>
+                  {h.text.trim() ? <blockquote>{h.text}</blockquote> : <span className="muted small">drawn on this source</span>}
+                </div>
+              ) : h.page ? (
                 <div className="hl-code">
                   <span className="muted small">Page {h.page}</span>
                   <blockquote>{h.text}</blockquote>

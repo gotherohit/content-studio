@@ -330,6 +330,7 @@ select option, select optgroup { background: var(--panel); color: var(--text); }
 
 .reader-scroll { position: relative; overflow-y: auto; flex: 1; padding: 26px 34px 90px; }
 .reader-meta h1 { font-family: var(--reader-font); font-size: 1.75rem; margin: 0 0 7px; line-height: 1.22; letter-spacing: -0.015em; }
+.reader-stage { position: relative; }
 .reader-body { font-family: var(--reader-font); line-height: 1.68; max-width: 40em; margin-top: 22px; color: var(--text); }
 .reader-body img, .reader-body video, .reader-body iframe { max-width: 100%; height: auto; border-radius: var(--r-md); }
 .reader-body pre { background: var(--code-bg); color: var(--code-text); padding: 12px 14px; border-radius: var(--r-md); overflow-x: auto; font-family: var(--mono); font-size: 0.82em; line-height: 1.5; }
@@ -515,6 +516,7 @@ mark.hl:hover { filter: brightness(0.94); }
 .file-scroll.as-slide .slide h1 { font-size: 1.8em; letter-spacing: -0.02em; }
 .file-text { font-family: var(--mono); line-height: 1.6; white-space: pre-wrap; word-break: break-word; margin: 0; }
 .file-media { flex: 1; min-height: 0; display: grid; place-items: center; padding: 16px; background: var(--panel-2); }
+.media-frame { position: relative; display: inline-block; max-width: 100%; max-height: 100%; line-height: 0; }
 .file-media img, .file-media video { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: var(--r-md); }
 
 /* PDFs are drawn page by page by pdf.js; only the pages near the viewport hold a canvas. */
@@ -525,7 +527,8 @@ mark.hl:hover { filter: brightness(0.94); }
 }
 .pdf-scroll.as-slide { justify-content: center; padding: 0; overflow: hidden; }
 .pdf-view .panel-empty { position: absolute; inset: 0; display: grid; place-items: center; z-index: 1; }
-.pdf-page { flex: none; position: relative; background: #fff; box-shadow: var(--shadow-2); border-radius: 2px; }
+.pdf-page-wrap { flex: none; position: relative; }
+.pdf-page { position: absolute; inset: 0; background: #fff; box-shadow: var(--shadow-2); border-radius: 2px; }
 .pdf-page canvas { display: block; width: 100%; height: 100%; border-radius: 2px; }
 .pdf-page .textLayer { position: absolute; inset: 0; }
 /* The glyphs are on the canvas underneath, so a highlight has to let them through. */
@@ -533,6 +536,30 @@ mark.hl:hover { filter: brightness(0.94); }
    on the canvas underneath visible. */
 .pdf-page .textLayer mark.hl { background-image: none; background-color: var(--hl); opacity: 0.5; padding: 0; border-radius: 2px; }
 .pdf-page .textLayer mark.hl:hover { opacity: 0.68; filter: none; }
+/* Shapes drawn over a source. The layer only takes the pointer while a tool is chosen, so the
+   article underneath stays clickable; a shape itself is grabbed by its stroke, not its middle. */
+.shape-layer { position: absolute; inset: 0; pointer-events: none; z-index: 3; }
+.shape-layer.drawing { pointer-events: auto; cursor: crosshair; }
+.shape-svg { position: absolute; left: 0; top: 0; overflow: visible; }
+.shape { fill: none; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; pointer-events: stroke; cursor: pointer; }
+.shape.drawing { stroke-dasharray: 5 4; opacity: 0.85; pointer-events: none; }
+.shape.selected { stroke-width: 4.5; }
+.shape.hl-yellow { stroke: var(--hl-yellow-bar); }
+.shape.hl-green { stroke: var(--hl-green-bar); }
+.shape.hl-pink { stroke: var(--hl-pink-bar); }
+.shape.hl-blue { stroke: var(--hl-blue-bar); }
+.shape-note {
+  position: absolute; transform: translate(-40%, -55%); pointer-events: auto;
+  display: grid; place-items: center; width: 19px; height: 19px; padding: 0;
+  border: 1px solid var(--border); border-radius: 50%; background: var(--panel);
+  color: var(--text); box-shadow: var(--shadow-1); cursor: pointer;
+}
+.shape-note:hover { transform: translate(-40%, -55%) scale(1.12); }
+.shape-note.hl-yellow { border-color: var(--hl-yellow-bar); }
+.shape-note.hl-green { border-color: var(--hl-green-bar); }
+.shape-note.hl-pink { border-color: var(--hl-pink-bar); }
+.shape-note.hl-blue { border-color: var(--hl-blue-bar); }
+
 .pdf-zoom {
   position: absolute; right: 14px; bottom: 14px; display: flex; align-items: center; gap: 2px;
   background: var(--panel); border: 1px solid var(--border); border-radius: var(--r-md);
@@ -887,6 +914,20 @@ mark.hl:hover { filter: brightness(0.94); }
 }
 .page-menu-list > button:hover:not(:disabled), .page-menu-list > a:hover { background: var(--panel-2); }
 .page-menu-check { width: 13px; display: inline-flex; color: var(--accent); }
+
+.draw-menu { position: relative; flex: none; }
+.draw-menu-list {
+  position: absolute; right: 0; top: calc(100% + 4px); z-index: 40; padding: 6px;
+  display: flex; flex-direction: column; gap: 6px; background: var(--panel);
+  border: 1px solid var(--border); border-radius: var(--r-md); box-shadow: var(--shadow-2);
+}
+.draw-row { display: flex; align-items: center; gap: 4px; }
+.draw-notes {
+  display: flex; align-items: center; gap: 7px; padding: 6px 8px; white-space: nowrap;
+  background: transparent; border: 0; border-radius: var(--r-sm); color: var(--text);
+  font-size: 12px; cursor: pointer;
+}
+.draw-notes:hover { background: var(--panel-2); }
 
 /* ============================================================
    Links between sources, and the source map

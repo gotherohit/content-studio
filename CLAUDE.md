@@ -212,6 +212,25 @@ wait. The AI request aborts when the pane closes. Assume a recording is in progr
   near the viewport, and reports the page through `PaneView.slideIndex` — the same field a
   Markdown deck uses, so beats, capture and restore work unchanged. Its geometry lives in
   `client/src/pdf.ts` and is unit-tested; the component holds no page maths of its own.
+- **A drawn shape is a highlight with a `shape` on it.** Same trick as code and PDF
+  highlights: cards, comments, colours, links, the map, beats and Copy as markdown all work
+  with no new plumbing. Everything that lays marks over text must therefore filter the list
+  through `textHighlights()`, or `applyHighlights` would try to mark a shape's anchor quote.
+- **A shape is fractions of what it was drawn on, never page coordinates.** A PDF page or an
+  image is that thing; over prose it is the paragraph the drag started in, identified by the
+  same kind of quote anchor a highlight uses (`shapes-dom.js`), or the picture by its `src`.
+  That is what keeps a drawing on its paragraph when the pane changes width. The geometry is
+  in `server/public/shapes-geom.js` so the injected script and the app share one definition.
+- **The overlay must not eat the page.** `.shape-layer` takes the pointer only while a tool is
+  out, and a shape is grabbed by its stroke (`pointer-events: stroke`), or an article would
+  stop being clickable and text could not be selected. In Present mode the tool is forced to
+  null: a tool left armed would swallow every click of a take.
+- **The PDF canvas is written by hand, so the shapes cannot live in the page div.** `paint()`
+  calls `replaceChildren`, which would remove them; the layer is a sibling inside
+  `.pdf-page-wrap`.
+- **Shapes in a live page are drawn by `inject.js` in document coordinates** and placed again
+  on resize, on mutations and when the fonts settle — with its own MutationObserver
+  disconnected during its writes, or placing them would trigger another placement forever.
 - **An inline background is taller than the line it sits on.** It fills the font's content
   area, not the line box, so on a site with tight leading a highlight covered the text above
   and below. Both `mark.hl` and the injected `rs-hl` paint the colour as a background band of

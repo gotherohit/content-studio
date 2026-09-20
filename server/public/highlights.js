@@ -50,20 +50,44 @@ function normalise(text) {
   }
   return { value, starts, ends };
 }
+/** Where a saved passage sits in the current text, as character offsets, or null. */
+function locate(root, full, h, normal) {
+  let start = find(full, h), end = start + h.text.length;
+  if (start < 0) {
+    const state = normal();
+    const quote = normalise(h.text).value;
+    const at = find(state.value, { text: quote, prefix: normalise(h.prefix || '').value, suffix: normalise(h.suffix || '').value });
+    if (at >= 0) { start = state.starts[at]; end = state.ends[at + quote.length - 1]; }
+  }
+  return start < 0 ? null : { start, end };
+}
+
+/** The same passage as a Range, for anything that needs the element it is in. */
+export function findRange(root, h) {
+  if (!h || !h.text) return null;
+  const nodes = textNodes(root), full = nodes.map(n => n.data).join('');
+  let normal;
+  const at = locate(root, full, h, () => (normal ||= normalise(full)));
+  if (!at) return null;
+  const range = root.ownerDocument.createRange();
+  let pos = 0, started = false;
+  for (const node of nodes) {
+    const begin = pos; pos += node.length;
+    if (!started && pos > at.start) { range.setStart(node, at.start - begin); started = true; }
+    if (started && pos >= at.end) { range.setEnd(node, at.end - begin); return range; }
+  }
+  return started ? range : null;
+}
+
 export function applyHighlights(root, highlights, className = 'hl') {
   root.querySelectorAll(`mark.${className}[data-hid]`).forEach(mark => mark.replaceWith(...mark.childNodes));
   root.normalize();
   const full = textNodes(root).map(n => n.data).join(''); let normal;
   const missing = [];
   for (const h of highlights) {
-    let start = find(full, h), end = start + h.text.length;
-    if (start < 0) {
-      normal ||= normalise(full);
-      const quote = normalise(h.text).value;
-      const at = find(normal.value, { text: quote, prefix: normalise(h.prefix || '').value, suffix: normalise(h.suffix || '').value });
-      if (at >= 0) { start = normal.starts[at]; end = normal.ends[at + quote.length - 1]; }
-    }
-    if (start < 0) { missing.push(h.id); continue; }
+    const at = locate(root, full, h, () => (normal ||= normalise(full)));
+    if (!at) { missing.push(h.id); continue; }
+    const start = at.start, end = at.end;
     // Snapshot before splitting; iteration also handles very long selections.
     let pos = 0;
     for (const node of textNodes(root)) {

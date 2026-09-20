@@ -48,7 +48,7 @@ The whole studio is one window, and panes inside it are real Chromium views rath
 | | |
 |---|---|
 | [Projects are folders](docs/guide.md#projects-are-folders) | One project is one video. Everything for it lives in a folder you choose. |
-| [Sources](docs/guide.md#sources) | Web pages as they really look, plus slides, notebooks, PDFs, documents. Highlight and comment on any of them. PDFs page with the arrow keys. |
+| [Sources](docs/guide.md#sources) | Web pages as they really look, plus slides, notebooks, PDFs, documents. Highlight, draw on and comment on any of them. PDFs page with the arrow keys. |
 | [Beats](docs/guide.md#beats) | The running order. Capture an arrangement per point you make; one key walks them while recording. |
 | [The presenter window](docs/guide.md#the-presenter-window) | A second window for your other monitor, outside any screen capture, with the clock and a chapter log. |
 | [Layout](docs/guide.md#layout) | Up to four panes, each showing a different source or tool. |

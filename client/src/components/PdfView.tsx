@@ -3,9 +3,11 @@ import { GlobalWorkerOptions, TextLayer, getDocument, type PDFDocumentProxy, typ
 import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import "pdfjs-dist/web/pdf_viewer.css";
 import { Minus, Plus } from "lucide-react";
-import type { Highlight, HighlightColor } from "../types";
+import type { Highlight, HighlightColor, Shape, ShapeKind } from "../types";
 import { applyHighlights, captureSelection } from "../highlighter";
 import { HighlightPopup } from "./HighlightPopup";
+import { ShapeLayer } from "./ShapeLayer";
+import { fromDrag, shapeHighlights, textHighlights } from "../shapes";
 import { PAGE_GAP, clampPage, fitScale, highlightsOnPage, layoutPages, offsetOf, pageAt, pageOf, stepZoom, visiblePages, type PageSize } from "../pdf";
 
 GlobalWorkerOptions.workerSrc = workerUrl;
@@ -35,6 +37,11 @@ interface Props {
   onSelectHighlight?: (id: string) => void;
   scrollToId?: string | null;
   scrollNonce?: number;
+  /** The drawing tool in the toolbar, and the colour it draws in. */
+  tool?: ShapeKind | null;
+  drawColor?: HighlightColor;
+  showNotes?: boolean;
+  onNote?: (id: string) => void;
 }
 
 /**
@@ -57,7 +64,11 @@ export function PdfView(p: Props) {
   const [err, setErr] = useState<string | null>(null);
   const [box, setBox] = useState({ width: 0, height: 0 });
   const [zoom, setZoom] = useState(1);
-  const [popup, setPopup] = useState<{ x: number; y: number; flip: boolean; page: number; anchor: NonNullable<ReturnType<typeof captureSelection>> } | null>(null);
+  const [popup, setPopup] = useState<{
+    x: number; y: number; flip: boolean; page: number;
+    anchor?: NonNullable<ReturnType<typeof captureSelection>>;
+    shape?: Shape;
+  } | null>(null);
 
   const highlights = p.highlights ?? [];
   // paint() is memoised on the scale, but must always draw the highlights as they are now.
@@ -149,7 +160,7 @@ export function PdfView(p: Props) {
       if (mine !== generation.current || pageEls.current.get(i) !== el) return;
       el.append(text);
       textEls.current.set(i, text);
-      applyHighlights(text, highlightsOnPage(marks.current, i));
+      applyHighlights(text, textHighlights(highlightsOnPage(marks.current, i)));
     } catch {
       // A cancelled render is the normal way a scroll interrupts one.
       painted.current.delete(i);
@@ -202,7 +213,7 @@ export function PdfView(p: Props) {
 
   // A highlight added, recoloured or deleted must show on the pages already drawn.
   useEffect(() => {
-    for (const [i, text] of textEls.current) applyHighlights(text, highlightsOnPage(highlights, i));
+    for (const [i, text] of textEls.current) applyHighlights(text, textHighlights(highlightsOnPage(highlights, i)));
   }, [highlights]);
 
   const frame = useRef(0);
@@ -250,6 +261,7 @@ export function PdfView(p: Props) {
     const h = p.scrollToId ? highlights.find((x) => x.id === p.scrollToId) : null;
     if (!h || !count) return;
     goTo(pageOf(h));
+    if (h.shape) return;
     let tries = 0;
     const timer = setInterval(() => {
       const mark = scrollRef.current?.querySelector<HTMLElement>(`mark.hl[data-hid="${h.id}"]`);
@@ -284,7 +296,8 @@ export function PdfView(p: Props) {
 
   const commit = (color: HighlightColor, comment: string) => {
     if (!popup || !p.onAddHighlight) return;
-    p.onAddHighlight({ id: `h${Date.now().toString(36)}`, ...popup.anchor, page: popup.page + 1, color, comment, createdAt: new Date().toISOString() });
+    const anchor = popup.anchor ?? { text: "", prefix: "", suffix: "" };
+    p.onAddHighlight({ id: `h${Date.now().toString(36)}`, ...anchor, shape: popup.shape, page: popup.page + 1, color, comment, createdAt: new Date().toISOString() });
     scrollRef.current?.ownerDocument.defaultView?.getSelection()?.removeAllRanges();
     setPopup(null);
   };
@@ -318,12 +331,36 @@ export function PdfView(p: Props) {
         }}
       >
         {(p.slideshow ? [page] : sizes.map((_, i) => i)).map((i) => (
+          // The canvas and text layer are put into .pdf-page by hand, which replaces whatever is
+          // inside it, so the shapes live beside it rather than in it.
           <div
             key={i}
-            className="pdf-page"
-            ref={setEl(i)}
+            className="pdf-page-wrap"
             style={{ width: layout.widths[i], height: layout.heights[i], marginBottom: p.slideshow ? 0 : PAGE_GAP }}
-          />
+          >
+            <div className="pdf-page" ref={setEl(i)} />
+            <ShapeLayer
+              items={shapeHighlights(highlightsOnPage(highlights, i)).map((h) => ({ id: h.id, shape: h.shape!, color: h.color, comment: h.comment }))}
+              tool={p.onAddHighlight ? p.tool ?? null : null}
+              color={p.drawColor ?? "yellow"}
+              selectedId={p.scrollToId}
+              showNotes={p.showNotes !== false && !p.presenting}
+              onSelect={(id) => p.onSelectHighlight?.(id)}
+              onNote={(id) => p.onNote?.(id)}
+              onDraw={(drag) => {
+                const shape = fromDrag(p.tool!, drag.from, drag.to, { width: layout.widths[i], height: layout.heights[i] });
+                if (!shape) return;
+                const scroller = scrollRef.current;
+                const host = scroller!.getBoundingClientRect();
+                const pageBox = pageEls.current.get(i)!.getBoundingClientRect();
+                const y = pageBox.top - host.top + Math.max(drag.from.y, drag.to.y) + scroller!.scrollTop;
+                setPopup({
+                  x: Math.min(Math.max(pageBox.left - host.left + (drag.from.x + drag.to.x) / 2, 170), host.width - 170),
+                  y: y + 10, flip: true, page: i, shape,
+                });
+              }}
+            />
+          </div>
         ))}
         {popup && <HighlightPopup x={popup.x} y={popup.y} flip={popup.flip} onCommit={commit} onCancel={() => setPopup(null)} />}
       </div>

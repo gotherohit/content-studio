@@ -13,6 +13,25 @@ export interface Highlight {
   lines?: [number, number];
   /** For a PDF: the page it is on, 1-based. Its quote is anchored inside that page's own text. */
   page?: number;
+  /** A drawn shape instead of a marked quote. Everything else about it is the same. */
+  shape?: Shape;
+  /** What the shape is drawn on when it is not a page: an image, by its source. */
+  onImage?: string;
+}
+
+export type ShapeKind = "rect" | "oval" | "arrow";
+
+/**
+ * A drawn annotation, in fractions of whatever it was drawn on: a PDF page, an image, or the
+ * paragraph its highlight is anchored to. An arrow runs from (x, y) by (w, h), so its width
+ * and height may be negative; a rectangle and an oval never are.
+ */
+export interface Shape {
+  kind: ShapeKind;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
 }
 
 export type SourceKind = "web" | "file" | "code";

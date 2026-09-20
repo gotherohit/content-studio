@@ -2,6 +2,20 @@
 
 What changed in each release, newest first. Versions are the ones the app updates itself to.
 
+## 0.18.0
+
+- **Draw on a source.** A pencil in the Source toolbar draws a rectangle, an oval or an arrow
+  on an article, a PDF page or an image, in any of the four highlight colours. Let go and the
+  note box appears, so a drawing can carry a comment.
+- **Drawings are highlights**, so they appear as cards in Highlights, take links and backlinks,
+  show in the source map, and come back with any beat that shows the source.
+- **They stay where they were put.** A drawing is anchored to the page, picture or paragraph it
+  was drawn over, so zooming a PDF, resizing the pane or collapsing the sidebar does not move
+  it; a drawing made in Reader also appears on the live page in Original view.
+- **A marker shows where a note is.** Any drawing or highlight with a comment gets a small
+  marker at its corner; clicking it selects that card. The pencil menu hides all the markers,
+  and Present mode hides them on its own while leaving the drawings on screen.
+
 ## 0.17.2
 
 - **A highlight no longer covers the line above it.** An inline background fills the font's

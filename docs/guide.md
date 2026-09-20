@@ -200,6 +200,29 @@ Bigger circles have more highlights and links.
 
 **Every Source pane picks its own source.** The dropdown at the left of a Source pane's toolbar either follows the sidebar selection or pins one source, so a slide deck can sit in one pane and the article it discusses in another.
 
+### Drawing on a source
+
+Some things are easier pointed at than quoted. The pencil in the Source toolbar draws a
+**rectangle**, an **oval** or an **arrow** straight onto the source.
+
+* Choose a shape and a colour from the pencil menu, then drag on the source. Let go and the
+  usual note box appears, so the drawing can carry a comment like any highlight.
+* The tool stays out until you put it down — press `Esc`, or click the pencil again. While it
+  is out the source underneath cannot be clicked, which is why the button stays lit.
+* Drawings belong to the source, not to the pane: they appear in **Highlights** as cards
+  ("Rectangle · page 3"), can be linked to other sources, show up in the map, and a beat that
+  shows the source shows them too.
+* A drawing is anchored to what it was drawn over — a PDF page, a picture, or the paragraph
+  underneath it — so it stays put when you zoom, resize the pane, or collapse the sidebar, and
+  an article drawn on in Reader keeps its drawings in Original view as well.
+* Where a drawing or a highlight has a comment, a small marker sits at its corner; clicking it
+  selects that card. The pencil menu can hide all the markers, and Present mode hides them for
+  you while leaving the drawings on screen.
+* To remove one, delete its card in Highlights.
+
+Drawing works on articles (Original and Reader), PDFs and images. Markdown, notebooks, tables
+and code do not take drawings — the pencil is not shown for them.
+
 ### PDFs
 
 PDFs are drawn page by page inside the pane, so scrolling stays smooth however long the
@@ -536,6 +559,7 @@ A key that cannot be decrypted is **kept, not discarded** — the provider simpl
 | `Home` / `End` | First / last beat, in Present mode or the presenter window |
 | `h` | Hide or show the beat strip |
 | `→` `←` `Space` | Navigate slides and PDF pages, when not presenting |
+| `Esc` | Put the drawing tool down |
 | `Home` / `End` | First / last page of a PDF, when not presenting |
 | `Ctrl` + scroll | Zoom a PDF |
 | `Ctrl+Enter` | Run the current code snippet |

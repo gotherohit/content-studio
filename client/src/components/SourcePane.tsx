@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, BookmarkPlus, Check, ChevronLeft, ChevronRight, CornerUpLeft, ExternalLink, Maximize, MoreHorizontal, NotebookText, Play, RefreshCw, ZapOff } from "lucide-react";
-import type { CodeView, Highlight, PaneView, ReadingPosition, Source } from "../types";
+import type { CodeView, Highlight, HighlightColor, PaneView, ReadingPosition, ShapeKind, Source } from "../types";
 import { trackReadingPosition } from "../../../server/public/reading-position.js";
 import type { AppConfig } from "../api";
 import { Reader } from "./Reader";
@@ -8,6 +8,7 @@ import { OriginalView } from "./OriginalView";
 import { FileView } from "./FileView";
 import { SourceSummary } from "./SourceSummary";
 import { CodeSourceView } from "./FilesPane";
+import { DrawMenu } from "./DrawMenu";
 import { samePage, stepPage, visitPage } from "../../../server/public/pages.js";
 
 interface Props {
@@ -72,6 +73,12 @@ export function SourcePane(p: Props) {
   const pageSlides = useRef(setSlideIndex);
   pageSlides.current = setSlideIndex;
   const [slideCount, setSlideCount] = useState(1);
+  // The drawing tool belongs to the pane: a new source always starts with the pointer, so a
+  // tool left out yesterday cannot draw on today's article by accident.
+  const [tool, setTool] = useState<ShapeKind | null>(null);
+  const [drawColor, setDrawColor] = useState<HighlightColor>("yellow");
+  const [notes, setNotes] = useState(true);
+  useEffect(() => { setTool(null); }, [p.source?.id]);
   const stageRef = useRef<HTMLDivElement>(null);
 
   const source = p.source;
@@ -165,6 +172,14 @@ export function SourcePane(p: Props) {
     );
   }
 
+  // Drawing needs something to draw on: a page, a picture, or prose the app itself lays out.
+  const canDraw = !isCode && (!isFile || viewer === "pdf" || viewer === "image");
+  const drawMenu = !p.presenting && canDraw && (
+    <DrawMenu tool={tool} onTool={setTool} color={drawColor} onColor={setDrawColor} notes={notes} onNotes={setNotes} />
+  );
+  // A tool left out cannot stay armed into a take: the overlay would swallow every click.
+  const draw = { tool: p.presenting || !canDraw ? null : tool, drawColor, showNotes: notes && !p.presenting, onNote: p.onSelectHighlight };
+
   const scripts = source.scripts !== false;
   const hasSummary = Boolean(source.summary?.trim());
   // Hidden in Present mode with the panel itself, so neither reaches a recording.
@@ -211,6 +226,7 @@ export function SourcePane(p: Props) {
               </>
             )}
             <a className="icon-btn" href={`/api/projects/${p.projectId}/sources/${encodeURIComponent(source.file!.name)}`} download={source.file!.name} title="Download"><ExternalLink size={14} /></a>
+            {drawMenu}
             {summaryButton}
           </>
         ) : (
@@ -242,6 +258,7 @@ export function SourcePane(p: Props) {
                 <ZapOff size={12} /> scripts off
               </button>
             )}
+            {drawMenu}
             {summaryButton}
             <PageMenu
               scripts={scripts}
@@ -288,6 +305,7 @@ export function SourcePane(p: Props) {
             onAddHighlight={p.onAddHighlight}
             onSelectHighlight={p.onSelectHighlight}
             presenting={p.presenting}
+            {...draw}
           />
         ) : mode === "original" ? (
           <OriginalView
@@ -307,6 +325,9 @@ export function SourcePane(p: Props) {
             presenting={p.presenting}
             onPresentationKey={p.onPresentationKey}
             onPosition={(position, url) => report.current(position, mode, samePage(url, source.url) ? undefined : url)}
+            tool={tool}
+            drawColor={drawColor}
+            showNotes={notes && !p.presenting}
           />
         ) : (
           <Reader
@@ -316,6 +337,7 @@ export function SourcePane(p: Props) {
             onAddHighlight={p.onAddHighlight}
             onSelectHighlight={p.onSelectHighlight}
             fontScale={p.fontScale}
+            {...draw}
           />
         )}
       </div>

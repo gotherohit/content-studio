@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { Highlight, HighlightColor, ReadingPosition, Source } from "../types";
+import type { Highlight, HighlightColor, ReadingPosition, Shape, ShapeKind, Source } from "../types";
 import { HighlightPopup } from "./HighlightPopup";
 import { samePage } from "../../../server/public/pages.js";
 
@@ -23,6 +23,10 @@ interface Props {
   presenting: boolean;
   onPresentationKey: (key: string) => void;
   onPosition: (position: ReadingPosition, url: string) => void;
+  /** The drawing tool in the toolbar; while one is out the page itself cannot be clicked. */
+  tool?: ShapeKind | null;
+  drawColor?: HighlightColor;
+  showNotes?: boolean;
 }
 
 /** "https://www.example.com/a/b#c" -> "http://www--example--com.localhost:4700/a/b#c" (the app's reverse proxy). */
@@ -34,7 +38,7 @@ export function proxiedUrl(url: string, apiPort: number, scripts: boolean): stri
 }
 
 /** The page exactly as the site serves it, running its own scripts, with highlights layered on top. */
-export function OriginalView({ source, apiPort, scripts, onAddHighlight, onSelectHighlight, onOpenLink, page, onPage, scrollToId, scrollNonce, position, restoreNonce, onPosition, presenting, onPresentationKey }: Props) {
+export function OriginalView({ source, apiPort, scripts, onAddHighlight, onSelectHighlight, onOpenLink, page, onPage, scrollToId, scrollNonce, position, restoreNonce, onPosition, presenting, onPresentationKey, tool, drawColor, showNotes }: Props) {
   const frame = useRef<HTMLIFrameElement>(null);
   const [ready, setReady] = useState(false);
   const [restoredNonce, setRestoredNonce] = useState<number | null>(null);
@@ -44,9 +48,9 @@ export function OriginalView({ source, apiPort, scripts, onAddHighlight, onSelec
   // page. Deriving it from `target` would reload a page the frame has just arrived at.
   const [frameUrl, setFrameUrl] = useState(target);
   const shown = useRef(target);
-  const latest = useRef({ position, restoreNonce, onPosition, presenting, onPresentationKey, target, onPage });
-  latest.current = { position, restoreNonce, onPosition, presenting, onPresentationKey, target, onPage };
-  const [popup, setPopup] = useState<{ x: number; y: number; flip: boolean; anchor: Anchor } | null>(null);
+  const latest = useRef({ position, restoreNonce, onPosition, presenting, onPresentationKey, target, onPage, tool, drawColor, showNotes });
+  latest.current = { position, restoreNonce, onPosition, presenting, onPresentationKey, target, onPage, tool, drawColor, showNotes };
+  const [popup, setPopup] = useState<{ x: number; y: number; flip: boolean; anchor: Anchor; shape?: Shape; onImage?: string } | null>(null);
   const src = proxiedUrl(frameUrl, apiPort, scripts);
 
   const post = (msg: Record<string, unknown>) => frame.current?.contentWindow?.postMessage({ src: "rs-app", ...msg }, "*");
@@ -62,6 +66,8 @@ export function OriginalView({ source, apiPort, scripts, onAddHighlight, onSelec
         post({ type: "highlights", list: source.highlights });
         post({ type: "restorePosition", position: latest.current.position, nonce: latest.current.restoreNonce, page: latest.current.target });
         post({ type: "presentation", enabled: latest.current.presenting });
+        post({ type: "notes", show: latest.current.showNotes !== false && !latest.current.presenting });
+        post({ type: "draw", tool: latest.current.tool ?? null, color: latest.current.drawColor });
       }
       if (m.type === "navigated" && m.url) arrived(m.url);
       if (m.type === "position" && m.nonce === latest.current.restoreNonce && m.position && Number.isFinite(m.position.y) && Number.isFinite(m.position.x)) latest.current.onPosition(m.position, m.url ?? shown.current);
@@ -74,6 +80,15 @@ export function OriginalView({ source, apiPort, scripts, onAddHighlight, onSelec
         const r = m.rect;
         const flip = r.top < 120;
         setPopup({ x: Math.min(Math.max(r.left + r.width / 2, 170), host.width - 170), y: flip ? r.bottom + 8 : r.top - 8, flip, anchor: m.anchor });
+      }
+      if (m.type === "shapeDrawn" && m.shape) {
+        const host = frame.current!.getBoundingClientRect();
+        const r = m.rect;
+        setPopup({
+          x: Math.min(Math.max(r.left + r.width / 2, 170), host.width - 170),
+          y: r.bottom + 10, flip: true, anchor: m.anchor ?? { text: "", prefix: "", suffix: "" },
+          shape: m.shape, onImage: m.onImage,
+        });
       }
       if (m.type === "scroll") setPopup(null);
       if (m.type === "hlclick") onSelectHighlight(m.id);
@@ -105,6 +120,8 @@ export function OriginalView({ source, apiPort, scripts, onAddHighlight, onSelec
   }, [target]);
   useLayoutEffect(() => { if (ready && samePage(shown.current, target)) post({ type: "restorePosition", position, nonce: restoreNonce, page: target }); }, [restoreNonce, ready]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (ready) post({ type: "presentation", enabled: presenting }); }, [presenting, ready]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (ready) post({ type: "draw", tool: tool ?? null, color: drawColor }); }, [tool, drawColor, ready]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (ready) post({ type: "notes", show: showNotes !== false && !presenting }); }, [showNotes, presenting, ready]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { setReady(false); setPopup(null); }, [source.id, scripts]);
   useEffect(() => {
     if (!position || restoredNonce === restoreNonce) return;
@@ -118,7 +135,10 @@ export function OriginalView({ source, apiPort, scripts, onAddHighlight, onSelec
 
   function commit(color: HighlightColor, comment: string) {
     if (!popup) return;
-    onAddHighlight({ id: `h${Date.now().toString(36)}`, ...popup.anchor, color, comment, createdAt: new Date().toISOString() });
+    onAddHighlight({
+      id: `h${Date.now().toString(36)}`, ...popup.anchor, shape: popup.shape, onImage: popup.onImage,
+      color, comment, createdAt: new Date().toISOString(),
+    });
     post({ type: "clearSelection" });
     setPopup(null);
   }
