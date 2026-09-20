@@ -596,6 +596,19 @@ open until it says *ready*, then click **Restart and install**. If you would rat
 wait, download the installer from
 [Releases](https://github.com/gotherohit/content-studio/releases) and run it over the top.
 
+**The update downloads, you press Restart and install, and nothing happens.** Windows is
+refusing to run the installer. Content Studio now says so in **Settings → Updates** and stays
+open instead of quitting, and it writes what happened to `~/.content-studio/update.log`.
+
+The usual cause on Windows 11 is **Smart App Control**, which only runs programs that are
+either known to Microsoft or signed with a certificate from a trusted authority. Content
+Studio's installer is not signed, so whether it is allowed is decided per file and can differ
+from one release to the next — one update installs, the next is blocked with no message. You
+can check at **Windows Security → App & browser control → Smart App Control**; when it says
+*On*, that is what is blocking it. Turning it off is permanent — Windows can only switch it
+back on after a reset — so it is worth deciding deliberately. Until the installer is signed,
+the alternative is to run the new version from the source folder (`npm run desktop`).
+
 **A project will not delete.** It now tells you why in the error bar. The usual cause is
 another program holding a file in the folder open — Explorer sitting in it, PowerPoint with
 a deck loaded, an editor. Close those and try again. The folder and everything in it is

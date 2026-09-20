@@ -2,6 +2,15 @@
 
 What changed in each release, newest first. Versions are the ones the app updates itself to.
 
+## 0.17.1
+
+- **An update that Windows refuses to install now says so.** The app starts the installer
+  itself and only quits once it is really running; if Windows blocks it — Smart App Control
+  does this to installers that are not code-signed, silently, even after the elevation
+  prompt — the app stays open and Settings → Updates explains what happened and where the
+  downloaded installer is.
+- Update activity is written to `~/.content-studio/update.log`.
+
 ## 0.17.0
 
 - **PDFs take highlights.** Select a passage in a PDF and the usual popup appears: colour, note,

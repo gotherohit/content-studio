@@ -269,6 +269,14 @@ wait. The AI request aborts when the pane closes. Assume a recording is in progr
 - **Quitting is asynchronous.** `before-quit` calls `preventDefault()`, asks the server to
   shut down over IPC, and quits for real when it exits or after 8s. Without that, Jupyter
   is orphaned every time the app closes.
+- **An update can be refused after the app has already quit.** electron-updater asks Windows
+  to run the installer and quits immediately, so anything that refuses it afterwards looks
+  like the button doing nothing. Windows 11 Smart App Control refuses unsigned installers —
+  ours are unsigned — and refuses the elevated retry too, silently. `installUpdate()` in
+  `electron/main.js` therefore starts the installer itself, falls back to `elevate.exe` the
+  way electron-updater does, waits for the installer to appear in the process list, and only
+  then quits; otherwise it reports it. Note the direct start fails with `UNKNOWN` on a healthy
+  machine too — that is "needs elevation" — so the process list, not the error, is the proof.
 - **Updates are ~115 MB and do not resume.** Restarting the app mid-download throws it
   away. If a user reports "it never updates", check for a part-file in
   `%LOCALAPPDATA%\content-studio-updater\pending\` before assuming a bug.

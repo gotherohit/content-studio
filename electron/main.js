@@ -6,7 +6,8 @@
 // server is unchanged and still runs on loopback; this process starts it, waits for it,
 // and shows it in a window whose panes may host real Chromium views.
 import { app, BrowserWindow, desktopCapturer, dialog, ipcMain, safeStorage, screen, session, shell } from "electron";
-import { fork, spawnSync } from "node:child_process";
+import { fork, spawn, spawnSync } from "node:child_process";
+import fs from "node:fs";
 import net from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -324,6 +325,8 @@ function configureWebviews() {
  * worse than being a version behind.
  */
 let update = { state: app.isPackaged ? "idle" : "unsupported", version: null, percent: 0, message: null };
+/** Where the downloaded installer is, so the app can start it and say where it is. */
+let installerFile = null;
 
 function setUpdate(patch) {
   update = { ...update, ...patch };
@@ -337,12 +340,16 @@ function wireUpdates() {
   }
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.logger = { info: updateLog, warn: updateLog, error: updateLog, debug: () => {} };
 
   autoUpdater.on("checking-for-update", () => setUpdate({ state: "checking", message: null }));
   autoUpdater.on("update-available", (info) => setUpdate({ state: "downloading", version: info?.version ?? null, percent: 0 }));
   autoUpdater.on("update-not-available", () => setUpdate({ state: "current", version: app.getVersion(), percent: 0 }));
   autoUpdater.on("download-progress", (p) => setUpdate({ state: "downloading", percent: Math.round(p?.percent ?? 0) }));
-  autoUpdater.on("update-downloaded", (info) => setUpdate({ state: "ready", version: info?.version ?? null, percent: 100 }));
+  autoUpdater.on("update-downloaded", (info) => {
+    installerFile = info?.downloadedFile ?? null;
+    setUpdate({ state: "ready", version: info?.version ?? null, percent: 100 });
+  });
   autoUpdater.on("error", (e) => {
     console.error("update check failed:", e?.message);
     setUpdate({ state: "error", message: e?.message ?? "The update check failed" });
@@ -350,6 +357,94 @@ function wireUpdates() {
 
   check();
   setInterval(check, 6 * 60 * 60 * 1000);
+}
+
+/** A line in ~/.content-studio/update.log, so a failed update can be explained afterwards. */
+function updateLog(message) {
+  try {
+    const dir = path.join(app.getPath("home"), ".content-studio");
+    fs.mkdirSync(dir, { recursive: true });
+    fs.appendFileSync(path.join(dir, "update.log"), `${new Date().toISOString()} ${message}\n`);
+  } catch {
+    // Logging must never be the reason an update fails.
+  }
+}
+
+/** Windows 11 Smart App Control: 1 is enforcing, and it refuses to run unsigned installers. */
+function smartAppControlOn() {
+  if (process.platform !== "win32") return false;
+  const key = String.raw`HKLM\SYSTEM\CurrentControlSet\Control\CI\Policy`;
+  const r = spawnSync("reg", ["query", key, "/v", "VerifiedAndReputablePolicyState"], { encoding: "utf8" });
+  return /VerifiedAndReputablePolicyState\s+REG_DWORD\s+0x1/i.test(r.stdout || "");
+}
+
+function startDetached(exe, args) {
+  return new Promise((resolve) => {
+    let child;
+    try {
+      child = spawn(exe, args, { detached: true, stdio: "ignore" });
+    } catch (e) {
+      resolve({ ok: false, error: e });
+      return;
+    }
+    child.once("error", (e) => resolve({ ok: false, error: e }));
+    child.once("spawn", () => { child.unref(); resolve({ ok: true }); });
+  });
+}
+
+/** elevate.exe returns the moment it has asked Windows, so only the process list proves it ran. */
+async function installerRunning(name, timeout) {
+  const deadline = Date.now() + timeout;
+  while (Date.now() < deadline) {
+    const r = spawnSync("tasklist", ["/FI", `IMAGENAME eq ${name}`], { encoding: "utf8" });
+    if ((r.stdout || "").includes(name)) return true;
+    await new Promise((r2) => setTimeout(r2, 1000));
+  }
+  return false;
+}
+
+/**
+ * Starting the installer, and only quitting once it is really running.
+ *
+ * electron-updater quits as soon as it has asked Windows, so anything that refuses the
+ * installer afterwards leaves the app gone and nothing installed — which looks exactly
+ * like pressing the button and nothing happening. Smart App Control does refuse it: it
+ * blocks installers that are not code-signed, silently, including the elevated retry.
+ */
+async function installUpdate() {
+  if (!installerFile || !fs.existsSync(installerFile)) {
+    setUpdate({ state: "error", message: "The downloaded installer is no longer on disk. Check for updates again." });
+    return update;
+  }
+  updateLog(`install requested: ${installerFile}`);
+  const quit = () => { app.isQuitting = true; app.quit(); };
+  const blocked = (why) => {
+    updateLog(`install did not start: ${why}`);
+    setUpdate({
+      state: "error",
+      message: smartAppControlOn()
+        ? `Windows would not run the installer. Smart App Control is on, and it blocks installers that are not code-signed — this one is not. Turn it off in Windows Security → App & browser control, or install by hand from ${installerFile}`
+        : `Windows would not run the installer (${why}). It is at ${installerFile}`,
+    });
+    return update;
+  };
+
+  const direct = await startDetached(installerFile, ["--updated"]);
+  if (direct.ok) {
+    updateLog("installer started");
+    quit();
+    return update;
+  }
+  updateLog(`direct start refused: ${direct.error?.code ?? direct.error?.message}`);
+  // UNKNOWN is what Windows says when the installer needs elevation, and also when it is blocked.
+  const elevate = path.join(process.resourcesPath, "elevate.exe");
+  if (!fs.existsSync(elevate)) return blocked(direct.error?.code ?? "cannot start");
+  const elevated = await startDetached(elevate, [installerFile, "--updated"]);
+  if (!elevated.ok) return blocked(elevated.error?.code ?? "cannot start");
+  if (!(await installerRunning(path.basename(installerFile), 25000))) return blocked("nothing started");
+  updateLog("installer started with elevation");
+  quit();
+  return update;
 }
 
 /** A check the creator asked for, or the periodic one. Either way, never throws. */
@@ -394,7 +489,7 @@ ipcMain.on("presenter:command", (e, cmd) => {
 
 ipcMain.handle("studio:updateState", () => update);
 ipcMain.handle("studio:checkForUpdates", () => check());
-ipcMain.handle("studio:installUpdate", () => { app.isQuitting = true; autoUpdater.quitAndInstall(); });
+ipcMain.handle("studio:installUpdate", () => installUpdate());
 ipcMain.handle("studio:openExternal", (_e, url) => shell.openExternal(url));
 
 if (!app.requestSingleInstanceLock()) {
