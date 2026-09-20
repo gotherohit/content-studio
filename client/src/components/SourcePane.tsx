@@ -24,6 +24,9 @@ interface Props {
   onMode: (m: "original" | "reader") => void;
   onToggleScripts: () => void;
   onAddHighlight: (h: Highlight) => void;
+  /** A drawing that has been moved or resized, or a highlight recoloured. */
+  onUpdateHighlight: (h: Highlight) => void;
+  onDeleteHighlight: (id: string) => void;
   onSelectHighlight: (id: string) => void;
   onOpenLink: (url: string, newTab: boolean) => void;
   onRefresh: () => void;
@@ -207,6 +210,8 @@ export function SourcePane(p: Props) {
     });
   };
   const draw = {
+    onUpdateHighlight: p.onUpdateHighlight,
+    onDeleteHighlight: p.onDeleteHighlight,
     tool: p.presenting || !canDraw ? null : tool,
     drawColor,
     showNotes: notes && !p.presenting,

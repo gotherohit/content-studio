@@ -233,6 +233,20 @@ wait. The AI request aborts when the pane closes. Assume a recording is in progr
   highlights: cards, comments, colours, links, the map, beats and Copy as markdown all work
   with no new plumbing. Everything that lays marks over text must therefore filter the list
   through `textHighlights()`, or `applyHighlights` would try to mark a shape's anchor quote.
+- **The element being dragged must keep its identity.** Moving a drawing is a pointer capture
+  on the shape; rendering the drag as a *different* element (a preview with another key) takes
+  the captured node out of the document and the drag dies on the first move. The same element
+  is re-rendered with the pulled geometry instead — resizing worked and moving did not, which
+  is exactly this difference: the handles kept their keys.
+- **What a drawing is anchored to must be what `hostFor` will find.** `anchorForRect` settles
+  its choice by asking `hostFor` for the quote it just took: a container's first words belong
+  to its first paragraph, so the two disagreed and the drawing was kept against one box and
+  drawn against another.
+- **A drawing that barely sits on a block belongs to the source.** Below 30 per cent overlap the
+  anchor is the root with an empty quote; otherwise a drawing dragged into the white space is
+  kept as fractions of a paragraph it no longer touches and the spill clamp squashes it.
+- **Keys pressed inside the framed article never reach the app.** `inject.js` forwards
+  Delete as `shapeDelete` when a drawing is chosen, the way it forwards presentation keys.
 - **A drawing belongs to what it covers, not to where the drag began.** `anchorForRect` picks
   the element with the largest overlap with the drag rectangle, preferring a picture inside a
   figure. Anchoring to the element under the starting point bound a box drawn *around* a

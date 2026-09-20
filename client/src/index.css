@@ -588,6 +588,13 @@ mark.hl:hover { filter: brightness(0.94); }
 .shape { fill: none; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; pointer-events: stroke; cursor: pointer; }
 .shape.drawing { stroke-dasharray: 5 4; opacity: 0.85; pointer-events: none; }
 .shape.selected { stroke-width: 4.5; }
+/* The grips on a chosen drawing: its corners, or the two ends of an arrow. */
+.shape-handle { fill: var(--panel); stroke: currentColor; stroke-width: 2; pointer-events: all; }
+.shape-handle.hl-yellow { color: var(--hl-yellow-bar); }
+.shape-handle.hl-green { color: var(--hl-green-bar); }
+.shape-handle.hl-pink { color: var(--hl-pink-bar); }
+.shape-handle.hl-blue { color: var(--hl-blue-bar); }
+.shape-handle:hover { fill: var(--panel-2); }
 .shape.hl-yellow { stroke: var(--hl-yellow-bar); }
 .shape.hl-green { stroke: var(--hl-green-bar); }
 .shape.hl-pink { stroke: var(--hl-pink-bar); }

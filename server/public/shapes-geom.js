@@ -7,11 +7,12 @@
 export const MIN_DRAG = 5;
 
 /**
-   * How far outside its host a shape may reach. Drawing a box *around* a paragraph starts in
-   * the margin and ends past its other corner; clamping that to the paragraph's own box was
-   * the drawing snapping to a place nobody asked for.
+   * How far outside its host a shape may reach, as a multiple of it. Drawing a box *around* a
+   * paragraph starts in the margin and ends past its other corner, and a drawing dragged a
+   * little clear of its paragraph must not be squashed back onto it; clamping tightly was the
+   * drawing snapping to a place nobody asked for.
    */
-const SPILL = 0.5;
+const SPILL = 1;
 const clamp = (v) => Math.min(1 + SPILL, Math.max(-SPILL, v));
 
 /**

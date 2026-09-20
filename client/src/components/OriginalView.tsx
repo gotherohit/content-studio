@@ -10,6 +10,8 @@ interface Props {
   apiPort: number;
   scripts: boolean;
   onAddHighlight: (h: Highlight) => void;
+  onUpdateHighlight?: (h: Highlight) => void;
+  onDeleteHighlight?: (id: string) => void;
   onSelectHighlight: (id: string) => void;
   onOpenLink: (url: string, newTab: boolean) => void;
   /** Another page of the source's site to show instead of the source's own page. */
@@ -41,7 +43,7 @@ export function proxiedUrl(url: string, apiPort: number, scripts: boolean): stri
 }
 
 /** The page exactly as the site serves it, running its own scripts, with highlights layered on top. */
-export function OriginalView({ source, apiPort, scripts, onAddHighlight, onSelectHighlight, onOpenLink, page, onPage, scrollToId, scrollNonce, position, restoreNonce, onPosition, presenting, onPresentationKey, tool, drawColor, showNotes, linkedIds, onNote }: Props) {
+export function OriginalView({ source, apiPort, scripts, onAddHighlight, onUpdateHighlight, onDeleteHighlight, onSelectHighlight, onOpenLink, page, onPage, scrollToId, scrollNonce, position, restoreNonce, onPosition, presenting, onPresentationKey, tool, drawColor, showNotes, linkedIds, onNote }: Props) {
   const frame = useRef<HTMLIFrameElement>(null);
   const [ready, setReady] = useState(false);
   const [restoredNonce, setRestoredNonce] = useState<number | null>(null);
@@ -51,8 +53,8 @@ export function OriginalView({ source, apiPort, scripts, onAddHighlight, onSelec
   // page. Deriving it from `target` would reload a page the frame has just arrived at.
   const [frameUrl, setFrameUrl] = useState(target);
   const shown = useRef(target);
-  const latest = useRef({ position, restoreNonce, onPosition, presenting, onPresentationKey, target, onPage, tool, drawColor, showNotes, onNote });
-  latest.current = { position, restoreNonce, onPosition, presenting, onPresentationKey, target, onPage, tool, drawColor, showNotes, onNote };
+  const latest = useRef({ position, restoreNonce, onPosition, presenting, onPresentationKey, target, onPage, tool, drawColor, showNotes, onNote, scrollToId, onDeleteHighlight });
+  latest.current = { position, restoreNonce, onPosition, presenting, onPresentationKey, target, onPage, tool, drawColor, showNotes, onNote, scrollToId, onDeleteHighlight };
   const [popup, setPopup] = useState<{ x: number; y: number; flip: boolean; anchor: Anchor; shape?: Shape; onImage?: string } | null>(null);
   const src = proxiedUrl(frameUrl, apiPort, scripts);
 
@@ -72,6 +74,7 @@ export function OriginalView({ source, apiPort, scripts, onAddHighlight, onSelec
         post({ type: "presentation", enabled: latest.current.presenting });
         post({ type: "notes", show: latest.current.showNotes !== false && !latest.current.presenting });
         post({ type: "draw", tool: latest.current.tool ?? null, color: latest.current.drawColor });
+        post({ type: "selected", id: latest.current.scrollToId });
       }
       if (m.type === "navigated" && m.url) arrived(m.url);
       if (m.type === "position" && m.nonce === latest.current.restoreNonce && m.position && Number.isFinite(m.position.y) && Number.isFinite(m.position.x)) latest.current.onPosition(m.position, m.url ?? shown.current);
@@ -96,6 +99,12 @@ export function OriginalView({ source, apiPort, scripts, onAddHighlight, onSelec
       }
       if (m.type === "scroll") setPopup(null);
       if (m.type === "hlclick") onSelectHighlight(m.id);
+      if (m.type === "shapeDelete" && m.id && source.highlights.some((h) => h.id === m.id && h.shape)) latest.current.onDeleteHighlight?.(m.id);
+      if (m.type === "shapeEdited" && m.shape) {
+        const was = source.highlights.find((h) => h.id === m.id);
+        // Moved onto other text, it belongs to that text now.
+        if (was) onUpdateHighlight?.({ ...was, ...(m.anchor ?? { text: "", prefix: "", suffix: "" }), shape: m.shape, onImage: m.onImage });
+      }
       if (m.type === "noteClick") {
         const host = frame.current!.getBoundingClientRect();
         latest.current.onNote?.(m.id, { x: host.left + m.at.x, y: host.top + m.at.y });
@@ -111,6 +120,8 @@ export function OriginalView({ source, apiPort, scripts, onAddHighlight, onSelec
 
   useEffect(() => { if (ready) post({ type: "highlights", list: forFrame() }); }, [source.highlights, linkedIds, ready]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (ready && scrollToId) post({ type: "scrollTo", id: scrollToId }); }, [scrollToId, scrollNonce, ready]); // eslint-disable-line react-hooks/exhaustive-deps
+  // The frame puts the grips on whichever drawing the app says is chosen.
+  useEffect(() => { if (ready) post({ type: "selected", id: scrollToId }); }, [scrollToId, ready]); // eslint-disable-line react-hooks/exhaustive-deps
   /** Where the frame really is; a redirect or the site's own routing can differ from what was asked. */
   function arrived(url: string) {
     shown.current = url;

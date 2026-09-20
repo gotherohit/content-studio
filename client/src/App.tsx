@@ -130,6 +130,8 @@ export default function App() {
   const [linkFrom, setLinkFrom] = useState<LinkEnd | null>(null);
   /** A link waiting for its other end to be chosen in the source it points at. */
   const [pendingLink, setPendingLink] = useState<{ from: LinkEnd; targetSourceId: string; relation: Relation; note: string } | null>(null);
+  /** Declared below, and needed by the key handler above it. */
+  const deleteHighlightRef = useRef<(sourceId: string, id: string) => void>(() => {});
   const [showMap, setShowMap] = useState(false);
   /** A short confirmation that a capture happened, or a warning about what it could not record. */
   const [notice, setNotice] = useState<{ text: string; kind: "ok" | "warn" | "fail" } | null>(null);
@@ -281,6 +283,16 @@ export default function App() {
         if (e.key === "b") { setCollapsed((v) => !v); e.preventDefault(); }
       }
       if (e.key === "Escape" && pendingLink) { setPendingLink(null); e.preventDefault(); return; }
+      // Delete takes away the drawing in hand. A quoted passage keeps to its card's bin: it is
+      // easy to have one selected without meaning to, and there is no undo for either.
+      if ((e.key === "Delete" || e.key === "Backspace") && selectedHl && !typing && !present) {
+        const chosen = source?.highlights.find((h) => h.id === selectedHl);
+        if (chosen?.shape && source) {
+          deleteHighlightRef.current(source.id, chosen.id);
+          e.preventDefault();
+          return;
+        }
+      }
       if (e.key === "Escape" && present && !document.fullscreenElement) setPresent(false);
       // While presenting, one key is the whole interface: the next beat.
       if (present && !typing && !e.ctrlKey && !e.metaKey && !e.altKey) {
@@ -289,7 +301,9 @@ export default function App() {
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [present, beats.length, beatIndex, pendingLink]);
+    // selectedHl and source are read above, so the handler must be attached again when they
+    // change: one kept from an earlier render deletes nothing, or the wrong thing.
+  }, [present, beats.length, beatIndex, pendingLink, selectedHl, source]);
 
   // ---- actions
   async function newProject(title: string, dir: string) {
@@ -413,6 +427,21 @@ export default function App() {
     setSelectedHl(h.id);
     finishPending(sourceId, h.id);
   }, [updateSource]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /** Taking a highlight away, with the links that pointed at it tidied in the same change. */
+  const deleteHighlight = useCallback((sourceId: string, id: string) => {
+    mutate((p) => {
+      const sources = p.sources.map((s) => (s.id === sourceId ? { ...s, highlights: s.highlights.filter((x) => x.id !== id) } : s));
+      return { ...p, sources, links: pruneLinks(p.links ?? [], sources) };
+    });
+  }, [mutate]);
+
+  deleteHighlightRef.current = deleteHighlight;
+
+  /** A highlight edited in place: recoloured, commented, or a drawing moved or resized. */
+  const updateHighlight = useCallback((sourceId: string, h: Highlight) => {
+    updateSource(sourceId, (s) => ({ ...s, highlights: s.highlights.map((x) => (x.id === h.id ? h : x)) }));
+  }, [updateSource]);
 
   /** Called from a page or file view: show the matching card. */
   const selectFromPage = useCallback((sourceId: string, id: string) => {
@@ -820,6 +849,8 @@ export default function App() {
             onMode={(mode) => setLayout((l) => ({ ...l, panes: l.panes.map((x, j) => j === i ? { ...x, mode } : x) }))}
             onToggleScripts={() => paneSource && updateSource(paneSource.id, (s) => ({ ...s, scripts: s.scripts === false }))}
             onAddHighlight={(h) => paneSource && addHighlight(paneSource.id, h)}
+            onUpdateHighlight={(h) => paneSource && updateHighlight(paneSource.id, h)}
+            onDeleteHighlight={(id) => paneSource && deleteHighlight(paneSource.id, id)}
             onSelectHighlight={(id) => paneSource && selectFromPage(paneSource.id, id)}
             onOpenLink={(link, newTab) => openLink(link, newTab, paneSource?.id)}
             onSaveAsSource={(link) => paneSource && savePageAsSource(link, paneSource.id, i)}
@@ -853,11 +884,8 @@ export default function App() {
             links={project.links ?? []}
             selectedId={selectedHl}
             onSelect={selectFromCard}
-            onUpdate={(h) => source && updateSource(source.id, (s) => ({ ...s, highlights: s.highlights.map((x) => (x.id === h.id ? h : x)) }))}
-            onDelete={(id) => source && mutate((p) => {
-              const sources = p.sources.map((s) => (s.id === source.id ? { ...s, highlights: s.highlights.filter((x) => x.id !== id) } : s));
-              return { ...p, sources, links: pruneLinks(p.links ?? [], sources) };
-            })}
+            onUpdate={(h) => source && updateHighlight(source.id, h)}
+            onDelete={(id) => source && deleteHighlight(source.id, id)}
             onCopyAll={copyHighlights}
             onLink={setLinkFrom}
             onRemoveLink={removeLink}

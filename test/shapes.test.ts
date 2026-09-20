@@ -28,9 +28,9 @@ test("a shape may spill outside what it is drawn on, but only so far", () => {
   const around = fromDrag("rect", { x: -20, y: -10 }, { x: 220, y: 110 }, size)!;
   const near = (a: number, b: number) => assert.ok(Math.abs(a - b) < 1e-9, `${a} ~ ${b}`);
   near(around.x, -0.1); near(around.y, -0.1); near(around.w, 1.2); near(around.h, 1.2);
-  // A drag from far outside is still pulled back to half a box beyond the edge.
+  // A drag from far outside is still pulled back to one box beyond the edge.
   const wild = fromDrag("rect", { x: -400, y: -300 }, { x: 900, y: 700 }, size)!;
-  assert.deepEqual(wild, { kind: "rect", x: -0.5, y: -0.5, w: 2, h: 2 });
+  assert.deepEqual(wild, { kind: "rect", x: -1, y: -1, w: 3, h: 3 });
 });
 
 test("a shape is put back in pixels, whichever way it was drawn", () => {

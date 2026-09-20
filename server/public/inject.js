@@ -48,6 +48,7 @@
   var drawColour = "yellow";
   var drawLayer = null;
   var placeTimer = null;
+  var selectedId = null;
   var shapeWatcher = null;
 
   function ensureShapeRoot() {
@@ -90,6 +91,7 @@
       node.setAttribute("rx", "3");
     }
     node.style.cssText = "fill:none;stroke:" + colour + ";stroke-width:2.5px;stroke-linecap:round;stroke-linejoin:round;pointer-events:stroke;cursor:pointer";
+    node.addEventListener("pointerdown", function (e) { beginDrag(h, "move", e); });
     node.addEventListener("click", function (e) { e.preventDefault(); e.stopPropagation(); send({ type: "hlclick", id: h.id }); });
     svg.appendChild(node);
     return svg;
@@ -114,7 +116,138 @@
     return dot;
   }
 
+  /**
+   * Moving and resizing a drawing inside the page.
+   *
+   * The same two points as the app: a box is its opposite corners, an arrow its tail and head.
+   * While a drag is running the shape is redrawn against the host it started on; when it ends
+   * the drawing is re-anchored to whatever it now covers, which may be a different paragraph.
+   */
+  var dragging = null;
+
+  function pointsOf(h, rect) {
+    var size = { width: rect.width, height: rect.height };
+    if (h.shape.kind === "arrow") {
+      var line = geomModule.arrowLine(h.shape, size);
+      return { from: { x: rect.left + line.x1, y: rect.top + line.y1 }, to: { x: rect.left + line.x2, y: rect.top + line.y2 } };
+    }
+    var box = geomModule.toBox(h.shape, size);
+    return {
+      from: { x: rect.left + box.left, y: rect.top + box.top },
+      to: { x: rect.left + box.left + box.width, y: rect.top + box.top + box.height },
+    };
+  }
+
+  function pulled(start, grab, origin, now) {
+    var dx = now.x - origin.x, dy = now.y - origin.y;
+    if (grab === "move") return { from: { x: start.from.x + dx, y: start.from.y + dy }, to: { x: start.to.x + dx, y: start.to.y + dy } };
+    if (grab === "from" || grab === "nw") return { from: now, to: start.to };
+    if (grab === "to" || grab === "se") return { from: start.from, to: now };
+    if (grab === "ne") return { from: { x: start.from.x, y: now.y }, to: { x: now.x, y: start.to.y } };
+    return { from: { x: now.x, y: start.from.y }, to: { x: start.to.x, y: now.y } };
+  }
+
+  function beginDrag(h, grab, e) {
+    if (e.button !== 0 || drawTool) return;
+    var host = shapesDomModule.hostFor(document.body, h);
+    if (!host) return;
+    e.preventDefault();
+    e.stopPropagation();
+    send({ type: "hlclick", id: h.id });
+    var rect = host.getBoundingClientRect();
+    var start = pointsOf(h, rect);
+    dragging = { id: h.id, kind: h.shape.kind, grab: grab, origin: { x: e.clientX, y: e.clientY }, start: start, now: start, rect: rect, h: h };
+    if (shapeWatcher) shapeWatcher.disconnect();
+    window.addEventListener("pointermove", onDragMove, true);
+    window.addEventListener("pointerup", onDragEnd, true);
+  }
+
+  function onDragMove(e) {
+    if (!dragging) return;
+    e.preventDefault();
+    dragging.now = pulled(dragging.start, dragging.grab, dragging.origin, { x: e.clientX, y: e.clientY });
+    var rect = dragging.rect;
+    var shape = geomModule.fromDrag(
+      dragging.kind,
+      { x: dragging.now.from.x - rect.left, y: dragging.now.from.y - rect.top },
+      { x: dragging.now.to.x - rect.left, y: dragging.now.to.y - rect.top },
+      rect,
+    );
+    if (shape) drawDragged(Object.assign({}, dragging.h, { shape: shape }), rect);
+  }
+
+  /** The shape as it is being pulled, drawn in place of the saved one. */
+  function drawDragged(h, rect) {
+    var root = ensureShapeRoot();
+    var wrap = root.querySelector('[data-hid="' + h.id + '"]');
+    if (!wrap) return;
+    var size = { width: rect.width, height: rect.height };
+    wrap.textContent = "";
+    wrap.appendChild(shapeSvg(h, size));
+    wrap.appendChild(handlesFor(h, size));
+  }
+
+  function onDragEnd(e) {
+    if (!dragging) return;
+    e.preventDefault();
+    e.stopPropagation();
+    window.removeEventListener("pointermove", onDragMove, true);
+    window.removeEventListener("pointerup", onDragEnd, true);
+    var moved = dragging.now, start = dragging.start, id = dragging.id, kind = dragging.kind;
+    var shifted = Math.abs(moved.from.x - start.from.x) + Math.abs(moved.from.y - start.from.y) +
+      Math.abs(moved.to.x - start.to.x) + Math.abs(moved.to.y - start.to.y);
+    dragging = null;
+    if (shapeWatcher) watchShapes();
+    if (shifted <= 2) { placeShapes(); return; }
+    // Re-anchored to whatever it covers now, exactly as a new drawing would be.
+    var found = shapesDomModule.anchorForRect(document, document.body, {
+      left: Math.min(moved.from.x, moved.to.x), top: Math.min(moved.from.y, moved.to.y),
+      right: Math.max(moved.from.x, moved.to.x), bottom: Math.max(moved.from.y, moved.to.y),
+    });
+    if (!found) { placeShapes(); return; }
+    var box = found.host.getBoundingClientRect();
+    var shape = geomModule.fromDrag(
+      kind,
+      { x: moved.from.x - box.left, y: moved.from.y - box.top },
+      { x: moved.to.x - box.left, y: moved.to.y - box.top },
+      box,
+    );
+    if (!shape) { placeShapes(); return; }
+    send({ type: "shapeEdited", id: id, shape: shape, anchor: found.anchor, onImage: found.onImage });
+  }
+
+  /** The grips on the chosen drawing, in the wrap's own pixels. */
+  function handlesFor(h, size) {
+    var group = document.createElement("div");
+    if (h.id !== selectedId || drawTool) return group;
+    var spots;
+    if (h.shape.kind === "arrow") {
+      var line = geomModule.arrowLine(h.shape, size);
+      spots = [{ grab: "from", x: line.x1, y: line.y1 }, { grab: "to", x: line.x2, y: line.y2 }];
+    } else {
+      var box = geomModule.toBox(h.shape, size);
+      spots = [
+        { grab: "nw", x: box.left, y: box.top },
+        { grab: "ne", x: box.left + box.width, y: box.top },
+        { grab: "sw", x: box.left, y: box.top + box.height },
+        { grab: "se", x: box.left + box.width, y: box.top + box.height },
+      ];
+    }
+    spots.forEach(function (spot) {
+      var dot = document.createElement("div");
+      dot.style.cssText = "position:absolute;left:" + spot.x + "px;top:" + spot.y + "px;transform:translate(-50%,-50%);" +
+        "width:11px;height:11px;border-radius:50%;background:#fff;border:2px solid " + (SHAPE_COLOURS[h.color] || SHAPE_COLOURS.yellow) + ";" +
+        "box-shadow:0 1px 3px rgba(0,0,0,.35);pointer-events:auto;cursor:" +
+        (spot.grab === "ne" || spot.grab === "sw" ? "nesw-resize" : spot.grab === "from" || spot.grab === "to" ? "move" : "nwse-resize") + ";touch-action:none";
+      dot.addEventListener("pointerdown", function (e) { beginDrag(h, spot.grab, e); });
+      group.appendChild(dot);
+    });
+    return group;
+  }
+
   function placeShapes() {
+    // Redrawing under a drag would take the shape out of the hand holding it.
+    if (dragging) return;
     var root = ensureShapeRoot();
     if (shapeWatcher) shapeWatcher.disconnect();
     root.textContent = "";
@@ -127,9 +260,11 @@
       if (!r.width || !r.height) return;
       var size = { width: r.width, height: r.height };
       var wrap = document.createElement("div");
+      wrap.setAttribute("data-hid", h.id);
       wrap.style.cssText = "position:absolute;pointer-events:none;left:" + (r.left + docX) + "px;top:" + (r.top + docY) +
         "px;width:" + r.width + "px;height:" + r.height + "px";
       wrap.appendChild(shapeSvg(h, size));
+      wrap.appendChild(handlesFor(h, size));
       if (showNotes && marked(h)) wrap.appendChild(shapeNote(h, size, geomModule.badgeAt(h.shape, size)));
       root.appendChild(wrap);
     });
@@ -266,7 +401,14 @@
   // Key events do not bubble out of an iframe. Forward only presentation commands.
   window.addEventListener("keydown", function (e) {
     var target = e.target;
-    if (!presenting || e.ctrlKey || e.metaKey || e.altKey || target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
+    if (e.ctrlKey || e.metaKey || e.altKey || target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
+    // Delete belongs to the drawing in hand, and the app cannot hear a key pressed in here.
+    if (selectedId && !presenting && (e.key === "Delete" || e.key === "Backspace")) {
+      e.preventDefault();
+      send({ type: "shapeDelete", id: selectedId });
+      return;
+    }
+    if (!presenting) return;
     if (["ArrowRight", "ArrowLeft", "PageDown", "PageUp", " ", "Home", "End", "Escape", "h"].indexOf(e.key) < 0) return;
     e.preventDefault(); e.stopImmediatePropagation();
     send({ type: "presentationKey", key: e.key });
@@ -299,6 +441,7 @@
       setTimeout(function () { applyHighlights(currentList); placeShapes(); }, delay);
     }
     if (m.type === "notes") { showNotes = m.show !== false; schedulePlace(); }
+    if (m.type === "selected") { selectedId = m.id || null; schedulePlace(); }
     if (m.type === "draw") setDraw(m.tool, m.color);
     if (m.type === "scrollTo") {
       userScrolled = true;

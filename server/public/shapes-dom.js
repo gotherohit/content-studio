@@ -112,15 +112,26 @@ export function anchorForRect(doc, root, rect) {
     const picture = best.querySelector ? best.querySelector("img") : null;
     if (picture && overlap(rect, picture.getBoundingClientRect()) > most * 0.8) best = picture;
   }
-  if (!best) best = nearestBlock(root, (rect.left + rect.right) / 2, (rect.top + rect.bottom) / 2);
+  // Nothing under it: the nearest line of prose, but only if it is close.
+  if (!best) best = nearestBlock(root, (rect.left + rect.right) / 2, (rect.top + rect.bottom) / 2, 60);
   if (!best) return { host: root, onImage: undefined, anchor: EMPTY };
+  // A drawing that barely sits on that block is not about it — one dragged into the white
+  // space beside a paragraph, say. Kept as fractions of the paragraph it would be squeezed
+  // back towards it, so it belongs to the source as a whole instead.
+  const area = Math.max(1, (rect.right - rect.left) * (rect.bottom - rect.top));
+  if (overlap(rect, best.getBoundingClientRect()) / area < 0.3) {
+    return { host: root, onImage: undefined, anchor: EMPTY };
+  }
   if (best.tagName === "IMG") {
     return { host: best, onImage: best.currentSrc || best.getAttribute("src") || "", anchor: EMPTY };
   }
   const quote = blockAnchor(root, best);
-  return quote && quote.text.trim()
-    ? { host: best, onImage: undefined, anchor: quote }
-    : { host: root, onImage: undefined, anchor: EMPTY };
+  if (!quote || !quote.text.trim()) return { host: root, onImage: undefined, anchor: EMPTY };
+  // The element the quote will be found on later, which is not always the one with the most
+  // overlap: a container's first words belong to its first paragraph. Keeping the drawing
+  // against anything else means it is drawn against a different box than it was measured in.
+  const settled = hostFor(root, quote) || best;
+  return { host: settled, onImage: undefined, anchor: quote };
 }
 
 /** What a shape drawn at this point should be anchored to: a picture, or a block of prose. */
@@ -149,9 +160,13 @@ export function hostFor(root, h) {
   if (!h.text) return h.onImage ? null : root;
   const range = findRange(root, h);
   if (!range) return null;
-  const node = range.commonAncestorContainer;
+  // Where the quote *starts*, not what contains all of it: a quote that runs a few characters
+  // past the end of its paragraph has the whole article as its common ancestor, and a drawing
+  // kept as fractions of that is nowhere near the paragraph it was drawn on.
+  const node = range.startContainer;
   const el = node.nodeType === 3 ? node.parentElement : node;
-  return (el && el.closest(BLOCK)) || el;
+  if (!el) return null;
+  return el.closest(LEAF) || el.closest(BLOCK) || el;
 }
 
 /** Where an element sits inside the box that draws over it, in pixels. */

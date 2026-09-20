@@ -2,6 +2,18 @@
 
 What changed in each release, newest first. Versions are the ones the app updates itself to.
 
+## 0.21.0
+
+- **Drawings can be moved and resized.** Click one and grips appear — at its corners, or at
+  both ends of an arrow. Drag the outline to move it, a grip to resize it. `Delete` removes the
+  one you are holding; a quoted passage still keeps to the bin on its card.
+- It works everywhere drawings do: PDF pages, pictures, articles in Reader, and inside a live
+  page in Original view.
+- **A moved drawing re-anchors itself.** Dragged onto a different paragraph it belongs to that
+  paragraph from then on, and follows it when the pane changes width; dragged into the white
+  space of a page it belongs to the page itself rather than being squeezed back towards the
+  nearest line.
+
 ## 0.20.2
 
 - **A drawing stays where you drew it.** It was anchored to whatever the drag *started* on, so

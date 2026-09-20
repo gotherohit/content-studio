@@ -85,3 +85,24 @@ test('a drawing over a picture is anchored to the picture', t => {
   assert.equal(found.host, img);
   assert.equal(found.onImage, 'https://example.com/chart.png');
 });
+
+test('a quote that runs past its paragraph still belongs to that paragraph', t => {
+  const doc = page(t);
+  // The body reads "…single one.RLHF rewards…", so this quote crosses from one block to the
+  // next and the two of them have only the article in common.
+  const across = { text: 'single one. RLHF rewards', prefix: '', suffix: '' };
+  const host = hostFor(doc.body, across);
+  assert.equal(host.id, 'one');
+  assert.notEqual(host.tagName, 'ARTICLE');
+});
+
+test('a drawing dragged clear of the prose belongs to the source, not to the nearest line', t => {
+  const doc = page(t);
+  // Thirty pixels under the last paragraph: close enough to find, too far to be about it.
+  const found = anchorForRect(doc, doc.body, { left: 120, top: 370, right: 480, bottom: 420 });
+  assert.equal(found.host, doc.body);
+  assert.equal(found.anchor.text, '');
+  // A box drawn around a paragraph still belongs to that paragraph.
+  const around = anchorForRect(doc, doc.body, { left: 90, top: 190, right: 510, bottom: 250 });
+  assert.equal(around.host.id, 'two');
+});

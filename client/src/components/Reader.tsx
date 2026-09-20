@@ -12,6 +12,7 @@ interface Props {
   scrollToId: string | null;
   scrollNonce: number;
   onAddHighlight: (h: Highlight) => void;
+  onUpdateHighlight?: (h: Highlight) => void;
   onSelectHighlight: (id: string) => void;
   fontScale: number;
   tool?: ShapeKind | null;
@@ -22,7 +23,7 @@ interface Props {
 }
 
 /** Clean, text-only rendering of the article. */
-export function Reader({ source, scrollToId, scrollNonce, onAddHighlight, onSelectHighlight, fontScale, tool, drawColor, showNotes, linkedIds, onNote }: Props) {
+export function Reader({ source, scrollToId, scrollNonce, onAddHighlight, onUpdateHighlight, onSelectHighlight, fontScale, tool, drawColor, showNotes, linkedIds, onNote }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   // The layer covers the stage, so every box it is given is measured against the stage too.
   const stageRef = useRef<HTMLDivElement>(null);
@@ -114,6 +115,23 @@ export function Reader({ source, scrollToId, scrollNonce, onAddHighlight, onSele
     };
   }
 
+  /** A drag in the layer's pixels becomes a shape on whatever it covers. */
+  function shapeFrom(drag: { from: { x: number; y: number }; to: { x: number; y: number } }, kind?: ShapeKind | null) {
+    const el = ref.current, stage = stageRef.current;
+    if (!el || !stage || !kind) return null;
+    const at = stage.getBoundingClientRect();
+    const found = anchorForRect(el.ownerDocument, el, {
+      left: at.left + Math.min(drag.from.x, drag.to.x),
+      top: at.top + Math.min(drag.from.y, drag.to.y),
+      right: at.left + Math.max(drag.from.x, drag.to.x),
+      bottom: at.top + Math.max(drag.from.y, drag.to.y),
+    });
+    if (!found) return null;
+    const box = boxWithin(stage, found.host);
+    const shape = fromDrag(kind, { x: drag.from.x - box.left, y: drag.from.y - box.top }, { x: drag.to.x - box.left, y: drag.to.y - box.top }, box);
+    return shape ? { shape, anchor: found.anchor, onImage: found.onImage } : null;
+  }
+
   function commit(color: HighlightColor, comment: string) {
     if (!popup) return;
     onAddHighlight({
@@ -150,21 +168,18 @@ export function Reader({ source, scrollToId, scrollNonce, onAddHighlight, onSele
           onSelect={onSelectHighlight}
           onNote={onNote}
           onDraw={(drag) => {
-            const el = ref.current, stage = stageRef.current;
-            if (!el || !stage || !tool) return;
-            const at = stage.getBoundingClientRect();
-            const found = anchorForRect(el.ownerDocument, el, {
-              left: at.left + Math.min(drag.from.x, drag.to.x),
-              top: at.top + Math.min(drag.from.y, drag.to.y),
-              right: at.left + Math.max(drag.from.x, drag.to.x),
-              bottom: at.top + Math.max(drag.from.y, drag.to.y),
-            });
-            if (!found) return;
-            const box = boxWithin(stage, found.host);
-            const shape = fromDrag(tool, { x: drag.from.x - box.left, y: drag.from.y - box.top }, { x: drag.to.x - box.left, y: drag.to.y - box.top }, box);
-            if (!shape) return;
-            const bottom = at.top + Math.max(drag.from.y, drag.to.y) + 6;
-            setPopup(popupAt(at.left + (drag.from.x + drag.to.x) / 2, bottom, bottom, { anchor: found.anchor, shape, onImage: found.onImage }));
+            const made = shapeFrom(drag, tool);
+            if (!made) return;
+            const stage = stageRef.current!.getBoundingClientRect();
+            const bottom = stage.top + Math.max(drag.from.y, drag.to.y) + 6;
+            setPopup(popupAt(stage.left + (drag.from.x + drag.to.x) / 2, bottom, bottom, made));
+          }}
+          onEdit={(id, drag) => {
+            const was = source.highlights.find((h) => h.id === id);
+            const made = was?.shape && shapeFrom(drag, was.shape.kind);
+            if (!was || !made) return;
+            // Dragged over a different paragraph, it belongs to that one now.
+            onUpdateHighlight?.({ ...was, ...made.anchor, shape: made.shape, onImage: made.onImage });
           }}
         />
       </div>

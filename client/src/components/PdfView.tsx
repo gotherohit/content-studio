@@ -35,6 +35,7 @@ interface Props {
   /** A deck rendered to PDF has no highlights of its own, so these are optional. */
   highlights?: Highlight[];
   onAddHighlight?: (h: Highlight) => void;
+  onUpdateHighlight?: (h: Highlight) => void;
   onSelectHighlight?: (id: string) => void;
   scrollToId?: string | null;
   scrollNonce?: number;
@@ -380,6 +381,11 @@ export function PdfView(p: Props) {
               showNotes={p.showNotes !== false && !p.presenting}
               onSelect={(id) => p.onSelectHighlight?.(id)}
               onNote={p.onNote}
+              onEdit={(id, drag) => {
+                const was = highlights.find((h) => h.id === id);
+                const shape = was?.shape && fromDrag(was.shape.kind, drag.from, drag.to, { width: layout.widths[i], height: layout.heights[i] });
+                if (was && shape) p.onUpdateHighlight?.({ ...was, shape });
+              }}
               onDraw={(drag) => {
                 const shape = fromDrag(p.tool!, drag.from, drag.to, { width: layout.widths[i], height: layout.heights[i] });
                 if (!shape) return;

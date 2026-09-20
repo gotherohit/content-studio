@@ -241,6 +241,12 @@ Some things are easier pointed at than quoted. The pencil in the Source toolbar 
   quote. Click it and the note opens on the source itself: the comment, and every link, each
   one clickable to jump to the other end. The pencil menu hides all the markers, and Present
   mode hides them for you while leaving the drawings on screen.
+* **Move and resize it afterwards.** Click a drawing to pick it up: grips appear at its
+  corners, or at both ends of an arrow. Drag the outline to move the whole thing, drag a grip
+  to resize it. Dragged onto a different paragraph it belongs to that paragraph from then on;
+  dragged into the white space of a page it belongs to the page itself.
+* **`Delete` removes the drawing you are holding.** A quoted passage keeps to the bin on its
+  card — it is too easy to have one selected by accident, and neither can be undone.
 * To remove one, delete its card in Highlights.
 
 Drawing works on articles (Original and Reader), PDFs and images. Markdown, notebooks, tables
@@ -583,6 +589,7 @@ A key that cannot be decrypted is **kept, not discarded** — the provider simpl
 | `h` | Hide or show the beat strip |
 | `→` `←` `Space` | Navigate slides and PDF pages, when not presenting |
 | `Esc` | Put the drawing tool down |
+| `Delete` | Remove the drawing you have picked up |
 | `Home` / `End` | First / last page of a PDF, when not presenting |
 | `Ctrl` + scroll | Zoom a PDF |
 | `Ctrl+Enter` | Run the current code snippet |

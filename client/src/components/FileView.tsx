@@ -24,6 +24,7 @@ interface Props {
   scrollToId: string | null;
   scrollNonce: number;
   onAddHighlight: (h: Highlight) => void;
+  onUpdateHighlight?: (h: Highlight) => void;
   onSelectHighlight: (id: string) => void;
   presenting: boolean;
   tool?: ShapeKind | null;
@@ -169,6 +170,7 @@ export function FileView(p: Props) {
         showNotes={p.showNotes}
         linkedIds={p.linkedIds}
         onNote={p.onNote}
+        onUpdateHighlight={p.onUpdateHighlight}
       />
     );
   }
@@ -186,6 +188,12 @@ export function FileView(p: Props) {
             showNotes={p.showNotes !== false && !p.presenting}
             onSelect={p.onSelectHighlight}
             onNote={p.onNote}
+            onEdit={(id, drag) => {
+              const frame = imageFrame.current;
+              const was = source.highlights.find((h) => h.id === id);
+              const shape = frame && was?.shape && fromDrag(was.shape.kind, drag.from, drag.to, frame.getBoundingClientRect());
+              if (was && shape) p.onUpdateHighlight?.({ ...was, shape });
+            }}
             onDraw={(drag) => {
               const frame = imageFrame.current;
               if (!frame || !p.tool) return;
