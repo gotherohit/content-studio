@@ -245,6 +245,18 @@ wait. The AI request aborts when the pane closes. Assume a recording is in progr
 - **A drawing that barely sits on a block belongs to the source.** Below 30 per cent overlap the
   anchor is the root with an empty quote; otherwise a drawing dragged into the white space is
   kept as fractions of a paragraph it no longer touches and the spill clamp squashes it.
+- **Every scroll in a page reaches a capture listener, not just the page's own.** A scroll
+  event does not bubble, so everything listens in the capture phase — and a carousel, a sticky
+  column, a lazy image or an advert scrolling then looks exactly like the article moving. The
+  note box was closed on that message, so on a real site it vanished mid-word and took the
+  comment with it. `server/public/scrolls.js` decides: the target must be the page itself *and*
+  the offset must really have changed.
+- **A note in progress is the person's, not the page's.** Once anything has been typed into the
+  highlight box, nothing the framed page does closes it — not a scroll, not a stray mouseup.
+  Only committing it, `Esc`, the close button, or moving to another source does. The box also
+  focuses itself in a layout effect and asks again on the next frame rather than using
+  `autoFocus`: a live page can take the focus back as it settles, and the first word typed
+  would go to the article.
 - **Keys pressed inside the framed article never reach the app.** `inject.js` forwards
   Delete as `shapeDelete` when a drawing is chosen, the way it forwards presentation keys.
 - **A drawing belongs to what it covers, not to where the drag began.** `anchorForRect` picks

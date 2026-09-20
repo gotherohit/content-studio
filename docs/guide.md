@@ -124,8 +124,12 @@ whitespace changes are tolerated, but a passage rewritten or removed by the publ
 no longer match even though its saved quote remains in Highlights.
 
 **Highlighting.** Select text in an article; a small bar offers four colours and a comment box.
-The highlight appears as a card in the **Highlights** pane — click a card to scroll the article
-to it, or click the highlight in the article to find its card.
+The box takes the typing straight away — start writing, then press `Enter` for a yellow
+highlight or click the colour you want. Once you have typed something the card stays until you
+finish or press `Esc`, even if the page carries on scrolling underneath. The highlight appears
+as a card in the **Highlights** pane — click a card to scroll the article to it, or click the
+highlight in the article to find its card. A comment can also be written or changed later in
+the card's own box.
 
 **Links in a web page.** A link to another page of the *same site* — a docs sidebar, a
 "next page" link — opens in the same pane, like a browser, without creating a source. The
@@ -223,7 +227,8 @@ Some things are easier pointed at than quoted. The pencil in the Source toolbar 
 **rectangle**, an **oval** or an **arrow** straight onto the source.
 
 * Choose a shape and a colour from the pencil menu, then drag on the source. Let go and the
-  usual note box appears, so the drawing can carry a comment like any highlight.
+  usual note box appears, ready for typing, so the drawing can carry a comment like any
+  highlight.
 * **Draw around what you mean.** A drawing belongs to whatever it mostly covers — the paragraph,
   the picture, the page — and may reach a little outside it, so a box drawn around a paragraph
   starting in the gap above it is a box around that paragraph, and stays one when the pane

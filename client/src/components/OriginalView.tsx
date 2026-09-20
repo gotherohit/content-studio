@@ -56,6 +56,12 @@ export function OriginalView({ source, apiPort, scripts, onAddHighlight, onUpdat
   const latest = useRef({ position, restoreNonce, onPosition, presenting, onPresentationKey, target, onPage, tool, drawColor, showNotes, onNote, scrollToId, onDeleteHighlight });
   latest.current = { position, restoreNonce, onPosition, presenting, onPresentationKey, target, onPage, tool, drawColor, showNotes, onNote, scrollToId, onDeleteHighlight };
   const [popup, setPopup] = useState<{ x: number; y: number; flip: boolean; anchor: Anchor; shape?: Shape; onImage?: string } | null>(null);
+  // Once something has been typed into the note, only the person may close the card: the page
+  // carries on scrolling, loading and firing events underneath, and a comment thrown away
+  // mid-sentence is indistinguishable from the feature not working.
+  const noteTyped = useRef(false);
+  const show = (p: typeof popup) => { noteTyped.current = false; setPopup(p); };
+  const dismiss = () => { if (!noteTyped.current) show(null); };
   const src = proxiedUrl(frameUrl, apiPort, scripts);
 
   const post = (msg: Record<string, unknown>) => frame.current?.contentWindow?.postMessage({ src: "rs-app", ...msg }, "*");
@@ -82,22 +88,22 @@ export function OriginalView({ source, apiPort, scripts, onAddHighlight, onUpdat
       if (m.type === "positionRestored" && m.nonce === latest.current.restoreNonce && (!m.url || samePage(m.url, latest.current.target))) { setRestoredNonce(m.nonce); setPositionError(false); }
       if (m.type === "presentationKey" && latest.current.presenting && ["ArrowRight", "ArrowLeft", "PageDown", "PageUp", " ", "Home", "End", "Escape", "h"].includes(m.key)) latest.current.onPresentationKey(m.key);
       if (m.type === "selection") {
-        if (!m.anchor) { setPopup(null); return; }
+        if (!m.anchor) { dismiss(); return; }
         const host = frame.current!.getBoundingClientRect();
         const r = m.rect;
         const flip = r.top < 120;
-        setPopup({ x: Math.min(Math.max(r.left + r.width / 2, 170), host.width - 170), y: flip ? r.bottom + 8 : r.top - 8, flip, anchor: m.anchor });
+        show({ x: Math.min(Math.max(r.left + r.width / 2, 170), host.width - 170), y: flip ? r.bottom + 8 : r.top - 8, flip, anchor: m.anchor });
       }
       if (m.type === "shapeDrawn" && m.shape) {
         const host = frame.current!.getBoundingClientRect();
         const r = m.rect;
-        setPopup({
+        show({
           x: Math.min(Math.max(r.left + r.width / 2, 170), host.width - 170),
           y: r.bottom + 10, flip: true, anchor: m.anchor ?? { text: "", prefix: "", suffix: "" },
           shape: m.shape, onImage: m.onImage,
         });
       }
-      if (m.type === "scroll") setPopup(null);
+      if (m.type === "scroll") dismiss();
       if (m.type === "hlclick") onSelectHighlight(m.id);
       if (m.type === "shapeDelete" && m.id && source.highlights.some((h) => h.id === m.id && h.shape)) latest.current.onDeleteHighlight?.(m.id);
       if (m.type === "shapeEdited" && m.shape) {
@@ -135,13 +141,13 @@ export function OriginalView({ source, apiPort, scripts, onAddHighlight, onUpdat
     if (frameUrl === target && frame.current) frame.current.src = proxiedUrl(target, apiPort, scripts);
     else setFrameUrl(target);
     setReady(false);
-    setPopup(null);
+    show(null);
   }, [target]);
   useLayoutEffect(() => { if (ready && samePage(shown.current, target)) post({ type: "restorePosition", position, nonce: restoreNonce, page: target }); }, [restoreNonce, ready]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (ready) post({ type: "presentation", enabled: presenting }); }, [presenting, ready]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (ready) post({ type: "draw", tool: tool ?? null, color: drawColor }); }, [tool, drawColor, ready]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (ready) post({ type: "notes", show: showNotes !== false && !presenting }); }, [showNotes, presenting, ready]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { setReady(false); setPopup(null); }, [source.id, scripts]);
+  useEffect(() => { setReady(false); show(null); }, [source.id, scripts]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!position || restoredNonce === restoreNonce) return;
     setPositionError(false);
@@ -159,7 +165,7 @@ export function OriginalView({ source, apiPort, scripts, onAddHighlight, onUpdat
       color, comment, createdAt: new Date().toISOString(),
     });
     post({ type: "clearSelection" });
-    setPopup(null);
+    show(null);
   }
 
   return (
@@ -174,7 +180,7 @@ export function OriginalView({ source, apiPort, scripts, onAddHighlight, onUpdat
         title={source.title}
         sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals"
       />
-      {popup && <HighlightPopup x={popup.x} y={popup.y} flip={popup.flip} onCommit={commit} onCancel={() => setPopup(null)} />}
+      {popup && <HighlightPopup x={popup.x} y={popup.y} flip={popup.flip} onCommit={commit} onCancel={() => show(null)} onType={() => (noteTyped.current = true)} />}
     </div>
   );
 }

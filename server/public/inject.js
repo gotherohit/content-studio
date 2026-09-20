@@ -6,6 +6,7 @@
   var pagesModule = await import(new URL("./pages.js", scriptUrl).href);
   var geomModule = await import(new URL("./shapes-geom.js", scriptUrl).href);
   var shapesDomModule = await import(new URL("./shapes-dom.js", scriptUrl).href);
+  var scrollsModule = await import(new URL("./scrolls.js", scriptUrl).href);
   var parentWin = window.parent;
   var send = function (msg) { parentWin.postMessage(Object.assign({ src: "rs-frame" }, msg), "*"); };
   var pageUrl = location.href;
@@ -369,7 +370,8 @@
         rect: { left: r.left, top: r.top, width: r.width, height: r.height, bottom: r.bottom } });
     }, 0);
   });
-  document.addEventListener("scroll", function () { send({ type: "scroll" }); }, true);
+  var pageMoved = scrollsModule.pageScrolls(window);
+  document.addEventListener("scroll", function (e) { if (pageMoved(e.target)) send({ type: "scroll" }); }, true);
 
   // ---- clicks: highlights and links
   document.addEventListener("click", function (e) {

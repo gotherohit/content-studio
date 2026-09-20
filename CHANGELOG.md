@@ -2,6 +2,17 @@
 
 What changed in each release, newest first. Versions are the ones the app updates itself to.
 
+## 0.21.1
+
+- **A comment can be typed on a highlight again.** In Original view the note box was taken away
+  the moment anything inside the page scrolled — a carousel, a sticky column, a lazy image, an
+  advert — which on a real article happens constantly, so the box vanished mid-word and the
+  comment went with it. Only the page itself moving counts as scrolling now, and once you have
+  typed something the box stays until you finish or press `Esc`. The same box is the one a new
+  drawing opens, so drawings are fixed by the same change.
+- The note box also takes the keyboard more firmly, so the first thing typed cannot go to the
+  article instead of the box.
+
 ## 0.21.0
 
 - **Drawings can be moved and resized.** Click one and grips appear — at its corners, or at
