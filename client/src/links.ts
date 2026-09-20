@@ -111,6 +111,51 @@ export function buildGraph(sources: Source[], links: SourceLink[]): { nodes: Gra
   return { nodes, edges: [...edges.values()] };
 }
 
+/** One line per link, keeping the exact end each side lands on. */
+export interface PassageEdge {
+  id: string;
+  link: SourceLink;
+  from: LinkEnd;
+  to: LinkEnd;
+  kind: Relation;
+}
+
+/**
+ * Links as they really are, passage by passage, for a map that should not pretend a link
+ * between two sentences is a link between two whole documents. A link whose source has gone
+ * is dropped, as it is everywhere else.
+ */
+export function passageEdges(sources: Source[], links: SourceLink[]): PassageEdge[] {
+  const ids = new Set(sources.map((s) => s.id));
+  return links
+    .filter((l) => ids.has(l.from.sourceId) && ids.has(l.to.sourceId))
+    .map((l) => ({ id: l.id, link: l, from: l.from, to: l.to, kind: l.relation }));
+}
+
+/**
+ * The passages a map has to show: those at one end of a link, in the order they were
+ * highlighted, so the picture is the same every time it is drawn.
+ */
+export function linkedPassages(sources: Source[], links: SourceLink[]): Record<string, string[]> {
+  const wanted = new Map<string, Set<string>>();
+  for (const l of links) {
+    for (const end of [l.from, l.to]) {
+      if (!end.highlightId) continue;
+      const set = wanted.get(end.sourceId) ?? new Set<string>();
+      set.add(end.highlightId);
+      wanted.set(end.sourceId, set);
+    }
+  }
+  const out: Record<string, string[]> = {};
+  for (const s of sources) {
+    const set = wanted.get(s.id);
+    if (!set) continue;
+    const ids = s.highlights.filter((h) => set.has(h.id)).map((h) => h.id);
+    if (ids.length) out[s.id] = ids;
+  }
+  return out;
+}
+
 export type Point = { x: number; y: number };
 
 /**

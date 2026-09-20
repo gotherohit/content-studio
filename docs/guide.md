@@ -165,8 +165,11 @@ To link, step by step:
 1. Put a **Highlights** pane beside the source, and highlight the passage you are making a
    point about.
 2. On its card, press the **link icon**.
-3. Choose how it relates, then the other **Source**, then — if you highlighted it there too — the
-   **Passage in it**. Add a note if the reason is not obvious, and press **Add link**.
+3. Choose how it relates, then the other **Source**, then the **Passage in it** if you have
+   already highlighted it there. If you have not — or you are not sure where in that source the
+   answer is — press **Pick it in the source…** instead: that source opens, and the next thing
+   you highlight, draw or click in it becomes the other end. Add a note if the reason is not
+   obvious, and press **Add link**.
 4. The card now shows *→ contradicts Paper X — "…"*. Open Paper X and its passage shows
    *← contradicted by…*. Click either to jump to the other end.
 
@@ -176,6 +179,10 @@ In more detail:
   Choose how it relates — **supports**, **contradicts**, **cites**, **same claim as** or
   **related to** — then the other source and, optionally, the passage in it, and a note.
 * **Link a whole source:** **Link source** at the top of the Highlights pane.
+* **Pick the far end in the source itself.** **Pick it in the source…** opens the other source
+  and waits: highlight the passage, draw on it, or click something already there, and the link
+  completes with the relation and note you had already chosen. A bar at the top says what it is
+  waiting for; `Esc` calls it off.
 * **Link two passages of the same source.** Pick the source marked *(this source)* and then the
   passage — a claim on page 2 answering one on page 9, a drawing against the paragraph it is
   about. It shows on both cards like any other link; the map leaves it out, because an arrow
@@ -195,8 +202,13 @@ line coloured by how they relate; a dashed line means one source was opened from
 Bigger circles have more highlights and links.
 
 * **Click a source** to open it. **Hover** one to fade everything not connected to it.
-* **Hover a line** to read the passages and the note behind it; **click** it to open the
-  passage that made the link.
+* **Links are drawn where they land.** A passage at one end of a link shows as a small
+  coloured dot on the rim of its source, and the line runs between the dots — so a link between
+  two sentences does not pretend to be a link between two whole documents. Hover a dot to read
+  the passage, click it to open it. The **passages** button in the legend turns this off, which
+  gives the older picture: one line per pair of sources.
+* **Hover a line** to read the passages and the note behind it; **click** the end you want and
+  it opens there.
 * **Drag** a source to move it, drag the background to pan, **scroll** to zoom, and use the
   fit button in the legend to reset. Moved sources go back when the map is reopened.
 * Code sources appear on the map like any other source.

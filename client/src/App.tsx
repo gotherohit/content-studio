@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  ChevronLeft, ChevronRight, Columns2, Columns3, EyeOff, Grid2x2, Maximize2, Minus, MonitorPlay, Moon, PanelLeftClose,
+  ChevronLeft, ChevronRight, Columns2, Columns3, Crosshair, EyeOff, Grid2x2, Maximize2, Minus, MonitorPlay, Moon, PanelLeftClose,
   PanelLeftOpen, Paperclip, Plus, Presentation, Square, SquareSplitHorizontal, SquareSplitVertical, Sun, X,
 } from "lucide-react";
 import { viewerForExt } from "./types";
@@ -128,6 +128,8 @@ export default function App() {
   const [summaryOpen, setSummaryOpen] = useState(lsGet("summaryOpen", "0") === "1");
   /** Where a link being made starts: a passage, or a whole source. */
   const [linkFrom, setLinkFrom] = useState<LinkEnd | null>(null);
+  /** A link waiting for its other end to be chosen in the source it points at. */
+  const [pendingLink, setPendingLink] = useState<{ from: LinkEnd; targetSourceId: string; relation: Relation; note: string } | null>(null);
   const [showMap, setShowMap] = useState(false);
   /** A short confirmation that a capture happened, or a warning about what it could not record. */
   const [notice, setNotice] = useState<{ text: string; kind: "ok" | "warn" | "fail" } | null>(null);
@@ -278,6 +280,7 @@ export default function App() {
         if (e.key === "p") { if (!present && beatIndexRef.current < 0 && beatsRef.current.length) goToBeatRef.current(0); setPresent((v) => !v); e.preventDefault(); }
         if (e.key === "b") { setCollapsed((v) => !v); e.preventDefault(); }
       }
+      if (e.key === "Escape" && pendingLink) { setPendingLink(null); e.preventDefault(); return; }
       if (e.key === "Escape" && present && !document.fullscreenElement) setPresent(false);
       // While presenting, one key is the whole interface: the next beat.
       if (present && !typing && !e.ctrlKey && !e.metaKey && !e.altKey) {
@@ -286,7 +289,7 @@ export default function App() {
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [present, beats.length, beatIndex]);
+  }, [present, beats.length, beatIndex, pendingLink]);
 
   // ---- actions
   async function newProject(title: string, dir: string) {
@@ -408,14 +411,16 @@ export default function App() {
     updateSource(sourceId, (s) => ({ ...s, highlights: [...s.highlights, h] }));
     setActiveSourceId(sourceId);
     setSelectedHl(h.id);
-  }, [updateSource]);
+    finishPending(sourceId, h.id);
+  }, [updateSource]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** Called from a page or file view: show the matching card. */
   const selectFromPage = useCallback((sourceId: string, id: string) => {
     setActiveSourceId(sourceId);
     setSelectedHl(id);
     requestAnimationFrame(() => document.getElementById(`hlcard-${id}`)?.scrollIntoView({ behavior: "smooth", block: "center" }));
-  }, []);
+    finishPending(sourceId, id);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** Called from a card: scroll the source to that highlight. */
   const selectFromCard = useCallback((id: string) => {
@@ -487,6 +492,25 @@ export default function App() {
   }
 
   // ---- links between sources
+  /**
+   * The other end of a link, chosen in the source itself rather than from a list. Anything
+   * that names a passage there finishes the link: a new highlight, a new drawing, or one
+   * that was already on the page.
+   */
+  const titleOfSource = (id: string) => {
+    const s = project?.sources.find((x) => x.id === id);
+    return s ? (s.kind === "file" ? s.file?.name ?? s.title : s.title) : "that source";
+  };
+
+  function finishPending(sourceId: string, highlightId: string) {
+    setPendingLink((wanted) => {
+      if (!wanted || wanted.targetSourceId !== sourceId) return wanted;
+      if (wanted.from.sourceId === sourceId && wanted.from.highlightId === highlightId) return wanted;
+      addLink(wanted.from, { sourceId, highlightId }, wanted.relation, wanted.note);
+      return null;
+    });
+  }
+
   function addLink(from: LinkEnd, to: LinkEnd, relation: Relation, note: string) {
     const link = { id: `lk${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`, from, to, relation, ...(note ? { note } : {}), createdAt: new Date().toISOString() };
     mutate((p) => ({ ...p, links: [...(p.links ?? []), link] }));
@@ -1006,6 +1030,15 @@ export default function App() {
         )}
 
         {error && <div className="error-bar" onClick={() => setError(null)}>{error}<X size={14} /></div>}
+        {pendingLink && !present && (
+          <div className="pick-bar" role="status">
+            <Crosshair size={14} />
+            <span className="ellipsis">
+              Choose what this links to in <b>{titleOfSource(pendingLink.targetSourceId)}</b> — select a passage, draw on it, or click one that is already there.
+            </span>
+            <button className="ghost small" onClick={() => setPendingLink(null)}>Cancel</button>
+          </div>
+        )}
         {notice && !present && (
           <div className={`capture-notice ${notice.kind}`} role="status" onClick={() => setNotice(null)}>{notice.text}</div>
         )}
@@ -1070,6 +1103,12 @@ export default function App() {
           from={linkFrom}
           sources={project.sources}
           onSave={(to, relation, note) => { addLink(linkFrom, to, relation, note); setLinkFrom(null); }}
+          onPick={(targetSourceId, relation, note) => {
+            setPendingLink({ from: linkFrom, targetSourceId, relation, note });
+            setLinkFrom(null);
+            setActiveSourceId(targetSourceId);
+            setSelectedHl(null);
+          }}
           onClose={() => setLinkFrom(null)}
         />
       )}

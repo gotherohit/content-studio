@@ -2,6 +2,18 @@
 
 What changed in each release, newest first. Versions are the ones the app updates itself to.
 
+## 0.20.0
+
+- **Link to a passage that has not been highlighted yet.** The link dialog has **Pick it in the
+  source…**: the other source opens, and the next thing you highlight, draw or click in it
+  becomes the other end, carrying the relation and note you had already chosen. A bar says what
+  it is waiting for, and `Esc` calls it off.
+- **The map draws links where they really land.** A passage at one end of a link appears as a
+  small coloured dot on the rim of its source, and the line runs dot to dot rather than between
+  two whole documents. Hovering a dot reads the passage, clicking it opens it, and clicking a
+  line opens the end you were nearest. The **passages** button in the legend returns to one
+  line per pair of sources.
+
 ## 0.19.0
 
 - **Links now open on the source itself.** A marker sits on anything with a comment or a link —

@@ -212,6 +212,14 @@ wait. The AI request aborts when the pane closes. Assume a recording is in progr
   near the viewport, and reports the page through `PaneView.slideIndex` — the same field a
   Markdown deck uses, so beats, capture and restore work unchanged. Its geometry lives in
   `client/src/pdf.ts` and is unit-tested; the component holds no page maths of its own.
+- **A link can be finished from the source rather than a list.** `pendingLink` in `App` holds
+  the half-made link; `addHighlight` and `selectFromPage` both call `finishPending`, so a new
+  quote, a new drawing or a click on something already there all complete it. Anything new that
+  names a passage should call it too, or that route will quietly not work.
+- **Passage dots on the map are placed deterministically**, in the order the passages were
+  highlighted, over the top three quarters of the node — the bottom is where its name sits, and
+  a dot there disappears under the label. Nothing about the map may depend on chance: a beat
+  can show it, and it must look the same every take.
 - **A link may have both ends in one source.** `buildGraph` already skips an edge whose ends
   are the same source, so the map ignores those links; they live on the cards and in the note
   markers. The link dialog demands a passage in that case — a source linked to itself with no

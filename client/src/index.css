@@ -373,6 +373,25 @@ mark.hl:hover { filter: brightness(0.94); }
 .hl-popup.below { transform: translate(-50%, 0); animation-name: pop-below; }
 @keyframes pop-below { from { opacity: 0; transform: translate(-50%, 0) scale(0.96); } }
 
+/* A passage at one end of a link, drawn on the rim of its source. */
+.map-dot { stroke: var(--panel); stroke-width: 1.5; cursor: pointer; transition: r var(--t-fast); }
+.map-dot.faded { opacity: 0.25; }
+.map-dot:hover { stroke: var(--text); }
+.map-dot.hl-yellow { fill: var(--hl-yellow-bar); }
+.map-dot.hl-green { fill: var(--hl-green-bar); }
+.map-dot.hl-pink { fill: var(--hl-pink-bar); }
+.map-dot.hl-blue { fill: var(--hl-blue-bar); }
+
+/* Waiting for the other end of a link to be chosen in the source it points at. */
+.pick-bar {
+  position: absolute; left: 50%; transform: translateX(-50%); top: 8px; z-index: 60;
+  display: flex; align-items: center; gap: 10px; max-width: min(640px, 80vw);
+  padding: 7px 10px; background: var(--panel); border: 1px solid var(--accent);
+  border-radius: var(--r-md); box-shadow: var(--shadow-2); color: var(--text); font-size: 12.5px;
+}
+.pick-bar .ellipsis { min-width: 0; }
+.pick-passage { align-self: flex-start; margin-top: 4px; }
+
 /* What a marker on a source is hiding: its note, and where the passage is linked. */
 .note-pop {
   position: absolute; transform: translate(-50%, -100%); z-index: 22; width: 300px; padding: 9px;

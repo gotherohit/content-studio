@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Maximize2, Network } from "lucide-react";
+import { Dot, Maximize2, Network } from "lucide-react";
 import type { Source } from "../types";
-import { buildGraph, layoutGraph, relationOf, RELATIONS, type EdgeKind, type GraphEdge, type LinkEnd, type Point, type SourceLink } from "../links";
+import { buildGraph, layoutGraph, linkedPassages, passageEdges, relationOf, RELATIONS, type EdgeKind, type GraphEdge, type LinkEnd, type PassageEdge, type Point, type SourceLink } from "../links";
 
 interface Props {
   sources: Source[];
@@ -34,7 +34,13 @@ export function SourceMap({ sources, links, activeSourceId, onOpen, onGo }: Prop
   const [moved, setMoved] = useState<Record<string, Point>>({});
   const [view, setView] = useState({ x: 0, y: 0, k: 1 });
   const [hover, setHover] = useState<string | null>(null);
-  const [tip, setTip] = useState<{ x: number; y: number; edge: GraphEdge } | null>(null);
+  type Tip = { x: number; y: number } & ({ kind: "edge"; edge: GraphEdge } | { kind: "link"; edge: PassageEdge } | { kind: "dot"; end: LinkEnd });
+  const [tip, setTip] = useState<Tip | null>(null);
+  // Links drawn where they really land. A map that joins two whole documents when the link is
+  // between two sentences is telling a smaller truth than it knows.
+  const [byPassage, setByPassage] = useState(true);
+  const lines = useMemo(() => passageEdges(sources, links), [sources, links]);
+  const spots = useMemo(() => linkedPassages(sources, links), [sources, links]);
   const drag = useRef<{ id: string | null; startX: number; startY: number; origin: Point; view: typeof view; moved: boolean } | null>(null);
 
   useEffect(() => {
@@ -113,7 +119,46 @@ export function SourceMap({ sources, links, activeSourceId, onOpen, onGo }: Prop
     const end = { x: b.x - ((b.x - mx) / Math.max(Math.hypot(b.x - mx, b.y - my), 1)) * rb, y: b.y - ((b.y - my) / Math.max(Math.hypot(b.x - mx, b.y - my), 1)) * rb };
     return `M${start.x},${start.y} Q${mx},${my} ${end.x},${end.y}`;
   };
-  const passage = (end: LinkEnd) => sources.find((s) => s.id === end.sourceId)?.highlights.find((h) => h.id === end.highlightId)?.text;
+  const passage = (end: LinkEnd) => {
+    const h = sources.find((s) => s.id === end.sourceId)?.highlights.find((x) => x.id === end.highlightId);
+    if (!h) return undefined;
+    return h.shape ? `${h.shape.kind === "rect" ? "Rectangle" : h.shape.kind === "oval" ? "Oval" : "Arrow"}${h.page ? ` · page ${h.page}` : ""}${h.text.trim() ? ` — ${h.text}` : ""}` : h.text;
+  };
+  const colourOf = (end: LinkEnd) =>
+    sources.find((s) => s.id === end.sourceId)?.highlights.find((x) => x.id === end.highlightId)?.color ?? "yellow";
+
+  /** Where a passage sits: around its source, in the order it was highlighted, so it never moves. */
+  const dotAt = (end: LinkEnd): Point | null => {
+    if (!end.highlightId) return null;
+    const ids = spots[end.sourceId];
+    const i = ids?.indexOf(end.highlightId) ?? -1;
+    if (i < 0) return null;
+    const node = graph.nodes.find((n) => n.id === end.sourceId);
+    const centre = at(end.sourceId);
+    const ring = radius(node?.weight ?? 0) + 15;
+    // Spread over the top three quarters: the bottom of a node is where its name sits.
+    const angle = -1.25 * Math.PI + (i + 0.5) * ((1.5 * Math.PI) / ids.length);
+    return { x: centre.x + Math.cos(angle) * ring, y: centre.y + Math.sin(angle) * ring };
+  };
+
+  /** One link, from exactly where it starts to exactly where it lands. */
+  const linkPath = (edge: PassageEdge) => {
+    const from = dotAt(edge.from), to = dotAt(edge.to);
+    const a = from ?? at(edge.from.sourceId), b = to ?? at(edge.to.sourceId);
+    const ra = from ? 4 : radius(graph.nodes.find((n) => n.id === edge.from.sourceId)?.weight ?? 0);
+    const rb = (to ? 4 : radius(graph.nodes.find((n) => n.id === edge.to.sourceId)?.weight ?? 0)) + 5;
+    const siblings = lines.filter((e) =>
+      (e.from.sourceId === edge.from.sourceId && e.to.sourceId === edge.to.sourceId) ||
+      (e.from.sourceId === edge.to.sourceId && e.to.sourceId === edge.from.sourceId));
+    const i = siblings.indexOf(edge);
+    const off = siblings.length < 2 ? 0 : (edge.from.sourceId < edge.to.sourceId ? 1 : -1) * (i - (siblings.length - 1) / 2) * 22;
+    const dx = b.x - a.x, dy = b.y - a.y, d = Math.max(Math.hypot(dx, dy), 1);
+    const mx = (a.x + b.x) / 2 - (dy / d) * off, my = (a.y + b.y) / 2 + (dx / d) * off;
+    const da = Math.max(Math.hypot(mx - a.x, my - a.y), 1), db = Math.max(Math.hypot(b.x - mx, b.y - my), 1);
+    const start = { x: a.x + ((mx - a.x) / da) * ra, y: a.y + ((my - a.y) / da) * ra };
+    const end = { x: b.x - ((b.x - mx) / db) * rb, y: b.y - ((b.y - my) / db) * rb };
+    return { d: `M${start.x},${start.y} Q${mx},${my} ${end.x},${end.y}`, a, b };
+  };
   const titleOf = (id: string) => graph.nodes.find((n) => n.id === id)?.title ?? "";
 
   if (!sources.length) return <div className="panel-empty">Add sources to see how they connect.</div>;
@@ -129,7 +174,7 @@ export function SourceMap({ sources, links, activeSourceId, onOpen, onGo }: Prop
           ))}
         </defs>
         <g transform={`translate(${view.x},${view.y}) scale(${view.k})`}>
-          {graph.edges.map((edge) => {
+          {graph.edges.filter((edge) => !byPassage || edge.kind === "opened").map((edge) => {
             const faded = neighbours && !(neighbours.has(edge.source) && neighbours.has(edge.target));
             return (
               <g key={edge.key} className={`map-edge edge-${edge.kind} ${faded ? "faded" : ""}`}>
@@ -138,14 +183,57 @@ export function SourceMap({ sources, links, activeSourceId, onOpen, onGo }: Prop
                   d={path(edge)}
                   className="map-edge-hit"
                   onPointerDown={(e) => e.stopPropagation()}
-                  onPointerEnter={(e) => setTip({ x: e.clientX, y: e.clientY, edge })}
-                  onPointerMove={(e) => setTip({ x: e.clientX, y: e.clientY, edge })}
+                  onPointerEnter={(e) => setTip({ x: e.clientX, y: e.clientY, kind: "edge", edge })}
+                  onPointerMove={(e) => setTip({ x: e.clientX, y: e.clientY, kind: "edge", edge })}
                   onPointerLeave={() => setTip(null)}
                   onClick={() => onGo(edge.links[0]?.from ?? { sourceId: edge.source })}
                 />
               </g>
             );
           })}
+          {byPassage && lines.map((edge) => {
+            const faded = neighbours && !(neighbours.has(edge.from.sourceId) && neighbours.has(edge.to.sourceId));
+            const line = linkPath(edge);
+            return (
+              <g key={edge.id} className={`map-edge edge-${edge.kind} ${faded ? "faded" : ""}`}>
+                <path d={line.d} className="map-edge-line" markerEnd={`url(#arrow-${edge.kind})`} />
+                <path
+                  d={line.d}
+                  className="map-edge-hit"
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onPointerEnter={(e) => setTip({ x: e.clientX, y: e.clientY, kind: "link", edge })}
+                  onPointerMove={(e) => setTip({ x: e.clientX, y: e.clientY, kind: "link", edge })}
+                  onPointerLeave={() => setTip(null)}
+                  // Clicking a line opens the end you were nearest, not always the same one.
+                  onClick={(e) => {
+                    const box = (e.currentTarget.ownerSVGElement as SVGSVGElement).getBoundingClientRect();
+                    const px = (e.clientX - box.left - view.x) / view.k, py = (e.clientY - box.top - view.y) / view.k;
+                    const near = Math.hypot(px - line.a.x, py - line.a.y) <= Math.hypot(px - line.b.x, py - line.b.y);
+                    onGo(near ? edge.from : edge.to);
+                  }}
+                />
+              </g>
+            );
+          })}
+          {byPassage && Object.entries(spots).flatMap(([sourceId, ids]) => ids.map((hid) => {
+            const end = { sourceId, highlightId: hid };
+            const spot = dotAt(end);
+            if (!spot) return null;
+            const faded = neighbours && !neighbours.has(sourceId);
+            return (
+              <circle
+                key={`${sourceId}:${hid}`}
+                className={`map-dot hl-${colourOf(end)} ${faded ? "faded" : ""}`}
+                cx={spot.x}
+                cy={spot.y}
+                r={4.5}
+                onPointerDown={(e) => e.stopPropagation()}
+                onPointerEnter={(e) => { setHover(sourceId); setTip({ x: e.clientX, y: e.clientY, kind: "dot", end }); }}
+                onPointerLeave={() => { setHover(null); setTip(null); }}
+                onClick={() => onGo(end)}
+              />
+            );
+          }))}
           {graph.nodes.map((node) => {
             const p = at(node.id);
             const r = radius(node.weight);
@@ -170,7 +258,24 @@ export function SourceMap({ sources, links, activeSourceId, onOpen, onGo }: Prop
 
       {tip && (
         <div className="map-tip" style={{ left: tip.x - (host.current?.getBoundingClientRect().left ?? 0) + 12, top: tip.y - (host.current?.getBoundingClientRect().top ?? 0) + 12 }}>
-          {tip.edge.kind === "opened" ? (
+          {tip.kind === "dot" ? (
+            <div>
+              <div><b>{clip(titleOf(tip.end.sourceId), 50)}</b></div>
+              <div className="muted">“{clip(passage(tip.end) ?? "", 160)}”</div>
+              <div className="muted small">Click to open it</div>
+            </div>
+          ) : tip.kind === "link" ? (
+            <div className="map-tip-link">
+              <div>
+                <b>{clip(titleOf(tip.edge.from.sourceId), 40)}</b> {relationOf(tip.edge.kind).label} <b>{clip(titleOf(tip.edge.to.sourceId), 40)}</b>
+              </div>
+              {passage(tip.edge.from) && <div className="muted">“{clip(passage(tip.edge.from)!, 120)}”</div>}
+              {passage(tip.edge.to) && <div className="muted">→ “{clip(passage(tip.edge.to)!, 120)}”</div>}
+              {!tip.edge.to.highlightId && <div className="muted">→ the whole source</div>}
+              {tip.edge.link.note && <div>{tip.edge.link.note}</div>}
+              <div className="muted small">Click the end you want to open</div>
+            </div>
+          ) : tip.edge.kind === "opened" ? (
             <div><b>{clip(titleOf(tip.edge.source), 50)}</b> was opened from <b>{clip(titleOf(tip.edge.target), 50)}</b></div>
           ) : tip.edge.links.map((l) => (
             <div key={l.id} className="map-tip-link">
@@ -180,16 +285,23 @@ export function SourceMap({ sources, links, activeSourceId, onOpen, onGo }: Prop
               {l.note && <div>{l.note}</div>}
             </div>
           ))}
-          {tip.edge.kind !== "opened" && <div className="muted small">Click to open the linked passage</div>}
+          {tip.kind === "edge" && tip.edge.kind !== "opened" && <div className="muted small">Click to open the linked passage</div>}
         </div>
       )}
 
       <div className="map-legend" onPointerDown={(e) => e.stopPropagation()}>
         {RELATIONS.map((r) => <span key={r.id} className={`edge-${r.id}`}><i />{r.label}</span>)}
         <span className="edge-opened"><i />opened from</span>
+        <button
+          className={`ghost small ${byPassage ? "on" : ""}`}
+          onClick={() => setByPassage((v) => !v)}
+          title={byPassage ? "Draw one line per pair of sources instead" : "Draw each link where it really lands"}
+        >
+          <Dot size={13} /> passages
+        </button>
         <button className="icon-btn" title="Fit the whole map" onClick={() => { setView({ x: 0, y: 0, k: 1 }); setMoved({}); }}><Maximize2 size={13} /></button>
       </div>
-      {!graph.edges.length && (
+      {!graph.edges.length && !lines.length && (
         <div className="map-hint"><Network size={14} /> Link a highlighted passage to another source from the Highlights pane, and the sources connect here.</div>
       )}
     </div>

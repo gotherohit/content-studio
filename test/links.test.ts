@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { buildGraph, layoutGraph, linksFor, linksOf, otherEnd, pruneLinks, type SourceLink } from "../client/src/links.ts";
+import { buildGraph, layoutGraph, linkedPassages, linksFor, linksOf, otherEnd, passageEdges, pruneLinks, type SourceLink } from "../client/src/links.ts";
 import type { Source } from "../client/src/types.ts";
 
 const source = (id: string, highlights: string[] = [], extra: Partial<Source> = {}): Source => ({
@@ -95,4 +95,22 @@ test("the links touching one passage are found from either end", () => {
   // Seen from the other passage, the same link points the other way.
   assert.equal(otherEnd(links[0], "a", "h2").outgoing, false);
   assert.deepEqual(otherEnd(links[0], "a", "h2").end, { sourceId: "a", highlightId: "h1" });
+});
+
+test("the map can see links passage by passage", () => {
+  const sources = [
+    { id: "a", title: "One", kind: "web", highlights: [{ id: "h1" }, { id: "h2" }, { id: "h3" }] },
+    { id: "b", title: "Two", kind: "web", highlights: [{ id: "k1" }] },
+  ] as unknown as Source[];
+  const links = [
+    { id: "l1", from: { sourceId: "a", highlightId: "h2" }, to: { sourceId: "b", highlightId: "k1" }, relation: "supports", createdAt: "" },
+    { id: "l2", from: { sourceId: "a", highlightId: "h1" }, to: { sourceId: "b" }, relation: "cites", createdAt: "" },
+    { id: "l3", from: { sourceId: "gone", highlightId: "x" }, to: { sourceId: "b" }, relation: "cites", createdAt: "" },
+  ] as unknown as SourceLink[];
+  const edges = passageEdges(sources, links);
+  // One line per link, not one per pair of sources, and nothing for a source that has gone.
+  assert.deepEqual(edges.map((e) => e.id), ["l1", "l2"]);
+  assert.deepEqual(edges[0].to, { sourceId: "b", highlightId: "k1" });
+  // Only passages at one end of a link are drawn, in the order they were highlighted.
+  assert.deepEqual(linkedPassages(sources, links), { a: ["h1", "h2"], b: ["k1"] });
 });

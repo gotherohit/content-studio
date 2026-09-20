@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link2, X } from "lucide-react";
+import { Crosshair, Link2, X } from "lucide-react";
 import type { Highlight, Source } from "../types";
 import { RELATIONS, type LinkEnd, type Relation } from "../links";
 
@@ -8,6 +8,8 @@ interface Props {
   from: LinkEnd;
   sources: Source[];
   onSave: (to: LinkEnd, relation: Relation, note: string) => void;
+  /** Go and find the passage in the other source, rather than pick one already highlighted. */
+  onPick: (targetSourceId: string, relation: Relation, note: string) => void;
   onClose: () => void;
 }
 
@@ -18,7 +20,7 @@ const label = (h: Highlight) =>
   h.shape ? `${h.shape.kind === "rect" ? "Rectangle" : h.shape.kind === "oval" ? "Oval" : "Arrow"}${h.page ? ` · page ${h.page}` : ""}${h.text.trim() ? ` — ${clip(h.text, 40)}` : ""}` : clip(h.text);
 
 /** Say how a passage bears on another source, or on one passage in it. */
-export function LinkDialog({ from, sources, onSave, onClose }: Props) {
+export function LinkDialog({ from, sources, onSave, onPick, onClose }: Props) {
   const origin = sources.find((s) => s.id === from.sourceId);
   const passage: Highlight | undefined = origin?.highlights.find((h) => h.id === from.highlightId);
   // The same source is a fair target: one passage can answer another a few paragraphs down.
@@ -75,11 +77,16 @@ export function LinkDialog({ from, sources, onSave, onClose }: Props) {
                 {sameSource && <option value="">Choose a passage…</option>}
                 {choices.map((h) => <option key={h.id} value={h.id}>{label(h)}</option>)}
               </select>
-              {targetSource && !choices.length && (
-                <span className="muted small">
-                  {sameSource ? "This source has nothing else to link to yet." : "Highlight a passage in that source to link to it exactly."}
-                </span>
-              )}
+              <button className="ghost small pick-passage" disabled={!targetSource} onClick={() => targetSource && onPick(targetSource.id, relation, note.trim())}>
+                <Crosshair size={12} /> Pick it in the source…
+              </button>
+              <span className="muted small">
+                {choices.length
+                  ? "Or open that source and choose the passage there — highlighting it as you go."
+                  : sameSource
+                    ? "Nothing else is highlighted here yet — pick the passage in the source."
+                    : "Nothing is highlighted there yet — pick the passage in the source."}
+              </span>
             </label>
             <label className="field">
               <span>Note <span className="muted">(optional)</span></span>
