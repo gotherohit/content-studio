@@ -76,8 +76,18 @@ export function applyHighlights(root, highlights, className = 'hl') {
       mark.className = `${className} ${className}-${h.color}`; mark.dataset.hid = h.id;
       if (h.comment) mark.title = h.comment;
       if (className === 'rs-hl') {
-        // Website styles must not erase the colour the reader chose.
-        mark.style.setProperty('background-color', colours[h.color] || colours.yellow, 'important');
+        // Website styles must not erase the colour the reader chose, and the band is kept to
+        // the line box: an inline background fills the font's content area, which on a site
+        // with tight leading spills over the line above.
+        const colour = colours[h.color] || colours.yellow;
+        mark.style.setProperty('background-color', 'transparent', 'important');
+        mark.style.setProperty('background-image', `linear-gradient(${colour}, ${colour})`, 'important');
+        mark.style.setProperty('background-repeat', 'no-repeat', 'important');
+        mark.style.setProperty('background-size', '100% min(1.2em, calc(1lh - 3px))', 'important');
+        mark.style.setProperty('background-position', '0 50%', 'important');
+        mark.style.setProperty('box-decoration-break', 'clone', 'important');
+        mark.style.setProperty('-webkit-box-decoration-break', 'clone', 'important');
+        mark.style.setProperty('padding', '0', 'important');
         mark.style.setProperty('color', '#202020', 'important');
         mark.style.setProperty('-webkit-text-fill-color', '#202020', 'important');
         mark.style.setProperty('display', 'inline', 'important');

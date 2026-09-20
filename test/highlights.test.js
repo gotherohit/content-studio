@@ -61,7 +61,20 @@ test('page replacement repairs a missing highlight even when another has many fr
 test('Original colours override website styles and can be changed', t => {
   const doc = fixture(t, '<p>A passage</p>');
   applyHighlights(doc.body, [quote('one', 'A passage')], 'rs-hl');
-  assert.equal(doc.querySelector('mark').style.getPropertyPriority('background-color'), 'important');
+  assert.equal(doc.querySelector('mark').style.getPropertyPriority('background-image'), 'important');
   applyHighlights(doc.body, [quote('one', 'A passage', { color: 'pink' })], 'rs-hl');
-  assert.equal(doc.querySelector('mark').style.backgroundColor, 'rgb(255, 208, 224)');
+  assert.match(doc.querySelector('mark').style.backgroundImage, /#ffd0e0/i);
+});
+
+test('an Original highlight is painted as a band no taller than its line', t => {
+  // A plain background fills the font's content area, which on tight leading covers the
+  // line above; the colour goes in a sized background image instead.
+  const doc = fixture(t, '<p>A passage</p>');
+  applyHighlights(doc.body, [quote('one', 'A passage')], 'rs-hl');
+  const style = doc.querySelector('mark').style;
+  assert.equal(style.backgroundColor, 'transparent');
+  assert.equal(style.backgroundSize, '100% min(1.2em, calc(1lh - 3px))');
+  assert.equal(style.backgroundRepeat, 'no-repeat');
+  assert.equal(style.getPropertyValue('box-decoration-break'), 'clone');
+  assert.equal(style.padding, '0px');
 });

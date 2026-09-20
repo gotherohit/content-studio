@@ -212,6 +212,12 @@ wait. The AI request aborts when the pane closes. Assume a recording is in progr
   near the viewport, and reports the page through `PaneView.slideIndex` — the same field a
   Markdown deck uses, so beats, capture and restore work unchanged. Its geometry lives in
   `client/src/pdf.ts` and is unit-tested; the component holds no page maths of its own.
+- **An inline background is taller than the line it sits on.** It fills the font's content
+  area, not the line box, so on a site with tight leading a highlight covered the text above
+  and below. Both `mark.hl` and the injected `rs-hl` paint the colour as a background band of
+  `min(1.2em, calc(1lh - 3px))` with `box-decoration-break: clone`, never a plain
+  `background-color`. The PDF text layer keeps the plain wash: one line per span, nothing to
+  overlap.
 - **A PDF highlight is anchored inside one page's text layer.** The layer pdf.js builds for
   selection is an ordinary DOM, so `captureRange`/`applyHighlights` work on it unchanged — the
   root is that page's layer, never the scroller, and the page number goes on the highlight

@@ -2,6 +2,13 @@
 
 What changed in each release, newest first. Versions are the ones the app updates itself to.
 
+## 0.17.2
+
+- **A highlight no longer covers the line above it.** An inline background fills the font's
+  whole content area, which on a site with tight leading spills onto its neighbours; the
+  colour is now painted as a band no taller than the line, in articles, Reader, Markdown and
+  text alike. PDFs are unchanged.
+
 ## 0.17.1
 
 - **An update that Windows refuses to install now says so.** The app starts the installer
