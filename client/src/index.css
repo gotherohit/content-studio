@@ -331,6 +331,7 @@ select option, select optgroup { background: var(--panel); color: var(--text); }
 .reader-scroll { position: relative; overflow-y: auto; flex: 1; padding: 26px 34px 90px; }
 .reader-meta h1 { font-family: var(--reader-font); font-size: 1.75rem; margin: 0 0 7px; line-height: 1.22; letter-spacing: -0.015em; }
 .reader-stage { position: relative; }
+.file-stage { position: relative; }
 .reader-body { font-family: var(--reader-font); line-height: 1.68; max-width: 40em; margin-top: 22px; color: var(--text); }
 .reader-body img, .reader-body video, .reader-body iframe { max-width: 100%; height: auto; border-radius: var(--r-md); }
 .reader-body pre { background: var(--code-bg); color: var(--code-text); padding: 12px 14px; border-radius: var(--r-md); overflow-x: auto; font-family: var(--mono); font-size: 0.82em; line-height: 1.5; }
@@ -592,12 +593,13 @@ mark.hl:hover { filter: brightness(0.94); }
 .shape.hl-pink { stroke: var(--hl-pink-bar); }
 .shape.hl-blue { stroke: var(--hl-blue-bar); }
 .shape-note {
-  position: absolute; transform: translate(-40%, -55%); pointer-events: auto;
-  display: grid; place-items: center; width: 19px; height: 19px; padding: 0;
+  position: absolute; transform: translate(-40%, -55%); pointer-events: auto; touch-action: none;
+  display: grid; place-items: center; width: 22px; height: 22px; padding: 0;
   border: 1px solid var(--border); border-radius: 50%; background: var(--panel);
   color: var(--text); box-shadow: var(--shadow-1); cursor: pointer;
 }
 .shape-note:hover { transform: translate(-40%, -55%) scale(1.12); }
+.shape-note:active { transform: translate(-40%, -55%) scale(0.94); }
 .shape-note.hl-yellow { border-color: var(--hl-yellow-bar); }
 .shape-note.hl-green { border-color: var(--hl-green-bar); }
 .shape-note.hl-pink { border-color: var(--hl-pink-bar); }

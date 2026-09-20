@@ -129,6 +129,11 @@ export function ShapeLayer(p: Props) {
       </svg>
       {p.showNotes !== false && p.items.filter((i) => i.comment?.trim() || i.linked).map((item) => {
         const host = item.host ?? whole;
+        const open = (e: React.SyntheticEvent) => {
+          e.stopPropagation();
+          const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+          p.onNote?.(item.id, { x: r.left + r.width / 2, y: r.bottom });
+        };
         // A drawing carries its marker on itself; a quote carries it at the end of its text.
         const spot = item.shape
           ? badgeAt(item.shape, { width: host.width, height: host.height })
@@ -139,12 +144,13 @@ export function ShapeLayer(p: Props) {
             className={`shape-note hl-${item.color}`}
             style={{ left: host.left + spot.x, top: host.top + spot.y }}
             title={item.comment || "Linked"}
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => {
-              e.stopPropagation();
-              const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-              p.onNote?.(item.id, { x: r.left + r.width / 2, y: r.bottom });
-            }}
+            // Opens on the press, not the click: a marker that is re-placed between pressing
+            // and releasing — which happens on every scroll of a PDF and every reflow of an
+            // article — would otherwise swallow the click and look broken.
+            onPointerDown={(e) => { e.preventDefault(); open(e); }}
+            // Also on click, so a keyboard can reach it; opening the same card twice shows
+            // the same card.
+            onClick={open}
           >
             <MessageSquareText size={11} />
           </button>

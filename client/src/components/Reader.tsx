@@ -5,7 +5,7 @@ import { applyHighlights, captureSelection } from "../highlighter";
 import { HighlightPopup } from "./HighlightPopup";
 import { ShapeLayer, type LayerItem } from "./ShapeLayer";
 import { fromDrag, textHighlights } from "../shapes";
-import { anchorAt, boxWithin, hostFor } from "../../../server/public/shapes-dom.js";
+import { anchorForRect, boxWithin, hostFor } from "../../../server/public/shapes-dom.js";
 
 interface Props {
   source: Source;
@@ -153,7 +153,12 @@ export function Reader({ source, scrollToId, scrollNonce, onAddHighlight, onSele
             const el = ref.current, stage = stageRef.current;
             if (!el || !stage || !tool) return;
             const at = stage.getBoundingClientRect();
-            const found = anchorAt(el.ownerDocument, el, at.left + drag.from.x, at.top + drag.from.y);
+            const found = anchorForRect(el.ownerDocument, el, {
+              left: at.left + Math.min(drag.from.x, drag.to.x),
+              top: at.top + Math.min(drag.from.y, drag.to.y),
+              right: at.left + Math.max(drag.from.x, drag.to.x),
+              bottom: at.top + Math.max(drag.from.y, drag.to.y),
+            });
             if (!found) return;
             const box = boxWithin(stage, found.host);
             const shape = fromDrag(tool, { x: drag.from.x - box.left, y: drag.from.y - box.top }, { x: drag.to.x - box.left, y: drag.to.y - box.top }, box);

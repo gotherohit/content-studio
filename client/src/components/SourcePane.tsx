@@ -188,13 +188,23 @@ export function SourcePane(p: Props) {
     l.from.sourceId === p.source?.id ? l.from.highlightId : undefined,
     l.to.sourceId === p.source?.id ? l.to.highlightId : undefined,
   ]).filter(Boolean) as string[];
-  /** A marker opens its note beside itself, in the stage's own coordinates. */
+  /**
+   * A marker opens its note beside itself, in the stage's own coordinates — below it when
+   * there is room, above it when there is not. A card that opens past the bottom of the pane
+   * is clipped away, which reads as the marker not working at all.
+   */
   const openNote = (id: string, at: { x: number; y: number }) => {
     const host = stageRef.current?.getBoundingClientRect();
     if (!host) return;
     p.onSelectHighlight(id);
-    const below = at.y - host.top + 6;
-    setNotePop({ id, x: Math.min(Math.max(at.x - host.left, 150), Math.max(151, host.width - 150)), y: below, flip: true });
+    const room = 190;
+    const below = at.y + room < host.bottom || at.y - room < host.top;
+    setNotePop({
+      id,
+      x: Math.min(Math.max(at.x - host.left, 150), Math.max(151, host.width - 150)),
+      y: Math.max(0, at.y - host.top + (below ? 6 : -26)),
+      flip: below,
+    });
   };
   const draw = {
     tool: p.presenting || !canDraw ? null : tool,

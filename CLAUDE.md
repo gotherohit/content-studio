@@ -233,6 +233,17 @@ wait. The AI request aborts when the pane closes. Assume a recording is in progr
   highlights: cards, comments, colours, links, the map, beats and Copy as markdown all work
   with no new plumbing. Everything that lays marks over text must therefore filter the list
   through `textHighlights()`, or `applyHighlights` would try to mark a shape's anchor quote.
+- **A drawing belongs to what it covers, not to where the drag began.** `anchorForRect` picks
+  the element with the largest overlap with the drag rectangle, preferring a picture inside a
+  figure. Anchoring to the element under the starting point bound a box drawn *around* a
+  paragraph to the heading above it — the gap belongs to the heading — and the drawing came back
+  as fractions of something one line tall. `fromDrag` also allows half a box of spill either
+  side, or a box around a paragraph would be clamped to the paragraph itself.
+- **The note markers open on `pointerdown`, not on click.** A marker is re-placed on every
+  scroll of a PDF and every reflow of an article, and a click needs the press and the release to
+  land on the same element, so most presses did nothing and the feature looked broken. The click
+  handler stays for the keyboard. The card opens above the marker when there is no room below,
+  or it is clipped out of sight by the pane.
 - **A shape is fractions of what it was drawn on, never page coordinates.** A PDF page or an
   image is that thing; over prose it is the paragraph the drag started in, identified by the
   same kind of quote anchor a highlight uses (`shapes-dom.js`), or the picture by its `src`.

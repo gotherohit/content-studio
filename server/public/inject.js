@@ -100,15 +100,17 @@
     dot.type = "button";
     dot.title = h.comment;
     dot.style.cssText = "all:unset;position:absolute;left:" + spot.x + "px;top:" + spot.y + "px;transform:translate(-40%,-55%);" +
-      "width:18px;height:18px;border-radius:50%;background:#fff;border:1px solid " + (SHAPE_COLOURS[h.color] || SHAPE_COLOURS.yellow) + ";" +
+      "width:22px;height:22px;border-radius:50%;background:#fff;border:1px solid " + (SHAPE_COLOURS[h.color] || SHAPE_COLOURS.yellow) + ";" +
       "box-shadow:0 1px 3px rgba(0,0,0,.35);pointer-events:auto;cursor:pointer;display:flex;align-items:center;justify-content:center;" +
       "font:600 11px system-ui,sans-serif;color:#333";
     dot.textContent = "i";
-    dot.addEventListener("click", function (e) {
+    // The press, not the click: the page reflows under these markers constantly.
+    dot.addEventListener("pointerdown", function (e) {
       e.preventDefault(); e.stopPropagation();
       var r = dot.getBoundingClientRect();
       send({ type: "noteClick", id: h.id, at: { x: r.left + r.width / 2, y: r.bottom } });
     });
+    dot.addEventListener("click", function (e) { e.preventDefault(); e.stopPropagation(); });
     return dot;
   }
 
@@ -197,7 +199,10 @@
   }
 
   function finishDraw(from, to) {
-    var found = shapesDomModule.anchorAt(document, document.body, from.x, from.y);
+    var found = shapesDomModule.anchorForRect(document, document.body, {
+      left: Math.min(from.x, to.x), top: Math.min(from.y, to.y),
+      right: Math.max(from.x, to.x), bottom: Math.max(from.y, to.y),
+    });
     if (!found) return;
     var r = found.host.getBoundingClientRect();
     var shape = geomModule.fromDrag(drawTool, { x: from.x - r.left, y: from.y - r.top }, { x: to.x - r.left, y: to.y - r.top }, r);

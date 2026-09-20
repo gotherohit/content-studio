@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
 import type { Highlight, HighlightColor, Shape, ShapeKind, Source } from "../types";
@@ -7,7 +7,8 @@ import { HighlightPopup } from "./HighlightPopup";
 import { NotebookView } from "./NotebookView";
 import { DeckView } from "./DeckView";
 import { PdfView } from "./PdfView";
-import { ShapeLayer } from "./ShapeLayer";
+import { ShapeLayer, type LayerItem } from "./ShapeLayer";
+import { boxWithin } from "../../../server/public/shapes-dom.js";
 import { fromDrag, shapeHighlights, textHighlights } from "../shapes";
 import type { AppConfig } from "../api";
 
@@ -58,6 +59,8 @@ export function FileView(p: Props) {
   const [err, setErr] = useState<string | null>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   const imageFrame = useRef<HTMLDivElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
+  const [markItems, setMarkItems] = useState<LayerItem[]>([]);
   const [popup, setPopup] = useState<{
     x: number; y: number; flip: boolean;
     anchor: NonNullable<ReturnType<typeof captureSelection>>;
@@ -94,6 +97,30 @@ export function FileView(p: Props) {
     if (!p.scrollToId) return;
     bodyRef.current?.querySelector<HTMLElement>(`mark.hl[data-hid="${p.scrollToId}"]`)?.scrollIntoView({ behavior: "instant", block: "center" });
   }, [p.scrollToId, p.scrollNonce, text]);
+
+  /** Markers for quotes carrying a note or a link, at the end of the text they mark. */
+  const placeMarks = useCallback(() => {
+    const el = bodyRef.current, stage = stageRef.current;
+    if (!el || !stage) return;
+    const next: LayerItem[] = [];
+    for (const h of source.highlights) {
+      const linked = p.linkedIds?.includes(h.id);
+      if (h.shape || (!h.comment?.trim() && !linked)) continue;
+      const marks = el.querySelectorAll<HTMLElement>(`mark.hl[data-hid="${h.id}"]`);
+      const last = marks[marks.length - 1];
+      if (last) next.push({ id: h.id, color: h.color, comment: h.comment, linked, host: boxWithin(stage, last) });
+    }
+    setMarkItems(next);
+  }, [source.highlights, p.linkedIds]);
+
+  useEffect(() => {
+    placeMarks();
+    const stage = stageRef.current;
+    if (!stage) return;
+    const ro = new ResizeObserver(placeMarks);
+    ro.observe(stage);
+    return () => ro.disconnect();
+  }, [placeMarks, markdownHtml, text]);
 
   function onMouseUp(e: React.MouseEvent) {
     if ((e.target as HTMLElement).closest(".hl-popup")) return;
@@ -225,11 +252,22 @@ export function FileView(p: Props) {
       const mark = (e.target as HTMLElement).closest("mark.hl") as HTMLElement | null;
       if (mark?.dataset.hid) p.onSelectHighlight(mark.dataset.hid);
     }}>
-      {viewer === "markdown" ? (
-        <div ref={bodyRef} className={`md-preview file-body ${p.slideshow ? "slide" : ""}`} style={{ fontSize: `${fontScale}rem` }} dangerouslySetInnerHTML={{ __html: markdownHtml }} />
-      ) : (
-        <div ref={bodyRef} className="file-body"><pre className="file-text" style={{ fontSize: `${fontScale * 0.85}rem` }}>{text ?? "Loading…"}</pre></div>
-      )}
+      <div className="file-stage" ref={stageRef}>
+        {viewer === "markdown" ? (
+          <div ref={bodyRef} className={`md-preview file-body ${p.slideshow ? "slide" : ""}`} style={{ fontSize: `${fontScale}rem` }} dangerouslySetInnerHTML={{ __html: markdownHtml }} />
+        ) : (
+          <div ref={bodyRef} className="file-body"><pre className="file-text" style={{ fontSize: `${fontScale * 0.85}rem` }}>{text ?? "Loading…"}</pre></div>
+        )}
+        <ShapeLayer
+          items={markItems}
+          tool={null}
+          color="yellow"
+          selectedId={p.scrollToId}
+          showNotes={p.showNotes !== false && !p.presenting}
+          onSelect={p.onSelectHighlight}
+          onNote={p.onNote}
+        />
+      </div>
       {popup && <HighlightPopup x={popup.x} y={popup.y} flip={popup.flip} onCommit={commit} onCancel={() => setPopup(null)} />}
     </div>
   );

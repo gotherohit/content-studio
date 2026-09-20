@@ -17,12 +17,20 @@ test("a rectangle drawn backwards is normalised, an arrow keeps its direction", 
   assert.deepEqual(arrow, { kind: "arrow", x: 0.6, y: 0.6, w: -0.5, h: -0.5 });
 });
 
-test("a click is not a drawing, and a drag off the edge is clamped", () => {
+test("a click is not a drawing", () => {
   assert.equal(fromDrag("rect", { x: 20, y: 10 }, { x: 20 + MIN_DRAG - 1, y: 12 }, size), null);
   assert.equal(fromDrag("rect", { x: 0, y: 0 }, { x: 0, y: 0 }, size), null);
   assert.equal(fromDrag("rect", { x: 0, y: 0 }, { x: 10, y: 10 }, { width: 0, height: 0 }), null);
-  const s = fromDrag("rect", { x: -40, y: -30 }, { x: 400, y: 300 }, size)!;
-  assert.deepEqual(s, { kind: "rect", x: 0, y: 0, w: 1, h: 1 });
+});
+
+test("a shape may spill outside what it is drawn on, but only so far", () => {
+  // Drawing a box around a paragraph starts in the margin and ends past its far corner.
+  const around = fromDrag("rect", { x: -20, y: -10 }, { x: 220, y: 110 }, size)!;
+  const near = (a: number, b: number) => assert.ok(Math.abs(a - b) < 1e-9, `${a} ~ ${b}`);
+  near(around.x, -0.1); near(around.y, -0.1); near(around.w, 1.2); near(around.h, 1.2);
+  // A drag from far outside is still pulled back to half a box beyond the edge.
+  const wild = fromDrag("rect", { x: -400, y: -300 }, { x: 900, y: 700 }, size)!;
+  assert.deepEqual(wild, { kind: "rect", x: -0.5, y: -0.5, w: 2, h: 2 });
 });
 
 test("a shape is put back in pixels, whichever way it was drawn", () => {

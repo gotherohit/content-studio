@@ -31,15 +31,39 @@ export function imageAt(doc, x, y) {
   }) || null;
 }
 
-/** The block a shape drawn at this point belongs to: the nearest one with words in it. */
+/** Blocks that hold prose themselves, rather than containing other blocks that do. */
+const LEAF = "p,li,h1,h2,h3,h4,h5,h6,blockquote,pre,figure,table";
+
+/**
+ * The block a shape drawn at this point belongs to: the one under the pointer, or — when the
+ * drag starts in a margin or the gap between paragraphs, which is exactly where you start to
+ * draw a box *around* something — the nearest line of prose to it.
+ */
 export function blockAt(doc, root, x, y) {
   const el = elementAt(doc, x, y);
-  if (!el || !root.contains(el)) return root;
-  let block = el.closest(BLOCK);
-  while (block && block !== root && (block.textContent || "").trim().length < ENOUGH) {
-    block = block.parentElement ? block.parentElement.closest(BLOCK) : null;
+  if (el && root.contains(el)) {
+    let block = el.closest(BLOCK);
+    while (block && block !== root && (block.textContent || "").trim().length < ENOUGH) {
+      block = block.parentElement ? block.parentElement.closest(BLOCK) : null;
+    }
+    if (block && block !== root && root.contains(block)) return block;
   }
-  return block && root.contains(block) ? block : root;
+  return nearestBlock(root, x, y) || root;
+}
+
+/** The line of prose closest to a point, when the point itself is not on one. */
+function nearestBlock(root, x, y, reach = 160) {
+  let best = null, score = Infinity;
+  for (const el of root.querySelectorAll(LEAF)) {
+    if ((el.textContent || "").trim().length < ENOUGH) continue;
+    const r = el.getBoundingClientRect();
+    if (!r.width || !r.height) continue;
+    const dy = y < r.top ? r.top - y : y > r.bottom ? y - r.bottom : 0;
+    const dx = x < r.left ? r.left - x : x > r.right ? x - r.right : 0;
+    const d = dy * 4 + dx;
+    if (dy <= reach && d < score) { best = el; score = d; }
+  }
+  return best;
 }
 
 /** The first words of a block, captured the way a quote is, so the block can be found again. */
@@ -61,6 +85,44 @@ export function blockAnchor(root, block, limit = 60) {
   return captureRange(root, range);
 }
 
+const EMPTY = { text: "", prefix: "", suffix: "" };
+
+/**
+ * What a drawing belongs to: the thing it mostly covers.
+ *
+ * Choosing by the point the drag started is wrong in the common case — a box drawn *around* a
+ * paragraph starts in the gap above it, which belongs to the heading, and the drawing was then
+ * kept as fractions of a heading one line tall and came back squashed into it. The element with
+ * the largest overlap is the thing being pointed at; a picture wins over the figure around it.
+ * `rect` is in viewport coordinates, like everything getBoundingClientRect returns.
+ */
+export function anchorForRect(doc, root, rect) {
+  const overlap = (a, b) =>
+    Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left)) *
+    Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top));
+  let best = null, most = 0;
+  for (const el of root.querySelectorAll(LEAF + ",img")) {
+    if (el.tagName !== "IMG" && (el.textContent || "").trim().length < ENOUGH) continue;
+    const r = el.getBoundingClientRect();
+    if (!r.width || !r.height) continue;
+    const area = overlap(rect, r);
+    if (area > most) { most = area; best = el; }
+  }
+  if (best && best.tagName !== "IMG") {
+    const picture = best.querySelector ? best.querySelector("img") : null;
+    if (picture && overlap(rect, picture.getBoundingClientRect()) > most * 0.8) best = picture;
+  }
+  if (!best) best = nearestBlock(root, (rect.left + rect.right) / 2, (rect.top + rect.bottom) / 2);
+  if (!best) return { host: root, onImage: undefined, anchor: EMPTY };
+  if (best.tagName === "IMG") {
+    return { host: best, onImage: best.currentSrc || best.getAttribute("src") || "", anchor: EMPTY };
+  }
+  const quote = blockAnchor(root, best);
+  return quote && quote.text.trim()
+    ? { host: best, onImage: undefined, anchor: quote }
+    : { host: root, onImage: undefined, anchor: EMPTY };
+}
+
 /** What a shape drawn at this point should be anchored to: a picture, or a block of prose. */
 export function anchorAt(doc, root, x, y) {
   const img = imageAt(doc, x, y);
@@ -69,7 +131,13 @@ export function anchorAt(doc, root, x, y) {
   }
   const block = blockAt(doc, root, x, y);
   if (!block) return null;
-  return { host: block, onImage: undefined, anchor: blockAnchor(root, block) || { text: "", prefix: "", suffix: "" } };
+  // Falling back to the whole source must say so: a quote taken from the top of it would be
+  // found again inside the first paragraph, and the shape would jump there.
+  if (block === root) return { host: root, onImage: undefined, anchor: EMPTY };
+  const quote = blockAnchor(root, block);
+  return quote && quote.text.trim()
+    ? { host: block, onImage: undefined, anchor: quote }
+    : { host: root, onImage: undefined, anchor: EMPTY };
 }
 
 /** The element a saved shape sits on, or null when the page no longer has it. */

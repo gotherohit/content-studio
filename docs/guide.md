@@ -224,6 +224,10 @@ Some things are easier pointed at than quoted. The pencil in the Source toolbar 
 
 * Choose a shape and a colour from the pencil menu, then drag on the source. Let go and the
   usual note box appears, so the drawing can carry a comment like any highlight.
+* **Draw around what you mean.** A drawing belongs to whatever it mostly covers — the paragraph,
+  the picture, the page — and may reach a little outside it, so a box drawn around a paragraph
+  starting in the gap above it is a box around that paragraph, and stays one when the pane
+  changes width.
 * The tool stays out until you put it down — press `Esc`, or click the pencil again. While it
   is out the source underneath cannot be clicked, which is why the button stays lit.
 * Drawings belong to the source, not to the pane: they appear in **Highlights** as cards

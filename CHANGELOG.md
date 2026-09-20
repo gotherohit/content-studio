@@ -2,6 +2,19 @@
 
 What changed in each release, newest first. Versions are the ones the app updates itself to.
 
+## 0.20.2
+
+- **A drawing stays where you drew it.** It was anchored to whatever the drag *started* on, so
+  a box drawn around a paragraph — which starts in the gap above it — bound itself to the
+  heading there and came back squashed into one line at the top of the article. A drawing now
+  belongs to the thing it mostly covers, and may reach a little outside it, so a box drawn
+  around a paragraph is a box around that paragraph.
+- **Note markers open first time.** They opened on the click, which a marker re-placed by a
+  scroll or a reflow between pressing and releasing never received; they now open on the press,
+  are a little larger, and the card opens above the marker when there is no room below it —
+  before, a card near the bottom of the pane opened out of sight.
+- **Markdown and text sources show note markers too**, like articles, PDFs and images.
+
 ## 0.20.1
 
 - **"The studio server did not start in time" on a cold start.** The app waited for

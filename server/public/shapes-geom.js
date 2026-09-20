@@ -6,7 +6,13 @@
 /** Shorter than this and it was a click, not a drawing. */
 export const MIN_DRAG = 5;
 
-const clamp = (v) => Math.min(1, Math.max(0, v));
+/**
+   * How far outside its host a shape may reach. Drawing a box *around* a paragraph starts in
+   * the margin and ends past its other corner; clamping that to the paragraph's own box was
+   * the drawing snapping to a place nobody asked for.
+   */
+const SPILL = 0.5;
+const clamp = (v) => Math.min(1 + SPILL, Math.max(-SPILL, v));
 
 /**
  * A drag in pixels becomes fractions of the box it happened in. An arrow keeps its direction,
