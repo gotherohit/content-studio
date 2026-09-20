@@ -605,9 +605,10 @@ either known to Microsoft or signed with a certificate from a trusted authority.
 Studio's installer is not signed, so whether it is allowed is decided per file and can differ
 from one release to the next — one update installs, the next is blocked with no message. You
 can check at **Windows Security → App & browser control → Smart App Control**; when it says
-*On*, that is what is blocking it. Turning it off is permanent — Windows can only switch it
-back on after a reset — so it is worth deciding deliberately. Until the installer is signed,
-the alternative is to run the new version from the source folder (`npm run desktop`).
+*On*, that is what is blocking it. It can be switched off and back on again from there on
+Windows 11 with the April 2026 update or later; on older builds turning it off was permanent
+until a reset. Until the installer is signed, the alternative is to run the new version from
+the source folder (`npm run desktop`).
 
 **A project will not delete.** It now tells you why in the error bar. The usual cause is
 another program holding a file in the folder open — Explorer sitting in it, PowerPoint with
