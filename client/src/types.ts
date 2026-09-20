@@ -11,6 +11,8 @@ export interface Highlight {
   createdAt: string;
   /** For code: the first and last line, 1-based. `text` holds those lines, to find them again after edits. */
   lines?: [number, number];
+  /** For a PDF: the page it is on, 1-based. Its quote is anchored inside that page's own text. */
+  page?: number;
 }
 
 export type SourceKind = "web" | "file" | "code";

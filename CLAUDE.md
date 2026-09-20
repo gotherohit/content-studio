@@ -212,6 +212,15 @@ wait. The AI request aborts when the pane closes. Assume a recording is in progr
   near the viewport, and reports the page through `PaneView.slideIndex` — the same field a
   Markdown deck uses, so beats, capture and restore work unchanged. Its geometry lives in
   `client/src/pdf.ts` and is unit-tested; the component holds no page maths of its own.
+- **A PDF highlight is anchored inside one page's text layer.** The layer pdf.js builds for
+  selection is an ordinary DOM, so `captureRange`/`applyHighlights` work on it unchanged — the
+  root is that page's layer, never the scroller, and the page number goes on the highlight
+  (`page`, 1-based). A selection across two pages has no single root and is refused. Marks are
+  re-applied whenever a page is painted, because a canvas is dropped as soon as it scrolls away.
+  They sit over the canvas, so they carry opacity rather than an opaque colour, or the glyphs
+  underneath would disappear.
+- **Scrolling a chosen highlight into view uses `block: "nearest"`.** Centring it pushed its own
+  page off the top of the pane, and the counter then named the page before it.
 - **pdf.js fetches character maps, standard fonts and WASM decoders by URL at runtime.**
   `client/scripts/copy-pdfjs.mjs` copies them into `client/public/pdfjs/` before dev and every
   build (`predev`/`prebuild`); the copy is generated and gitignored. Without it, a PDF with

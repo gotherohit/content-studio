@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { clampPage, fitScale, layoutPages, offsetOf, pageAt, stepZoom, visiblePages, PAGE_GAP } from "../client/src/pdf.ts";
+import { clampPage, fitScale, highlightsOnPage, layoutPages, offsetOf, pageAt, pageOf, stepZoom, visiblePages, PAGE_GAP } from "../client/src/pdf.ts";
 
 const sizes = Array.from({ length: 6 }, () => ({ width: 612, height: 792 }));
 
@@ -66,4 +66,16 @@ test("zoom steps are symmetrical", () => {
   assert.equal(stepZoom(1.25, -1), 1);
   assert.equal(stepZoom(4, 1), 4);
   assert.equal(stepZoom(0.5, -1), 0.5);
+});
+
+test("a highlight belongs to the page it was made on", () => {
+  const hs = [{ id: "a", page: 1 }, { id: "b", page: 3 }, { id: "c", page: 3 }, { id: "d" }];
+  assert.equal(pageOf({ page: 1 }), 0);
+  assert.equal(pageOf({ page: 4 }), 3);
+  // One saved before pages were recorded, or with nonsense in it, belongs to the first page.
+  assert.equal(pageOf({}), 0);
+  assert.equal(pageOf({ page: 0 }), 0);
+  assert.deepEqual(highlightsOnPage(hs, 0).map((h) => h.id), ["a", "d"]);
+  assert.deepEqual(highlightsOnPage(hs, 2).map((h) => h.id), ["b", "c"]);
+  assert.deepEqual(highlightsOnPage(hs, 1), []);
 });

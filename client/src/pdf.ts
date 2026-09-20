@@ -84,3 +84,12 @@ export function stepZoom(zoom: number, by: 1 | -1) {
   const at = by > 0 ? (i === -1 ? ZOOM_STEPS.length - 1 : i) : Math.max(0, (i === -1 ? ZOOM_STEPS.length : i) - 2);
   return ZOOM_STEPS[Math.min(Math.max(at, 0), ZOOM_STEPS.length - 1)];
 }
+
+/** A PDF highlight belongs to one page; one saved without a page is treated as the first. */
+export function pageOf(highlight: { page?: number }) {
+  return Math.max(1, Math.round(highlight.page || 1)) - 1;
+}
+
+export function highlightsOnPage<T extends { page?: number }>(highlights: T[], index: number) {
+  return highlights.filter((h) => pageOf(h) === index);
+}

@@ -2,6 +2,17 @@
 
 What changed in each release, newest first. Versions are the ones the app updates itself to.
 
+## 0.17.0
+
+- **PDFs take highlights.** Select a passage in a PDF and the usual popup appears: colour, note,
+  and a card in the Highlights panel labelled with the page it is on. Clicking the card turns
+  back to that page and puts the passage on screen, and the highlight can be linked to other
+  sources like any other.
+- Highlights are drawn over the page itself, and survive scrolling, zooming, Slides mode and
+  reopening the project. **Copy as markdown** notes the page a quote came from.
+- A selection cannot run across two pages, and a scanned PDF with no text layer still cannot be
+  highlighted.
+
 ## 0.16.0
 
 - **PDFs are drawn by the app itself instead of the browser's built-in viewer.** Scrolling a

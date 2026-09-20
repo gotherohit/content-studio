@@ -503,7 +503,9 @@ export default function App() {
 
   function copyHighlights() {
     if (!source) return;
-    const md = [`## ${source.title}`, source.url, "", ...source.highlights.map((h) => `> ${h.text}\n${h.comment ? `\n${h.comment}\n` : ""}`)].join("\n");
+    const md = [`## ${source.title}`, source.url, "", ...source.highlights.map((h) => `${h.page ? `*Page ${h.page}*
+
+` : ""}> ${h.text}\n${h.comment ? `\n${h.comment}\n` : ""}`)].join("\n");
     navigator.clipboard.writeText(md);
   }
 

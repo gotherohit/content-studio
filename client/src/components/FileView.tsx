@@ -120,6 +120,11 @@ export function FileView(p: Props) {
         onPage={p.onSlideIndex}
         onCount={p.onSlideCount}
         presenting={p.presenting}
+        highlights={source.highlights}
+        onAddHighlight={p.onAddHighlight}
+        onSelectHighlight={p.onSelectHighlight}
+        scrollToId={p.scrollToId}
+        scrollNonce={p.scrollNonce}
       />
     );
   }

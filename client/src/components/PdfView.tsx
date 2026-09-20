@@ -3,7 +3,10 @@ import { GlobalWorkerOptions, TextLayer, getDocument, type PDFDocumentProxy, typ
 import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import "pdfjs-dist/web/pdf_viewer.css";
 import { Minus, Plus } from "lucide-react";
-import { PAGE_GAP, clampPage, fitScale, layoutPages, offsetOf, pageAt, stepZoom, visiblePages, type PageSize } from "../pdf";
+import type { Highlight, HighlightColor } from "../types";
+import { applyHighlights, captureSelection } from "../highlighter";
+import { HighlightPopup } from "./HighlightPopup";
+import { PAGE_GAP, clampPage, fitScale, highlightsOnPage, layoutPages, offsetOf, pageAt, pageOf, stepZoom, visiblePages, type PageSize } from "../pdf";
 
 GlobalWorkerOptions.workerSrc = workerUrl;
 
@@ -26,6 +29,12 @@ interface Props {
   onPage: (i: number) => void;
   onCount: (n: number) => void;
   presenting: boolean;
+  /** A deck rendered to PDF has no highlights of its own, so these are optional. */
+  highlights?: Highlight[];
+  onAddHighlight?: (h: Highlight) => void;
+  onSelectHighlight?: (id: string) => void;
+  scrollToId?: string | null;
+  scrollNonce?: number;
 }
 
 /**
@@ -37,6 +46,7 @@ export function PdfView(p: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const pageEls = useRef(new Map<number, HTMLDivElement>());
+  const textEls = useRef(new Map<number, HTMLDivElement>());
   const tasks = useRef(new Map<number, RenderTask>());
   const painted = useRef(new Map<number, number>());
   const generation = useRef(0);
@@ -47,6 +57,12 @@ export function PdfView(p: Props) {
   const [err, setErr] = useState<string | null>(null);
   const [box, setBox] = useState({ width: 0, height: 0 });
   const [zoom, setZoom] = useState(1);
+  const [popup, setPopup] = useState<{ x: number; y: number; flip: boolean; page: number; anchor: NonNullable<ReturnType<typeof captureSelection>> } | null>(null);
+
+  const highlights = p.highlights ?? [];
+  // paint() is memoised on the scale, but must always draw the highlights as they are now.
+  const marks = useRef(highlights);
+  marks.current = highlights;
 
   const count = sizes.length;
   const page = clampPage(p.page, count);
@@ -130,7 +146,10 @@ export function PdfView(p: Props) {
       el.style.setProperty("--scale-factor", String(scale));
       el.style.setProperty("--total-scale-factor", String(scale));
       await new TextLayer({ textContentSource: pdfPage.streamTextContent(), container: text, viewport: css }).render();
-      if (mine === generation.current && pageEls.current.get(i) === el) el.append(text);
+      if (mine !== generation.current || pageEls.current.get(i) !== el) return;
+      el.append(text);
+      textEls.current.set(i, text);
+      applyHighlights(text, highlightsOnPage(marks.current, i));
     } catch {
       // A cancelled render is the normal way a scroll interrupts one.
       painted.current.delete(i);
@@ -154,6 +173,7 @@ export function PdfView(p: Props) {
       tasks.current.get(i)?.cancel();
       tasks.current.delete(i);
       painted.current.delete(i);
+      textEls.current.delete(i);
       el.replaceChildren();
     }
     clearTimeout(settle.current);
@@ -168,6 +188,7 @@ export function PdfView(p: Props) {
     tasks.current.clear();
     painted.current.clear();
     for (const el of pageEls.current.values()) el.replaceChildren();
+    textEls.current.clear();
     draw();
   }, [scale, doc, p.slideshow]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -178,6 +199,11 @@ export function PdfView(p: Props) {
     scrollRef.current?.scrollTo({ top: offsetOf(layout, page), behavior: "instant" });
     draw();
   }, [page, count, layout, p.slideshow]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // A highlight added, recoloured or deleted must show on the pages already drawn.
+  useEffect(() => {
+    for (const [i, text] of textEls.current) applyHighlights(text, highlightsOnPage(highlights, i));
+  }, [highlights]);
 
   const frame = useRef(0);
   const onScroll = () => {
@@ -219,6 +245,50 @@ export function PdfView(p: Props) {
     return () => window.removeEventListener("keydown", onKey);
   }, [count, goTo, p.slideshow, p.presenting]);
 
+  /** Choosing a highlight card: turn to its page, then put the passage on screen. */
+  useEffect(() => {
+    const h = p.scrollToId ? highlights.find((x) => x.id === p.scrollToId) : null;
+    if (!h || !count) return;
+    goTo(pageOf(h));
+    let tries = 0;
+    const timer = setInterval(() => {
+      const mark = scrollRef.current?.querySelector<HTMLElement>(`mark.hl[data-hid="${h.id}"]`);
+      // "nearest", not "center": centring a passage pushes its page off the top of the pane,
+      // and the counter would then name the page before it.
+      if (mark) mark.scrollIntoView({ behavior: "instant", block: "nearest" });
+      if (mark || ++tries > 20) clearInterval(timer);
+    }, 100);
+    return () => clearInterval(timer);
+  }, [p.scrollToId, p.scrollNonce, count]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /** A selection inside one page's text layer becomes a highlight on that page. */
+  const onMouseUp = (e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).closest(".hl-popup")) return;
+    const scroller = scrollRef.current;
+    const layer = (e.target as HTMLElement).closest(".textLayer") as HTMLElement | null;
+    if (!scroller || !layer || !p.onAddHighlight) { setPopup(null); return; }
+    const anchor = captureSelection(layer);
+    // Null for a selection running across two pages: each page has its own text.
+    if (!anchor || !anchor.text.trim()) { setPopup(null); return; }
+    const i = [...textEls.current].find(([, el]) => el === layer)?.[0] ?? 0;
+    const rect = scroller.ownerDocument.defaultView!.getSelection()!.getRangeAt(0).getBoundingClientRect();
+    const host = scroller.getBoundingClientRect();
+    const above = rect.top - host.top;
+    const flip = above < 120;
+    setPopup({
+      x: Math.min(Math.max(rect.left - host.left + rect.width / 2, 170), host.width - 170),
+      y: (flip ? rect.bottom - host.top + 8 : above - 8) + scroller.scrollTop,
+      flip, page: i, anchor,
+    });
+  };
+
+  const commit = (color: HighlightColor, comment: string) => {
+    if (!popup || !p.onAddHighlight) return;
+    p.onAddHighlight({ id: `h${Date.now().toString(36)}`, ...popup.anchor, page: popup.page + 1, color, comment, createdAt: new Date().toISOString() });
+    scrollRef.current?.ownerDocument.defaultView?.getSelection()?.removeAllRanges();
+    setPopup(null);
+  };
+
   const onWheel = (e: React.WheelEvent) => {
     if (!e.ctrlKey || p.slideshow) return;
     e.preventDefault();
@@ -241,6 +311,11 @@ export function PdfView(p: Props) {
         tabIndex={0}
         onScroll={p.slideshow ? undefined : onScroll}
         onWheel={onWheel}
+        onMouseUp={onMouseUp}
+        onClick={(e) => {
+          const mark = (e.target as HTMLElement).closest("mark.hl") as HTMLElement | null;
+          if (mark?.dataset.hid) p.onSelectHighlight?.(mark.dataset.hid);
+        }}
       >
         {(p.slideshow ? [page] : sizes.map((_, i) => i)).map((i) => (
           <div
@@ -250,6 +325,7 @@ export function PdfView(p: Props) {
             style={{ width: layout.widths[i], height: layout.heights[i], marginBottom: p.slideshow ? 0 : PAGE_GAP }}
           />
         ))}
+        {popup && <HighlightPopup x={popup.x} y={popup.y} flip={popup.flip} onCommit={commit} onCancel={() => setPopup(null)} />}
       </div>
       {!p.presenting && !p.slideshow && count > 0 && (
         <div className="pdf-zoom">

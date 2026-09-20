@@ -117,7 +117,7 @@ A source is anything you want on screen. Paste a URL in the top bar, click **Fil
 | Text, code, JSON, HTML | Text or rendered view |
 | Word, Excel | Export to PDF and add that instead |
 
-Select text in a web page, markdown or text source to highlight it and attach a comment.
+Select text in a web page, PDF, markdown or text source to highlight it and attach a comment.
 Saved highlights appear in both Original and Reader views. Original view restores their
 colours when page scripts refresh the article; hidden copies of text are ignored. Minor
 whitespace changes are tolerated, but a passage rewritten or removed by the publisher may
@@ -214,8 +214,11 @@ document is and the pane always knows which page you are on.
 * Zoom with the small `−` `+` control in the corner of the pane, or hold `Ctrl` and scroll.
   The percentage button puts the page back to the pane's width. The control is hidden in
   Present mode.
-* Text is selectable, so a quote can still be copied out of a paper. PDFs do not take
-  highlights: highlight the passage in the article or a Markdown note instead.
+* **Select text to highlight it**, exactly as in an article: the popup takes a colour and a
+  note, and the passage joins the Highlights panel with the page it is on. Clicking its card
+  turns back to that page. PDF highlights link to other sources and appear in the map like
+  any other. A selection cannot run across two pages — each page holds its own text — and
+  a passage in a scanned PDF with no text layer cannot be selected at all.
 * **A beat remembers the page**, in either mode, and puts it back when you show that beat.
   With two PDFs open at once, the keys go to the pane you last clicked in.
 
