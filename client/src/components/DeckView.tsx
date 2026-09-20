@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight, MonitorPlay, RefreshCw } from "lucide-react";
 import { api, type AppConfig } from "../api";
 import type { DeckRender } from "../types";
+import { PdfView } from "./PdfView";
 
 interface Props {
   projectId: string;
@@ -11,6 +12,7 @@ interface Props {
   onSlideIndex: (i: number) => void;
   onSlideCount: (n: number) => void;
   config: AppConfig | null;
+  presenting: boolean;
 }
 
 /**
@@ -19,7 +21,7 @@ interface Props {
  * still image, so "Play in PowerPoint" starts the real slideshow, which the Window
  * pane can mirror and drive.
  */
-export function DeckView({ projectId, name, slideshow, slideIndex, onSlideIndex, onSlideCount, config }: Props) {
+export function DeckView({ projectId, name, slideshow, slideIndex, onSlideIndex, onSlideCount, config, presenting }: Props) {
   const [render, setRender] = useState<DeckRender | null>(null);
   const [busy, setBusy] = useState(true);
   const [err, setErr] = useState<string | null>(null);
@@ -64,9 +66,19 @@ export function DeckView({ projectId, name, slideshow, slideIndex, onSlideIndex,
 
   if (busy) return <div className="panel-empty">Rendering slides with PowerPoint…</div>;
 
-  // LibreOffice route: we got a PDF instead of images.
+  // LibreOffice route: we got a PDF instead of images, so it gets the PDF viewer.
   if (render?.pdf) {
-    return <iframe className="file-frame" src={api.deckSlideUrl(projectId, name, render.pdf)} title={name} />;
+    return (
+      <PdfView
+        url={api.deckSlideUrl(projectId, name, render.pdf)}
+        name={name}
+        slideshow={slideshow}
+        page={slideIndex}
+        onPage={onSlideIndex}
+        onCount={onSlideCount}
+        presenting={presenting}
+      />
+    );
   }
 
   if (!slides.length) {

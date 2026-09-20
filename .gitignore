@@ -56,3 +56,6 @@ release/
 
 # API keys never live in the repo; they are in ~/.content-studio/credentials.json
 credentials.json
+
+# generated before dev and builds by client/scripts/copy-pdfjs.mjs
+client/public/pdfjs/

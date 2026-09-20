@@ -2,6 +2,21 @@
 
 What changed in each release, newest first. Versions are the ones the app updates itself to.
 
+## 0.16.0
+
+- **PDFs are drawn by the app itself instead of the browser's built-in viewer.** Scrolling a
+  long PDF inside a pane is smooth: each page is rasterised only while it is near the viewport
+  and repainting waits for a fast scroll to settle.
+- **Arrow keys turn PDF pages.** `→` `←`, `PageDown` `PageUp`, `Home` and `End` work in both
+  Document and Slides mode, and `Space` in Slides. In Present mode the arrows still belong to
+  the beats.
+- **The page counter in the toolbar now covers PDFs**, in both modes, and its arrows turn the
+  page. A beat captures and restores the page it was on.
+- **Zoom**, with the control in the corner of the pane or `Ctrl` and the scroll wheel; the
+  percentage button returns to the pane's width.
+- Text in a PDF can still be selected and copied. A deck converted by LibreOffice uses the
+  same viewer.
+
 ## 0.15.1
 
 A regression pass over every existing flow: articles and beats, sidebar collapse and Present mode, browsing inside a pane, Save as source, the Source toolbar and summary, links, backlinks and the map, file sources, highlights in articles, text files and Reader, Notes, the Code runner, Terminal, Canvas, Jupyter, the beat list, beat scripts, the presenter window, Settings, project rename and delete, and the Files pane.

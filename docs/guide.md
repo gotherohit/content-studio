@@ -109,7 +109,7 @@ A source is anything you want on screen. Paste a URL in the top bar, click **Fil
 |---|---|
 | Web page | The live page, exactly as the site builds it, or a clean Reader view |
 | PowerPoint (`.pptx`, `.ppt`) | Real slides rendered by PowerPoint: a filmstrip, a slideshow, or the live animated show |
-| PDF | Page view, or a Slides mode that fills the pane |
+| PDF | A scrolling page view, or a Slides mode that fills the pane. See [PDFs](#pdfs) |
 | Markdown | Document view, or Slides — split on a line containing only `---` |
 | Jupyter notebook | Rendered cells with code, stdout, errors and image outputs |
 | Images, video, audio | Inline player or viewer |
@@ -200,6 +200,27 @@ Bigger circles have more highlights and links.
 
 **Every Source pane picks its own source.** The dropdown at the left of a Source pane's toolbar either follows the sidebar selection or pins one source, so a slide deck can sit in one pane and the article it discusses in another.
 
+### PDFs
+
+PDFs are drawn page by page inside the pane, so scrolling stays smooth however long the
+document is and the pane always knows which page you are on.
+
+* **Document** mode scrolls through the pages; **Slides** mode shows one whole page at a time.
+* `→` `←` and `PageDown` `PageUp` turn the page in either mode, `Home` and `End` jump to the
+  first and last. In Slides mode `Space` also moves on. These keys belong to the beats in
+  Present mode, as they do for a Markdown deck, so a PDF never pages under you mid-take.
+* The page counter beside **Document / Slides** shows where you are, and its arrows turn the
+  page too.
+* Zoom with the small `−` `+` control in the corner of the pane, or hold `Ctrl` and scroll.
+  The percentage button puts the page back to the pane's width. The control is hidden in
+  Present mode.
+* Text is selectable, so a quote can still be copied out of a paper. PDFs do not take
+  highlights: highlight the passage in the article or a Markdown note instead.
+* **A beat remembers the page**, in either mode, and puts it back when you show that beat.
+  With two PDFs open at once, the keys go to the pane you last clicked in.
+
+A deck that LibreOffice converted to PDF is shown by the same viewer.
+
 ### Slide decks
 
 PowerPoint is the only thing that renders `.pptx` faithfully, so when it is installed Content Studio drives it to export each slide as an image. Fonts, charts and layout come out exactly as designed. Two ways to show a deck:
@@ -255,8 +276,8 @@ Things worth knowing:
   saved highlights, immediately, but cannot recover scroll positions that were never saved.
   Arrange the old beat as you want it and use its camera button once.
 * **Reading positions cover Original web pages, Reader, and scrollable in-app file views.**
-  Native PDF viewers and separate Browser/Embed panes do not expose their internal reading
-  positions to beats. Highly dynamic pages or sites with their own nested scrolling areas
+  A PDF saves its page rather than a passage. Separate Browser/Embed panes do not expose their
+  internal reading positions to beats. Highly dynamic pages or sites with their own nested scrolling areas
   may need Reader view for reliable passage restoration. A page that cannot confirm restoration
   shows a visible error instead of staying concealed.
 * **Code and the map are part of a beat too.** A Files pane or code source restores its file,
@@ -511,7 +532,9 @@ A key that cannot be decrypted is **kept, not discarded** — the provider simpl
 | `→` `←` `Space` | Next or previous beat, in Present mode |
 | `Home` / `End` | First / last beat, in Present mode or the presenter window |
 | `h` | Hide or show the beat strip |
-| `→` `←` `Space` | Navigate slides, when not presenting |
+| `→` `←` `Space` | Navigate slides and PDF pages, when not presenting |
+| `Home` / `End` | First / last page of a PDF, when not presenting |
+| `Ctrl` + scroll | Zoom a PDF |
 | `Ctrl+Enter` | Run the current code snippet |
 | `Ctrl+S` | Save the open file, in the Files pane |
 | `F2` / `Delete` | Rename / delete the selected file or folder, in the Files pane |

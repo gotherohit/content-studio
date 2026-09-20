@@ -206,6 +206,27 @@ wait. The AI request aborts when the pane closes. Assume a recording is in progr
   links, backlinks, the map and beats work unchanged. It quotes its lines and relocates by
   them (`locateLines`). A focused beat restores without a text selection, so its lines live
   only in the saved view — `codeFor` keeps them on re-capture.
+- **PDFs are ours, not the browser's.** Chromium's viewer is a plugin in an iframe: it scrolls
+  badly inside a pane, says nothing about which page is showing and swallows the keys, so a
+  beat could not capture a page. `PdfView` rasterises with pdf.js, one canvas per page and only
+  near the viewport, and reports the page through `PaneView.slideIndex` — the same field a
+  Markdown deck uses, so beats, capture and restore work unchanged. Its geometry lives in
+  `client/src/pdf.ts` and is unit-tested; the component holds no page maths of its own.
+- **pdf.js fetches character maps, standard fonts and WASM decoders by URL at runtime.**
+  `client/scripts/copy-pdfjs.mjs` copies them into `client/public/pdfjs/` before dev and every
+  build (`predev`/`prebuild`); the copy is generated and gitignored. Without it, a PDF with
+  embedded CJK or JPEG 2000 images renders blank with no error in the pane.
+- **Measure the pane before the document arrives.** Returning a "loading" element instead of the
+  host meant the `ResizeObserver` never attached, the width stayed zero and every page was laid
+  out one pixel tall. The host is always rendered; the message sits over it.
+- **The last page can never reach the top of the pane.** "Which page am I on" is the page under
+  the top third of the viewport, except at the very bottom, where it is the last page —
+  otherwise `End` on a short last page reports the one before it.
+- **Rasterising is main-thread work, so it waits for the scroll to settle** (90 ms). Painting
+  every intermediate position of a fling halves the frame rate for pages already scrolled past.
+- **In Present mode the arrows belong to the beats.** Every pane that pages on arrow keys —
+  Markdown slides, decks, PDFs — must stand down while presenting, or → both advances the beat
+  and turns the page.
 - **A key handler attached in an effect sees the state of the render that attached it.** The
   Markdown slide keys called a setter that computed "next" from the slide number captured at
   attach time, so → could never get past slide two. Read current state through a ref that is

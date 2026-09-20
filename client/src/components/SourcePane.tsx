@@ -122,7 +122,7 @@ export function SourcePane(p: Props) {
   }, [source?.id, mode, p.restoreNonce, slideshow]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (!slideshow || viewer !== "markdown") return; // deck and pdf handle their own keys
+    if (!slideshow || viewer !== "markdown") return; // deck and PDF handle their own keys
     const onKey = (e: KeyboardEvent) => {
       if (document.querySelector(".app.present")) return;
       const t = e.target as HTMLElement;
@@ -196,7 +196,7 @@ export function SourcePane(p: Props) {
             <span className="muted small grow ellipsis" title={source.file!.name}>{source.file!.name}</span>
             {canSlide && (
               <>
-                {slideshow && viewer === "markdown" && (
+                {(viewer === "pdf" || (slideshow && viewer === "markdown")) && (
                   <>
                     <button className="icon-btn" onClick={() => setSlideIndex((i) => Math.max(0, i - 1))} disabled={slideIndex === 0} title="Previous slide"><ChevronLeft size={15} /></button>
                     <span className="muted small">{slideIndex + 1}/{slideCount}</span>
@@ -287,6 +287,7 @@ export function SourcePane(p: Props) {
             scrollNonce={p.scrollNonce}
             onAddHighlight={p.onAddHighlight}
             onSelectHighlight={p.onSelectHighlight}
+            presenting={p.presenting}
           />
         ) : mode === "original" ? (
           <OriginalView

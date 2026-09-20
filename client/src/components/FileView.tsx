@@ -6,6 +6,7 @@ import { applyHighlights, captureSelection } from "../highlighter";
 import { HighlightPopup } from "./HighlightPopup";
 import { NotebookView } from "./NotebookView";
 import { DeckView } from "./DeckView";
+import { PdfView } from "./PdfView";
 import type { AppConfig } from "../api";
 
 interface Props {
@@ -21,6 +22,7 @@ interface Props {
   scrollNonce: number;
   onAddHighlight: (h: Highlight) => void;
   onSelectHighlight: (id: string) => void;
+  presenting: boolean;
 }
 
 function parseDelimited(text: string, sep: string) {
@@ -109,8 +111,17 @@ export function FileView(p: Props) {
   if (err) return <div className="panel-empty">Could not open {file.name}: {err}</div>;
 
   if (viewer === "pdf") {
-    // #toolbar=0 in slideshow so a full-page slide fills the pane.
-    return <iframe key={p.slideshow ? "show" : "read"} className="file-frame" src={`${url}#view=FitH${p.slideshow ? "&toolbar=0&pagemode=none" : ""}`} title={file.name} />;
+    return (
+      <PdfView
+        url={url}
+        name={file.name}
+        slideshow={p.slideshow}
+        page={p.slideIndex}
+        onPage={p.onSlideIndex}
+        onCount={p.onSlideCount}
+        presenting={p.presenting}
+      />
+    );
   }
   if (viewer === "html") return <iframe className="file-frame" src={url} title={file.name} sandbox="allow-scripts allow-same-origin allow-forms" />;
   if (viewer === "image") return <div className="file-media"><img src={url} alt={file.name} /></div>;
@@ -127,6 +138,7 @@ export function FileView(p: Props) {
         onSlideIndex={p.onSlideIndex}
         onSlideCount={p.onSlideCount}
         config={p.config}
+        presenting={p.presenting}
       />
     );
   }
