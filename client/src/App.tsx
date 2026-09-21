@@ -15,6 +15,7 @@ import { UpdateBanner } from "./components/UpdateBanner";
 import { Sidebar } from "./components/Sidebar";
 import { SourcePane } from "./components/SourcePane";
 import { HighlightsPanel } from "./components/HighlightsPanel";
+import { highlightSourceFor } from "./highlight-source";
 import { NotesPanel } from "./components/NotesPanel";
 import { CodePanel } from "./components/CodePanel";
 import { AiPanel } from "./components/AiPanel";
@@ -554,9 +555,9 @@ export default function App() {
     if (end.highlightId) setScrollNonce((n) => n + 1);
   }, [project?.sources]);
 
-  function copyHighlights() {
-    if (!source) return;
-    const md = [`## ${source.title}`, source.url, "", ...source.highlights.map((h) => `${h.page ? `*Page ${h.page}*
+  function copyHighlights(from: Source | null) {
+    if (!from) return;
+    const md = [`## ${from.title}`, from.url, "", ...from.highlights.map((h) => `${h.page ? `*Page ${h.page}*
 
 ` : ""}> ${h.text}\n${h.comment ? `\n${h.comment}\n` : ""}`)].join("\n");
     navigator.clipboard.writeText(md);
@@ -876,22 +877,24 @@ export default function App() {
           />
         );
       }
-      case "highlights":
+      case "highlights": {
+        const shownSource = highlightSourceFor(layout.panes, i, project.sources, activeSourceId);
         return (
           <HighlightsPanel
-            source={source}
+            source={shownSource}
             sources={project.sources}
             links={project.links ?? []}
             selectedId={selectedHl}
-            onSelect={selectFromCard}
-            onUpdate={(h) => source && updateHighlight(source.id, h)}
-            onDelete={(id) => source && deleteHighlight(source.id, id)}
-            onCopyAll={copyHighlights}
+            onSelect={(id) => { if (shownSource) setActiveSourceId(shownSource.id); selectFromCard(id); }}
+            onUpdate={(h) => shownSource && updateHighlight(shownSource.id, h)}
+            onDelete={(id) => shownSource && deleteHighlight(shownSource.id, id)}
+            onCopyAll={() => copyHighlights(shownSource)}
             onLink={setLinkFrom}
             onRemoveLink={removeLink}
             onGo={goToEnd}
           />
         );
+      }
       case "files": {
         const root = paneViews[i]?.code?.root ?? project.settings.filesRoot ?? project.dir ?? "";
         return (

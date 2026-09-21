@@ -85,7 +85,21 @@ export function blockAnchor(root, block, limit = 60) {
   return captureRange(root, range);
 }
 
-const EMPTY = { text: "", prefix: "", suffix: "" };
+const EMPTY = { text: "", prefix: "", suffix: "", blocks: undefined };
+
+// A drawing can cover several paragraphs that become columns at another breakpoint.
+// Its host is their union, not the page or whichever paragraph happened to be largest.
+function groupHost(hosts) {
+  return {
+    getBoundingClientRect() {
+      const boxes = hosts.map(el => el.getBoundingClientRect());
+      const left = Math.min(...boxes.map(r => r.left)), top = Math.min(...boxes.map(r => r.top));
+      const right = Math.max(...boxes.map(r => r.right)), bottom = Math.max(...boxes.map(r => r.bottom));
+      return { left, top, right, bottom, x: left, y: top, width: right - left, height: bottom - top };
+    },
+    scrollIntoView(options) { hosts[0].scrollIntoView(options); },
+  };
+}
 
 /**
  * What a drawing belongs to: the thing it mostly covers.
@@ -100,6 +114,21 @@ export function anchorForRect(doc, root, rect) {
   const overlap = (a, b) =>
     Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left)) *
     Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top));
+  const covered = [];
+  for (const el of root.querySelectorAll(LEAF)) {
+    if (el.closest('.rs-shapes, .shape-layer') || el.querySelector(LEAF + ',img')) continue;
+    const r = el.getBoundingClientRect();
+    if (!r.width || !r.height || overlap(rect, r) < r.width * r.height * 0.25) continue;
+    const quote = blockAnchor(root, el);
+    if (!quote?.text.trim()) continue;
+    const host = hostFor(root, quote);
+    if (host && !covered.some(c => c.host === host)) covered.push({ host, quote });
+  }
+  const drawnArea = Math.max(1, (rect.right - rect.left) * (rect.bottom - rect.top));
+  if (covered.length > 1 && covered.reduce((sum, c) => sum + overlap(rect, c.host.getBoundingClientRect()), 0) >= drawnArea * 0.3) {
+    return { host: groupHost(covered.map(c => c.host)), onImage: undefined,
+      anchor: { ...covered[0].quote, blocks: covered.map(c => c.quote) } };
+  }
   let best = null, most = 0;
   for (const el of root.querySelectorAll(LEAF + ",img")) {
     if (el.tagName !== "IMG" && (el.textContent || "").trim().length < ENOUGH) continue;
@@ -131,7 +160,7 @@ export function anchorForRect(doc, root, rect) {
   // overlap: a container's first words belong to its first paragraph. Keeping the drawing
   // against anything else means it is drawn against a different box than it was measured in.
   const settled = hostFor(root, quote) || best;
-  return { host: settled, onImage: undefined, anchor: quote };
+  return { host: settled, onImage: undefined, anchor: { ...quote, blocks: undefined } };
 }
 
 /** What a shape drawn at this point should be anchored to: a picture, or a block of prose. */
@@ -153,6 +182,11 @@ export function anchorAt(doc, root, x, y) {
 
 /** The element a saved shape sits on, or null when the page no longer has it. */
 export function hostFor(root, h) {
+  if (h.blocks?.length) {
+    const hosts = h.blocks.map(quote => hostFor(root, quote));
+    // A missing block must not silently shrink the drawing onto a different passage.
+    return hosts.every(Boolean) ? groupHost(hosts) : null;
+  }
   if (h.onImage) {
     const img = Array.from(root.querySelectorAll("img")).find((im) => (im.currentSrc || im.src) === h.onImage || im.getAttribute("src") === h.onImage);
     if (img) return img;

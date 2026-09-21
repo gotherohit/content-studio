@@ -2,6 +2,12 @@
 
 What changed in each release, newest first. Versions are the ones the app updates itself to.
 
+## 0.21.3
+
+- Drawings spanning several prose blocks now anchor to their combined bounds, so a rectangle follows those blocks when a responsive site switches between stacked text and columns.
+- Highlights now follows the nearest Source pane, including its pinned article, instead of showing an unrelated sidebar source until a highlight is clicked. Card edits, deletion and copying use the same resolved source.
+- Existing drawings saved against the whole page have no passage anchors. Move or resize one over its intended content, or redraw it once, to attach it to that content.
+
 ## 0.21.2
 
 - Fixed Original-view drawings drifting when a pane resized or moved alongside another pane. Drawings and note markers now use the overlay's actual origin, including on websites with a positioned, centred body.

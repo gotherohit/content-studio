@@ -233,6 +233,14 @@ wait. The AI request aborts when the pane closes. Assume a recording is in progr
   highlights: cards, comments, colours, links, the map, beats and Copy as markdown all work
   with no new plumbing. Everything that lays marks over text must therefore filter the list
   through `textHighlights()`, or `applyHighlights` would try to mark a shape's anchor quote.
+- **A drawing may cover several blocks.** `blocks` stores their quote anchors, and `hostFor`
+  returns their combined bounds. Choosing one paragraph (or falling back to the body) loses
+  the drawing when stacked sections become columns. Keep `blocks: undefined` in a new
+  single-block anchor so spreading an edit clears the old group. Old page-only drawings
+  cannot be inferred safely; an explicit move/resize or redraw attaches them to content.
+- **Highlights must resolve the displayed source, not only the sidebar selection.** A pinned
+  Source pane can differ from the sidebar. `highlightSourceFor` resolves the closest Source
+  pane; use that same source for rendering, editing, deleting, selecting and copying cards.
 - **The element being dragged must keep its identity.** Moving a drawing is a pointer capture
   on the shape; rendering the drag as a *different* element (a preview with another key) takes
   the captured node out of the document and the drag dies on the first move. The same element

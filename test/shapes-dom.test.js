@@ -106,3 +106,24 @@ test('a drawing dragged clear of the prose belongs to the source, not to the nea
   const around = anchorForRect(doc, doc.body, { left: 90, top: 190, right: 510, bottom: 250 });
   assert.equal(around.host.id, 'two');
 });
+
+test('a rectangle spanning stacked paragraphs follows both when they become columns', t => {
+  const doc = page(t);
+  const rect = { left: 90, top: 90, right: 510, bottom: 250 };
+  const found = anchorForRect(doc, doc.body, rect);
+  assert.equal(found.anchor.blocks.length, 2);
+  assert.equal(found.host.getBoundingClientRect().height, 140);
+  doc.querySelector('#one').getBoundingClientRect = () => ({ left: 100, top: 180, right: 300, bottom: 340, width: 200, height: 160 });
+  doc.querySelector('#two').getBoundingClientRect = () => ({ left: 320, top: 180, right: 520, bottom: 280, width: 200, height: 100 });
+  const restored = hostFor(doc.body, JSON.parse(JSON.stringify(found.anchor)));
+  assert.deepEqual(restored.getBoundingClientRect(), { left: 100, top: 180, right: 520, bottom: 340, x: 100, y: 180, width: 420, height: 160 });
+  doc.querySelector('#two').remove();
+  assert.equal(hostFor(doc.body, found.anchor), null);
+});
+
+test('editing a multi-block drawing onto one paragraph clears its previous blocks', t => {
+  const doc = page(t);
+  const old = anchorForRect(doc, doc.body, { left: 90, top: 90, right: 510, bottom: 250 }).anchor;
+  const next = anchorForRect(doc, doc.body, { left: 90, top: 290, right: 510, bottom: 350 }).anchor;
+  assert.equal(hostFor(doc.body, { ...old, ...next }).id, 'three');
+});

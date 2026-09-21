@@ -17,6 +17,8 @@ export interface Highlight {
   shape?: Shape;
   /** What the shape is drawn on when it is not a page: an image, by its source. */
   onImage?: string;
+  /** Prose blocks covered by a drawing, whose union follows responsive column changes. */
+  blocks?: { text: string; prefix: string; suffix: string }[];
 }
 
 export type ShapeKind = "rect" | "oval" | "arrow";

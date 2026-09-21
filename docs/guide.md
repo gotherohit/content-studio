@@ -118,6 +118,9 @@ A source is anything you want on screen. Paste a URL in the top bar, click **Fil
 | Word, Excel | Export to PDF and add that instead |
 
 Select text in a web page, PDF, markdown or text source to highlight it and attach a comment.
+The Highlights pane follows the nearest Source pane, including a pinned article; with no
+Source pane visible it follows the sidebar selection. Opening it does not require clicking
+a highlight first.
 Saved highlights appear in both Original and Reader views. Original view restores their
 colours when page scripts refresh the article; hidden copies of text are ignored. Minor
 whitespace changes are tolerated, but a passage rewritten or removed by the publisher may
@@ -243,6 +246,9 @@ Some things are easier pointed at than quoted. The pencil in the Source toolbar 
   an article drawn on in Reader keeps its drawings in Original view as well.
   In Original view the drawing also follows centred page layouts and late-loading content;
   adding a pane to the left does not change which passage it belongs to.
+  A drawing covering several text blocks follows their combined area when a site changes
+  between stacked sections and columns. Older boxes saved against the whole page need one
+  move/resize over the intended content (or a redraw) to acquire those anchors.
 * **A marker shows where there is more to see.** Anything with a comment, and anything that is
   one end of a link, carries a small marker — at the corner of a drawing, at the end of a
   quote. Click it and the note opens on the source itself: the comment, and every link, each

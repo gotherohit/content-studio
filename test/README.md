@@ -31,6 +31,13 @@ project, and stop the fixture when done. A real Tavily request needs a separatel
 
 # Highlight verification
 
+Responsive drawing coverage also checks several saved paragraph anchors changing from a
+stack to columns, including clearing that group after an edit onto one paragraph. On a
+scratch project, the Typesafe home page reproduces this with a rectangle around the
+"Not Chat" and "A New Model" sections. Switch between one and two panes and check both
+passages remain inside the rectangle. Pin that source, select another sidebar source, and
+open Highlights: its cards and edits must still belong to the pinned article.
+
 `shapes-original.test.js` runs the actual injected script with controlled browser geometry,
 checking a positioned body, narrow panes, scrolling and late reflow. For Electron verification,
 serve `shape-article.html` as a synthetic Original-view source on the test server at port 4710.
