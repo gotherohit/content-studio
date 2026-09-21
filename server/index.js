@@ -13,7 +13,7 @@ import { createSiteProxy } from "./site.js";
 import { attachTerminal } from "./terminal.js";
 import { createJupyter } from "./jupyter.js";
 import { createInput } from "./input.js";
-import { TYPES, viewerFor, safeName, uniqueName } from "./assets.js";
+import { TYPES, viewerFor, safeName, uniqueName, removeAsset } from "./assets.js";
 import { renderDeck, openSlideshow, hasPowerPoint, findSoffice } from "./slides.js";
 import { pickFolder } from "./picker.js";
 import { FilesError, MAX_BYTES, createEntry, deleteEntry, listDir, readText, renameEntry, statFile, writeText } from "./files.js";
@@ -374,9 +374,14 @@ app.get("/api/projects/:id/sources/:name", async (req, res) => {
 app.delete("/api/projects/:id/sources/:name", async (req, res) => {
   if (!safeId(req.params.id)) return res.status(400).end();
   const name = safeName(req.params.name);
-  await fs.rm(path.join(sourcesDir(req.params.id), name), { force: true });
-  await fs.rm(derivedDir(req.params.id, name), { recursive: true, force: true });
-  res.json({ ok: true });
+  try {
+    await removeAsset(sourcesDir(req.params.id), name);
+    // What was rendered from it is a cache and is rebuilt on demand, so it just goes.
+    await fs.rm(derivedDir(req.params.id, name), { recursive: true, force: true });
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // ---------- slide decks ----------

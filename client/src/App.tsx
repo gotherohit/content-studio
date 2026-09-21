@@ -26,6 +26,7 @@ import { BrowserPane } from "./components/BrowserPane";
 import { TerminalPane } from "./components/TerminalPane";
 import { JupyterPane } from "./components/JupyterPane";
 import { rootFor } from "./jupyter";
+import { adoptFiles } from "./sources";
 import { SlidesPane } from "./components/SlidesPane";
 import { WindowPane } from "./components/WindowPane";
 import { SettingsDialog } from "./components/SettingsDialog";
@@ -229,25 +230,20 @@ export default function App() {
    */
   async function adoptFolderFiles(p: Project) {
     const onDisk = await api.listFiles(p.id);
-    const known = new Set(p.sources.filter((s) => s.kind === "file").map((s) => s.file?.name));
-    const added = onDisk
-      .filter((f) => !known.has(f.name))
-      .map((f, i): Source => ({
+    // Decided inside the update, against the project as it stands: deciding against the copy
+    // this was handed adopted the same file twice when an earlier adoption was still landing.
+    mutate((cur) => {
+      if (cur.id !== p.id) return cur;
+      const sources = adoptFiles(cur.sources, onDisk, (f, i) => ({
         id: `src${Date.now().toString(36)}${i}`,
         kind: "file",
         file: { ...f, viewer: viewerForExt(f.ext) },
-        url: api.fileUrl(p.id, f.name),
+        url: api.fileUrl(cur.id, f.name),
         title: f.name, byline: null, siteName: null, excerpt: null,
         content: "", textContent: "", fetchedAt: new Date().toISOString(), highlights: [],
       }));
-    const onDiskNames = new Set(onDisk.map((f) => f.name));
-    const removed = p.sources.filter((s) => s.kind === "file" && !onDiskNames.has(s.file?.name ?? "")).length;
-    if (added.length || removed) {
-      mutate((cur) => ({
-        ...cur,
-        sources: [...cur.sources.filter((s) => s.kind !== "file" || onDiskNames.has(s.file?.name ?? "")), ...added],
-      }));
-    }
+      return sources ? { ...cur, sources } : cur;
+    });
   }
 
   // ---- debounced autosave
@@ -1034,7 +1030,20 @@ export default function App() {
           deletingId={deletingId}
           onRenameProject={(title) => mutate((p) => ({ ...p, title }))}
           onOpenSource={(id) => goToEnd({ sourceId: id })}
-          onRemoveSource={(id) => {
+          onRemoveSource={async (id) => {
+            // A file source is its file: the project folder is the source of truth, so a
+            // source removed while its file stays behind is adopted again on the next open.
+            // A code source points at a file outside the project and is never touched.
+            const gone = project?.sources.find((s) => s.id === id);
+            if (gone?.kind === "file" && gone.file) {
+              try {
+                await api.deleteFile(project!.id, gone.file.name);
+              } catch (e) {
+                setError(`${gone.file.name} could not be removed: ${(e as Error).message}`);
+                return;
+              }
+              setNotice({ kind: "ok", text: `${gone.file.name} moved to the Recycle Bin` });
+            }
             mutate((p) => { const sources = p.sources.filter((s) => s.id !== id); return { ...p, sources, links: pruneLinks(p.links ?? [], sources) }; });
             if (activeSourceId === id) setActiveSourceId(null);
           }}

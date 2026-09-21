@@ -3,6 +3,7 @@
 // project owns, so the terminal, code snippets and Jupyter all see the same material.
 import fs from "node:fs/promises";
 import path from "node:path";
+import { recycle } from "./files.js";
 
 export const TYPES = {
   ".md": "text/markdown", ".markdown": "text/markdown", ".txt": "text/plain",
@@ -50,4 +51,19 @@ export async function uniqueName(dir, name) {
     try { await fs.access(path.join(dir, candidate)); } catch { return candidate; }
     candidate = `${stem}-${i}${ext}`;
   }
+}
+
+/**
+ * Take a file out of a project's sources folder.
+ *
+ * The folder is the source of truth — anything in it is adopted as a source when the project
+ * opens — so a source that is removed while its file stays behind simply comes back. It goes
+ * to the Recycle Bin rather than being unlinked, because it is the creator's material.
+ */
+export async function removeAsset(dir, name, { trash = recycle } = {}) {
+  const file = path.join(dir, name);
+  try { await fs.access(file); } catch { return { removed: false }; }
+  await trash(file);
+  try { await fs.access(file); } catch { return { removed: true }; }
+  throw new Error(`${name} is still there — another program may have it open`);
 }

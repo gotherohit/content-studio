@@ -3,7 +3,7 @@ import {
   ArrowDown, ArrowUp, Camera, ChevronDown, ChevronRight, Clapperboard, FileCode2, FileText, FolderOpen,
   Copy, Image, Network, Plus, Presentation, ScrollText, Settings, Table2, Trash2, Undo2, X,
 } from "lucide-react";
-import type { Beat, Project, ProjectSummary } from "../types";
+import type { Beat, Project, ProjectSummary, Source } from "../types";
 
 interface Props {
   projects: ProjectSummary[];
@@ -74,6 +74,19 @@ function Section({ id, title, count, actions, children }: {
  * screen rather than in a separate step, and re-capture replaces the arrangement without
  * disturbing the text.
  */
+/**
+ * Removing a file source deletes the file too — the project folder is the source of truth,
+ * so a file left behind is adopted again the next time the project opens. That is worth a
+ * question, and worth saying where the file goes.
+ */
+function confirmRemoval(s: Source) {
+  const notes = s.highlights.length
+    ? `\n\n${s.highlights.length === 1 ? "Its highlight goes" : `Its ${s.highlights.length} highlights go`} with it, and any links to them.`
+    : "";
+  if (s.kind !== "file" || !s.file) return !notes || confirm(`Remove "${s.title}"?${notes}`);
+  return confirm(`Remove "${s.title}"?${notes}\n\n${s.file.name} moves to the Recycle Bin, where you can restore it. Leaving it in the project folder would bring this source back when the project is opened again.`);
+}
+
 function BeatRow({ beat, index, active, last, onGo, onPoint, onRecapture, onMove, onRemove, onScript, onDuplicate }: {
   beat: Beat; index: number; active: boolean; last: boolean;
   onGo: () => void;
@@ -175,7 +188,11 @@ export function Sidebar(p: Props) {
                   {firstLine(s.summary) && <span className="source-summary-line ellipsis">{firstLine(s.summary)}</span>}
                 </span>
                 <span className="badge">{s.highlights.length}</span>
-                <button className="icon-btn danger hover-only" title="Remove source" onClick={(e) => { e.stopPropagation(); p.onRemoveSource(s.id); }}><X size={13} /></button>
+                <button
+                  className="icon-btn danger hover-only"
+                  title={s.kind === "file" ? `Remove ${s.file?.name ?? s.title} and move its file to the Recycle Bin` : "Remove source"}
+                  onClick={(e) => { e.stopPropagation(); if (confirmRemoval(s)) p.onRemoveSource(s.id); }}
+                ><X size={13} /></button>
               </div>
             ))}
             {!p.project.sources.length && <div className="panel-empty">No sources yet. Paste a URL or drop a file.</div>}

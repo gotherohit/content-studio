@@ -106,6 +106,16 @@ wait. The AI request aborts when the pane closes. Assume a recording is in progr
   and launch `python -m jupyterlab` directly to own the real server process. The legacy
   root-based process cleanup remains for servers orphaned by earlier versions.
 
+- **A file source is its file.** The project folder is the source of truth: `adoptFolderFiles`
+  adds a source for anything in `sources/` and drops the sources whose files have gone. So
+  removing a file source must delete the file (`removeAsset`, to the Recycle Bin) or the next
+  open adopts it straight back, with a new id and no highlights — which is exactly what it did.
+  A `kind: "code"` source points at a file outside the project and must never be deleted.
+- **Adoption is decided inside `mutate`, against the project as it stands.** The listing is
+  asynchronous, so a decision taken against the project handed in adopts a file that has
+  already been adopted since: the same source twice. `adoptFiles` in `client/src/sources.ts`
+  holds the rule and is unit-tested; it returns null when nothing changed, so an open does not
+  mark the project dirty.
 - **One JupyterLab serves the whole app, and its root cannot change without a restart.** A
   folder is therefore a restart, and a restart takes every kernel with it. `client/src/jupyter.ts`
   holds the rules — which folder a pane wants (beat, then project setting, then the project

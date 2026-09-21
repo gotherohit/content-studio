@@ -101,6 +101,12 @@ The sidebar shows each project's folder under its name; click it to open the fol
 
 The folder is the source of truth. Drop a PDF into `sources/` from Explorer and it appears as a source next time you open the project; delete one and it disappears from the list.
 
+Because of that, **removing a file source removes its file too** — the X beside it asks first,
+and the file goes to the Recycle Bin, where you can restore it. A source left in the list
+while its file stayed in the folder would simply be adopted again the next time the project
+opened. Web sources and code sources have no file in the project: removing one only takes it
+off the list, and a code source's file, which lives outside the project, is never touched.
+
 ## Sources
 
 A source is anything you want on screen. Paste a URL in the top bar, click **File**, drop files on the window, or copy them into the project's `sources/` folder.

@@ -2,6 +2,19 @@
 
 What changed in each release, newest first. Versions are the ones the app updates itself to.
 
+## 0.23.1
+
+- **A removed source stayed removed.** Removing a PDF, image, deck or other file source took
+  it off the list but left its file in the project's `sources/` folder — and the folder is
+  what the project reads on opening, so every one of them came back the next time the project
+  was opened, with its highlights gone. The X now asks, then moves the file to the Recycle
+  Bin, so removing means removed. Web and code sources are unchanged; a code source's file
+  lives outside the project and is never touched.
+- **A file could be adopted twice.** Opening a project decided what to adopt from a copy of
+  the project taken before the folder was listed, so a file that had just been adopted was
+  adopted again — the same source twice in the sidebar.
+- Removing a source with highlights on it now asks first, and says how many go with it.
+
 ## 0.23.0
 
 - **Jupyter can open any folder, not only the project's.** The folder button in the pane
