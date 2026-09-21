@@ -2,6 +2,12 @@
 
 What changed in each release, newest first. Versions are the ones the app updates itself to.
 
+## 0.22.0
+
+- Selecting a source or following a source link now opens it in the visible Source pane, including when that pane was pinned to another article.
+- With multiple Source panes, choose the destination by its position and current article. Only that pane changes; Cancel leaves the panes and selection untouched. With no Source pane, the first pane becomes one.
+- Navigation clears the chosen pane's old browsed page and reading position. Linked passages scroll into view, including drawings in Original mode. Source-map navigation and newly added sources use the same destination flow.
+
 ## 0.21.3
 
 - Drawings spanning several prose blocks now anchor to their combined bounds, so a rectangle follows those blocks when a responsive site switches between stacked text and columns.

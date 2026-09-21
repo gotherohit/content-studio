@@ -121,6 +121,12 @@ Select text in a web page, PDF, markdown or text source to highlight it and atta
 The Highlights pane follows the nearest Source pane, including a pinned article; with no
 Source pane visible it follows the sidebar selection. Opening it does not require clicking
 a highlight first.
+
+Selecting a source in the sidebar or following a link opens it in the visible Source pane,
+even if that pane was pinned. If several Source panes are open, choose one in the destination
+picker; its position and current article identify it. The other panes stay on their current
+sources. Cancel (or `Esc`) leaves everything unchanged. With no Source pane, the first pane
+becomes a Source pane. Links to passages also bring the destination passage into view.
 Saved highlights appear in both Original and Reader views. Original view restores their
 colours when page scripts refresh the article; hidden copies of text are ignored. Minor
 whitespace changes are tolerated, but a passage rewritten or removed by the publisher may

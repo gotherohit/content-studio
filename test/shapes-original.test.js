@@ -39,6 +39,10 @@ test('Original drawings use the overlay origin through resize, scroll and late r
     shape: { kind: 'rect', x: 0, y: 0, w: 1, h: 1 } };
   win.dispatchEvent(new win.MessageEvent('message', { source: win, data: { src: 'rs-app', type: 'highlights', list: [h] } }));
   await wait();
+  let scrolled = false;
+  doc.querySelector('p').scrollIntoView = () => { scrolled = true; };
+  win.dispatchEvent(new win.MessageEvent('message', { source: win, data: { src: 'rs-app', type: 'scrollTo', id: 'drawing' } }));
+  assert.equal(scrolled, true, 'linked drawings must scroll to their host as text highlights do');
   const check = () => {
     const wrap = doc.querySelector('.rs-shapes [data-hid="drawing"]');
     assert.ok(wrap);

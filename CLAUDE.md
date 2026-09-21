@@ -241,6 +241,12 @@ wait. The AI request aborts when the pane closes. Assume a recording is in progr
 - **Highlights must resolve the displayed source, not only the sidebar selection.** A pinned
   Source pane can differ from the sidebar. `highlightSourceFor` resolves the closest Source
   pane; use that same source for rendering, editing, deleting, selecting and copying cards.
+- **Source navigation changes a pane, not just sidebar state.** Queue a destination, choose
+  the sole Source pane or ask when several exist, then use `navigateSourceLayout`. Before
+  changing the active source, pin other following panes to their current source. Clear only
+  the chosen pane's view and scope the highlight jump to it; otherwise old browsed pages and
+  beat positions win over the navigation, or duplicate panes all jump. Cancel must not mutate
+  project or selection state. With no Source pane the first pane is used.
 - **The element being dragged must keep its identity.** Moving a drawing is a pointer capture
   on the shape; rendering the drag as a *different* element (a preview with another key) takes
   the captured node out of the document and the drag dies on the first move. The same element

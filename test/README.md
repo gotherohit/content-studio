@@ -31,6 +31,12 @@ project, and stop the fixture when done. A real Tavily request needs a separatel
 
 # Highlight verification
 
+Source navigation tests cover pinned destinations and preserving other following panes.
+In a scratch project with linked sources, check sidebar selection and following a link with
+one Source pane, then two. Cancel the picker before choosing a destination, verify only the
+chosen pane changes, and restore a beat afterwards. Linked drawings in Original mode must
+scroll to their content host, as quoted highlights do.
+
 Responsive drawing coverage also checks several saved paragraph anchors changing from a
 stack to columns, including clearing that group after an edit onto one paragraph. On a
 scratch project, the Typesafe home page reproduces this with a rectangle around the

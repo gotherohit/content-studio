@@ -16,6 +16,7 @@ import { Sidebar } from "./components/Sidebar";
 import { SourcePane } from "./components/SourcePane";
 import { HighlightsPanel } from "./components/HighlightsPanel";
 import { highlightSourceFor } from "./highlight-source";
+import { navigateSourceLayout, sourcePaneLabel } from "./source-navigation";
 import { NotesPanel } from "./components/NotesPanel";
 import { CodePanel } from "./components/CodePanel";
 import { AiPanel } from "./components/AiPanel";
@@ -94,6 +95,8 @@ export default function App() {
   const [project, setProject] = useState<Project | null>(null);
   const [activeSourceId, setActiveSourceId] = useState<string | null>(null);
   const [selectedHl, setSelectedHl] = useState<string | null>(null);
+  const [navigation, setNavigation] = useState<{ projectId: string; end: LinkEnd } | null>(null);
+  const [navigationPane, setNavigationPane] = useState<number | null>(null);
   const [scrollNonce, setScrollNonce] = useState(0);
   const [url, setUrl] = useState("");
   const [loading, setLoading] = useState(false);
@@ -279,6 +282,7 @@ export default function App() {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement;
       const typing = ["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName) || t.isContentEditable;
+      if (navigation) { if (e.key === "Escape") { setNavigation(null); e.preventDefault(); } return; }
       if (e.altKey && !typing) {
         if (e.key === "p") { if (!present && beatIndexRef.current < 0 && beatsRef.current.length) goToBeatRef.current(0); setPresent((v) => !v); e.preventDefault(); }
         if (e.key === "b") { setCollapsed((v) => !v); e.preventDefault(); }
@@ -304,7 +308,7 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKey, true);
     // selectedHl and source are read above, so the handler must be attached again when they
     // change: one kept from an earlier render deletes nothing, or the wrong thing.
-  }, [present, beats.length, beatIndex, pendingLink, selectedHl, source]);
+  }, [present, beats.length, beatIndex, pendingLink, selectedHl, source, navigation]);
 
   // ---- actions
   async function newProject(title: string, dir: string) {
@@ -344,7 +348,7 @@ export default function App() {
     refreshList();
   }
 
-  const addSource = useCallback(async (raw: string, from?: string): Promise<string | null> => {
+  const addSource = useCallback(async (raw: string, from?: string, show = true): Promise<string | null> => {
     const target = raw.trim();
     if (!target) return null;
     if (!project) { setError("Create or open a project first."); return null; }
@@ -358,7 +362,7 @@ export default function App() {
         ...(from ? { from } : {}),
       };
       mutate((p) => ({ ...p, sources: [...p.sources, s] }));
-      setActiveSourceId(s.id);
+      if (show) setNavigation({ projectId: project.id, end: { sourceId: s.id } });
       setUrl("");
       return s.id;
     } catch (e) {
@@ -387,7 +391,7 @@ export default function App() {
         mutate((p) => ({ ...p, sources: [...p.sources, s] }));
         lastId = s.id;
       }
-      if (lastId) setActiveSourceId(lastId);
+      if (lastId) setNavigation({ projectId: project.id, end: { sourceId: lastId } });
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -458,17 +462,17 @@ export default function App() {
     setScrollNonce((n) => n + 1);
   }, []);
 
-  const openLink = useCallback((link: string, newTab: boolean, from?: string) => {
+  function openLink(link: string, newTab: boolean, from?: string) {
     if (newTab) { window.open(link, "_blank", "noreferrer"); return; }
     const existing = project?.sources.find((s) => samePage(s.url, link));
-    if (existing) { setActiveSourceId(existing.id); return; }
+    if (existing) { goToEnd({ sourceId: existing.id }); return; }
     addSource(link, from);
-  }, [project, addSource]);
+  }
 
   /** Keep a page browsed inside a pane as a source of its own, and show it in that pane. */
   const savePageAsSource = useCallback(async (link: string, from: string, paneIndex: number) => {
     const existing = project?.sources.find((s) => samePage(s.url, link));
-    const id = existing?.id ?? await addSource(link, from);
+    const id = existing?.id ?? await addSource(link, from, false);
     if (!id) return;
     setActiveSourceId(id);
     // A pinned pane would otherwise keep showing the page it was browsing from.
@@ -550,10 +554,30 @@ export default function App() {
   /** Open one end of a link, scrolled to its passage when it has one. */
   const goToEnd = useCallback((end: LinkEnd) => {
     if (!project?.sources.some((s) => s.id === end.sourceId)) { setError("That source has been removed."); return; }
+    setNavigation({ projectId: project.id, end });
+  }, [project?.id, project?.sources]);
+
+  function showInPane(index: number) {
+    if (!navigation || !project || navigation.projectId !== project.id) return;
+    const end = navigation.end;
+    if (!project.sources.some(s => s.id === end.sourceId)) { setNavigation(null); return; }
+    mutate(p => ({ ...p, layout: navigateSourceLayout(p.layout, index, end.sourceId, activeSourceId) }));
+    setPaneViews(views => ({ ...views, [index]: {} }));
+    delete positions.current[index];
+    delete codeViews.current[index];
+    setNavigationPane(index);
     setActiveSourceId(end.sourceId);
     setSelectedHl(end.highlightId ?? null);
-    if (end.highlightId) setScrollNonce((n) => n + 1);
-  }, [project?.sources]);
+    setScrollNonce(n => n + 1);
+    setNavigation(null);
+  }
+
+  useEffect(() => {
+    if (!navigation) return;
+    if (navigation.projectId !== project?.id) { setNavigation(null); return; }
+    const choices = layout.panes.flatMap((p, i) => p.kind === 'source' ? [i] : []);
+    if (choices.length < 2) showInPane(choices[0] ?? 0);
+  }, [navigation, project?.id, layout]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function copyHighlights(from: Source | null) {
     if (!from) return;
@@ -617,6 +641,8 @@ export default function App() {
    * out mid-take that a beat shows the wrong thing is the failure worth avoiding.
    */
   const applyStage = useCallback((stage: Stage) => {
+    setNavigation(null);
+    setNavigationPane(null);
     const missing: string[] = [];
     const liveSource = stage.activeSourceId && project?.sources.some((s) => s.id === stage.activeSourceId)
       ? stage.activeSourceId
@@ -852,18 +878,18 @@ export default function App() {
             onAddHighlight={(h) => paneSource && addHighlight(paneSource.id, h)}
             onUpdateHighlight={(h) => paneSource && updateHighlight(paneSource.id, h)}
             onDeleteHighlight={(id) => paneSource && deleteHighlight(paneSource.id, id)}
-            onSelectHighlight={(id) => paneSource && selectFromPage(paneSource.id, id)}
+            onSelectHighlight={(id) => { setNavigationPane(i); if (paneSource) selectFromPage(paneSource.id, id); }}
             onOpenLink={(link, newTab) => openLink(link, newTab, paneSource?.id)}
             onSaveAsSource={(link) => paneSource && savePageAsSource(link, paneSource.id, i)}
             fromSource={paneSource?.from ? project.sources.find((s) => s.id === paneSource.from) ?? null : null}
-            onShowSource={(id) => { if (pane.sourceId) setLayout((l) => ({ ...l, panes: l.panes.map((x, j) => (j === i ? { ...x, sourceId: id } : x)) })); setActiveSourceId(id); setSelectedHl(null); }}
+            onShowSource={(id) => goToEnd({ sourceId: id })}
             summaryOpen={summaryOpen}
             onSummaryOpen={setSummaryOpen}
             onSummary={(summary) => paneSource && updateSource(paneSource.id, (s) => ({ ...s, summary }))}
             onCodePlace={(code) => { codeViews.current[i] = code; }}
             dark={dark}
             onRefresh={() => paneSource && refreshSource(paneSource)}
-            scrollToId={paneSource && paneSource.id === activeSourceId ? selectedHl : null}
+            scrollToId={paneSource && paneSource.id === activeSourceId && (navigationPane === null || navigationPane === i) ? selectedHl : null}
             scrollNonce={scrollNonce}
             restoreNonce={stageNonce}
             presenting={present}
@@ -885,7 +911,7 @@ export default function App() {
             sources={project.sources}
             links={project.links ?? []}
             selectedId={selectedHl}
-            onSelect={(id) => { if (shownSource) setActiveSourceId(shownSource.id); selectFromCard(id); }}
+            onSelect={(id) => { setNavigationPane(null); if (shownSource) setActiveSourceId(shownSource.id); selectFromCard(id); }}
             onUpdate={(h) => shownSource && updateHighlight(shownSource.id, h)}
             onDelete={(id) => shownSource && deleteHighlight(shownSource.id, id)}
             onCopyAll={() => copyHighlights(shownSource)}
@@ -936,7 +962,7 @@ export default function App() {
             sources={project.sources}
             links={project.links ?? []}
             activeSourceId={activeSourceId}
-            onOpen={(id) => { setActiveSourceId(id); setSelectedHl(null); }}
+            onOpen={(id) => goToEnd({ sourceId: id })}
             onGo={goToEnd}
           />
         );
@@ -988,7 +1014,7 @@ export default function App() {
           onDeleteProject={deleteProject}
           deletingId={deletingId}
           onRenameProject={(title) => mutate((p) => ({ ...p, title }))}
-          onOpenSource={(id) => { setActiveSourceId(id); setSelectedHl(null); }}
+          onOpenSource={(id) => goToEnd({ sourceId: id })}
           onRemoveSource={(id) => {
             mutate((p) => { const sources = p.sources.filter((s) => s.id !== id); return { ...p, sources, links: pruneLinks(p.links ?? [], sources) }; });
             if (activeSourceId === id) setActiveSourceId(null);
@@ -1129,6 +1155,27 @@ export default function App() {
         />
       )}
 
+      {navigation && project?.id === navigation.projectId && layout.panes.filter(p => p.kind === 'source').length > 1 && (
+        <div className="modal-backdrop" onMouseDown={() => setNavigation(null)}>
+          <div className="modal" role="dialog" aria-modal="true" aria-labelledby="source-destination-title" onMouseDown={e => e.stopPropagation()}>
+            <div className="modal-head">
+              <h3 id="source-destination-title">Where should this source open?</h3>
+              <span className="grow" />
+              <button className="icon-btn" title="Cancel source navigation" onClick={() => setNavigation(null)}><X size={16} /></button>
+            </div>
+            <p>{titleOfSource(navigation.end.sourceId)}</p>
+            <div className="field">
+              {layout.panes.map((pane, i) => pane.kind === 'source' && (
+                <button key={i} className="ghost" onClick={() => showInPane(i)}>
+                  {sourcePaneLabel(layout, i)} — {titleOfSource(pane.sourceId || activeSourceId || '')}
+                </button>
+              ))}
+            </div>
+            <button className="ghost" autoFocus onClick={() => setNavigation(null)}>Cancel</button>
+          </div>
+        </div>
+      )}
+
       {linkFrom && project && (
         <LinkDialog
           from={linkFrom}
@@ -1137,8 +1184,7 @@ export default function App() {
           onPick={(targetSourceId, relation, note) => {
             setPendingLink({ from: linkFrom, targetSourceId, relation, note });
             setLinkFrom(null);
-            setActiveSourceId(targetSourceId);
-            setSelectedHl(null);
+            goToEnd({ sourceId: targetSourceId });
           }}
           onClose={() => setLinkFrom(null)}
         />
@@ -1156,7 +1202,7 @@ export default function App() {
               sources={project.sources}
               links={project.links ?? []}
               activeSourceId={activeSourceId}
-              onOpen={(id) => { setActiveSourceId(id); setSelectedHl(null); setShowMap(false); }}
+              onOpen={(id) => { goToEnd({ sourceId: id }); setShowMap(false); }}
               onGo={(end) => { goToEnd(end); setShowMap(false); }}
             />
           </div>

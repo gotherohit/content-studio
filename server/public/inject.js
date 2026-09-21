@@ -33,6 +33,11 @@
   function jumpToHighlight() {
     var el = Array.from(document.querySelectorAll("mark.rs-hl")).find(function (mark) { return mark.getAttribute("data-hid") === pendingHighlight; });
     if (el) { el.scrollIntoView({ behavior: "instant", block: "center" }); pendingHighlight = null; }
+    else {
+      var drawing = shapeList.find(function (h) { return h.id === pendingHighlight; });
+      var host = drawing && shapesDomModule.hostFor(document.body, drawing);
+      if (host) { host.scrollIntoView({ behavior: "instant", block: "center" }); pendingHighlight = null; }
+    }
   }
   // ---- shapes drawn over the page
   //
