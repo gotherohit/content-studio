@@ -2,6 +2,12 @@
 
 What changed in each release, newest first. Versions are the ones the app updates itself to.
 
+## 0.21.2
+
+- Fixed Original-view drawings drifting when a pane resized or moved alongside another pane. Drawings and note markers now use the overlay's actual origin, including on websites with a positioned, centred body.
+- Drawings reposition after image loads, page reflow and nested scrolling. Continuous page updates no longer postpone placement indefinitely.
+- Added regression coverage for the injected drawing layer across resize, scroll and delayed layout changes.
+
 ## 0.21.1
 
 - **A comment can be typed on a highlight again.** In Original view the note box was taken away

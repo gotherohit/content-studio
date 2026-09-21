@@ -31,6 +31,13 @@ project, and stop the fixture when done. A real Tavily request needs a separatel
 
 # Highlight verification
 
+`shapes-original.test.js` runs the actual injected script with controlled browser geometry,
+checking a positioned body, narrow panes, scrolling and late reflow. For Electron verification,
+serve `shape-article.html` as a synthetic Original-view source on the test server at port 4710.
+Draw around its first paragraph, change column counts, place the source in the middle pane,
+and check Present mode, beat restore and reopening. Use only a disposable project and close
+the test app and server afterwards.
+
 Highlight regressions run in `npm test`: hidden duplicate text, element selection boundaries,
 whitespace changes, overlapping marks, website colour overrides and DOM replacement recovery.
 For UI verification, use a disposable project and serve `highlight-article.html` through a

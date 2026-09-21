@@ -37,8 +37,9 @@
   // ---- shapes drawn over the page
   //
   // A shape belongs to the paragraph or picture it was drawn over, so it is kept as fractions
-  // of that element and placed again whenever the page reflows. The overlay sits in document
-  // coordinates and never takes the pointer, except the note markers and the shapes' own
+  // of that element and placed again whenever the page reflows. The overlay uses its own
+  // measured origin (the site's body may be positioned), and never takes the pointer except
+  // the note markers and the shapes' own
   // strokes, or the article underneath would stop being clickable.
   var SHAPE_COLOURS = { yellow: "#e0b528", green: "#2fae51", pink: "#dd5f92", blue: "#3d84dd" };
   var SVG_NS = "http://www.w3.org/2000/svg";
@@ -253,16 +254,15 @@
     if (shapeWatcher) shapeWatcher.disconnect();
     root.textContent = "";
     var list = onHome() ? shapeList : [];
-    var docX = window.scrollX || 0, docY = window.scrollY || 0;
     list.forEach(function (h) {
       var host = shapesDomModule.hostFor(document.body, h);
       if (!host) return;
-      var r = host.getBoundingClientRect();
+      var r = shapesDomModule.boxWithin(root, host);
       if (!r.width || !r.height) return;
       var size = { width: r.width, height: r.height };
       var wrap = document.createElement("div");
       wrap.setAttribute("data-hid", h.id);
-      wrap.style.cssText = "position:absolute;pointer-events:none;left:" + (r.left + docX) + "px;top:" + (r.top + docY) +
+      wrap.style.cssText = "position:absolute;pointer-events:none;left:" + r.left + "px;top:" + r.top +
         "px;width:" + r.width + "px;height:" + r.height + "px";
       wrap.appendChild(shapeSvg(h, size));
       wrap.appendChild(handlesFor(h, size));
@@ -275,9 +275,9 @@
         var marks = document.querySelectorAll('mark.rs-hl[data-hid="' + h.id + '"]');
         var last = marks[marks.length - 1];
         if (!last) return;
-        var r = last.getBoundingClientRect();
+        var r = shapesDomModule.boxWithin(root, last);
         var wrap = document.createElement("div");
-        wrap.style.cssText = "position:absolute;pointer-events:none;left:" + (r.left + docX) + "px;top:" + (r.top + docY) +
+        wrap.style.cssText = "position:absolute;pointer-events:none;left:" + r.left + "px;top:" + r.top +
           "px;width:" + r.width + "px;height:" + r.height + "px";
         wrap.appendChild(shapeNote(h, { width: r.width, height: r.height }, { x: r.width, y: 0 }));
         root.appendChild(wrap);
@@ -289,7 +289,11 @@
   /** A note or a link is worth a marker on the page; a bare highlight is not. */
   function marked(h) { return Boolean((h.comment && h.comment.trim()) || h.linked); }
 
-  function schedulePlace() { clearTimeout(placeTimer); placeTimer = setTimeout(placeShapes, 60); }
+  function schedulePlace() {
+    // Continuous page updates must not keep postponing a resize indefinitely.
+    if (placeTimer !== null) return;
+    placeTimer = setTimeout(function () { placeTimer = null; placeShapes(); }, 16);
+  }
 
   function watchShapes() {
     shapeWatcher.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["style", "class", "hidden"] });
@@ -355,6 +359,12 @@
   shapeWatcher = new MutationObserver(schedulePlace);
   watchShapes();
   window.addEventListener("resize", schedulePlace);
+  // Image loads and CSS reflow can move an anchor without changing a DOM attribute.
+  var shapeResize = new ResizeObserver(schedulePlace);
+  shapeResize.observe(document.body);
+  shapeResize.observe(document.documentElement);
+  document.addEventListener("load", schedulePlace, true);
+  document.addEventListener("scroll", schedulePlace, true);
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(schedulePlace);
 
   // ---- selection -> parent

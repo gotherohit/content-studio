@@ -1,0 +1,13 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Drawing resize verification</title>
+<style>
+html { background: #eee; } body { position: relative; max-width: 720px; margin: 48px auto; padding: 24px; background: white; font: 20px/1.6 system-ui; }
+p { margin: 28px 0; } #spacer { height: 200px; }
+@media(max-width: 650px) { body { margin: 24px 18px; } }
+</style><link rel="stylesheet" href="http://127.0.0.1:4710/api/inject.css"></head><body>
+<h1>Drawings follow the article</h1>
+<p id="target">This paragraph changes height when the pane becomes narrower. A rectangle around it should stay attached to this paragraph, even when the page has its own centred and positioned body.</p>
+<div id="spacer"></div>
+<p id="later">A later passage lets us verify scrolling, beat restoration and page layout changes without using any personal project material.</p>
+<div style="height:700px"></div>
+<script defer src="http://127.0.0.1:4710/api/inject.js"></script>
+</body></html>

@@ -241,6 +241,8 @@ Some things are easier pointed at than quoted. The pencil in the Source toolbar 
 * A drawing is anchored to what it was drawn over — a PDF page, a picture, or the paragraph
   underneath it — so it stays put when you zoom, resize the pane, or collapse the sidebar, and
   an article drawn on in Reader keeps its drawings in Original view as well.
+  In Original view the drawing also follows centred page layouts and late-loading content;
+  adding a pane to the left does not change which passage it belongs to.
 * **A marker shows where there is more to see.** Anything with a comment, and anything that is
   one end of a link, carries a small marker — at the corner of a drawing, at the end of a
   quote. Click it and the note opens on the source itself: the comment, and every link, each

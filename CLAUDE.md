@@ -282,7 +282,12 @@ wait. The AI request aborts when the pane closes. Assume a recording is in progr
 - **The PDF canvas is written by hand, so the shapes cannot live in the page div.** `paint()`
   calls `replaceChildren`, which would remove them; the layer is a sibling inside
   `.pdf-page-wrap`.
-- **Shapes in a live page are drawn by `inject.js` in document coordinates** and placed again
+- **Shapes in a live page are drawn relative to the overlay's measured origin.** A positioned,
+  centred body makes document coordinates wrong: adding scroll offsets double-counts its
+  margins, and resizing changes the error. Use `boxWithin` for drawings and note markers.
+  Reflow without a DOM mutation (images loading, for example) needs resize/load listeners too.
+  Placements are coalesced without resetting the timer, so a busy page cannot starve them.
+  Shapes are placed again
   on resize, on mutations and when the fonts settle — with its own MutationObserver
   disconnected during its writes, or placing them would trigger another placement forever.
 - **An inline background is taller than the line it sits on.** It fills the font's content
