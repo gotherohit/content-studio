@@ -106,6 +106,15 @@ wait. The AI request aborts when the pane closes. Assume a recording is in progr
   and launch `python -m jupyterlab` directly to own the real server process. The legacy
   root-based process cleanup remains for servers orphaned by earlier versions.
 
+- **One JupyterLab serves the whole app, and its root cannot change without a restart.** A
+  folder is therefore a restart, and a restart takes every kernel with it. `client/src/jupyter.ts`
+  holds the rules — which folder a pane wants (beat, then project setting, then the project
+  folder) and whether it may move the server (only with no kernel alive; otherwise it offers).
+  `jupyter.kernels()` asks Jupyter, because kernels belong to it. Two Jupyter panes wanting
+  different folders is the same situation: the second one shows the offer.
+- **A beat captures the folder Jupyter is actually in**, reported by the pane through
+  `onShowing`, not the one it asked for — otherwise a beat taken while the server was busy
+  elsewhere would restore a folder that was never on screen.
 - **A hidden development copy can block the installed app.** Both use the same
   single-instance lock. Close verification copies when finished, and explicitly `show()`
   the existing window before focusing it when the executable is launched again.

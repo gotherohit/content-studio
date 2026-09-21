@@ -528,12 +528,25 @@ Choose **Jupyter**, then **Start JupyterLab**. The launcher opens at the project
 notebooks you create are saved there. Studio uses the installed Python and can install
 JupyterLab when it is missing.
 
+**Another folder.** Notebooks often live somewhere else — a repository of experiments, a
+shared drive, last month's project. The folder button in the pane toolbar (or **Another
+folder** before it starts) points JupyterLab anywhere you like, and the choice is kept with
+the project. Each folder keeps its own Lab tabs and layout, so going back to one reopens the
+notebooks that were open in it.
+
+One JupyterLab serves the whole app and it cannot change folders without restarting, so
+moving it ends its kernels. Studio therefore moves the server by itself only when nothing is
+running in it. With a kernel alive the pane says which folder it is in and offers the move as
+a button, so a beat cannot throw away a running calculation in the middle of a take.
+
 The embedded page uses the same loopback hostname as Studio, allowing its authenticated
 kernel connection to work inside the pane. Authentication stays enabled. If port 8890 is
 occupied, Studio chooses another free loopback port and displays it in the pane toolbar.
 Startup failures show a diagnostic instead of claiming the server is ready.
 
-Jupyter's saved tabs and layout live in the project's `.jupyter/workspaces/` directory.
+Jupyter's saved tabs and layout live in that folder's `.jupyter/workspaces/` directory.
+**A beat remembers the folder that was on screen**, so restoring it opens JupyterLab there
+again — subject to the same rule about live kernels.
 **Stop** stops the managed server and its kernels; starting again opens the same folder.
 Save notebook edits before stopping or updating Studio. Existing notebooks do not need to
 be moved into a `project-id/files` subfolder.

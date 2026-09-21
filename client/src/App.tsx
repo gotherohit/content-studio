@@ -25,6 +25,7 @@ import { EmbedPane } from "./components/EmbedPane";
 import { BrowserPane } from "./components/BrowserPane";
 import { TerminalPane } from "./components/TerminalPane";
 import { JupyterPane } from "./components/JupyterPane";
+import { rootFor } from "./jupyter";
 import { SlidesPane } from "./components/SlidesPane";
 import { WindowPane } from "./components/WindowPane";
 import { SettingsDialog } from "./components/SettingsDialog";
@@ -108,6 +109,8 @@ export default function App() {
   const canvasViews = useRef<Record<number, CanvasView>>({});
   /** Where each Files pane or code source is scrolled; reported on every scroll, so a ref. */
   const codeViews = useRef<Record<number, CodeView>>({});
+  /** The folder each Jupyter pane has on screen, which a beat captures as it stands. */
+  const jupyterRoots = useRef<Record<number, string>>({});
   /** Where the canvas is looking now, and where a beat wants it pointed. */
   const canvasViewRef = useRef<CanvasView | null>(null);
   const [canvasTarget, setCanvasTarget] = useState<CanvasView | null>(null);
@@ -620,6 +623,9 @@ export default function App() {
       return [i, {
         ...view, sourceId, mode,
         canvasView: pane.kind === "canvas" ? canvasViews.current[i] : undefined,
+        // Jupyter serves one folder at a time: a beat remembers the one that was showing,
+        // not the one the pane had asked for.
+        jupyterRoot: pane.kind === "jupyter" ? jupyterRoots.current[i] ?? view.jupyterRoot : view.jupyterRoot,
         code: codeFor(pane, i, sourceId, view.code),
         position: pane.kind === "source" && live?.projectId === project?.id && live?.sourceId === sourceId && live?.mode === mode && sameBrowsedPage(live.page, view.page) ? { ...live.position } : undefined,
       }];
@@ -983,7 +989,20 @@ export default function App() {
         />
       );
       case "terminal": return <TerminalPane key={`term-${i}-${project.id}`} dark={dark} projectId={project.id} />;
-      case "jupyter": return <JupyterPane projectId={project.id} />;
+      case "jupyter": {
+        const root = rootFor(paneViews[i], project.settings, project.dir);
+        return (
+          <JupyterPane
+            projectId={project.id}
+            root={root}
+            onRoot={(dir) => {
+              mutate((p) => ({ ...p, settings: { ...p.settings, jupyterRoot: dir } }));
+              setPaneViews((m) => ({ ...m, [i]: { ...(m[i] ?? {}), jupyterRoot: dir } }));
+            }}
+            onShowing={(dir) => { jupyterRoots.current[i] = dir; }}
+          />
+        );
+      }
       case "slides": return <SlidesPane value={project.slides} onChange={(slides) => mutate((p) => ({ ...p, slides }))} />;
       case "browser":
         return (

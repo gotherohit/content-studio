@@ -148,7 +148,9 @@ export const api = {
     fetch("/api/input", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(msg) }).then((r) => j<{ ok: boolean }>(r)),
 
   jupyterStatus: () => fetch("/api/jupyter/status").then((r) => j<JupyterStatus>(r)),
-  jupyterStart: (projectId: string) => fetch("/api/jupyter/start", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ projectId }) }).then((r) => j<JupyterStatus>(r)),
+  /** `dir` roots JupyterLab somewhere other than the project's own folder. */
+  jupyterStart: (projectId: string, dir?: string) => fetch("/api/jupyter/start", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ projectId, dir }) }).then((r) => j<JupyterStatus>(r)),
+  jupyterKernels: () => fetch("/api/jupyter/kernels").then((r) => j<{ count: number }>(r)),
   jupyterStop: () => fetch("/api/jupyter/stop", { method: "POST" }).then((r) => j<JupyterStatus>(r)),
   jupyterInstall: (onText: (t: string) => void) => sse("/api/jupyter/install", {}, onText),
   aiStatus: () => fetch("/api/ai/status").then((r) => j<AiStatus>(r)),

@@ -458,10 +458,22 @@ app.post("/api/run", async (req, res) => {
 app.get("/api/jupyter/status", async (_req, res) => { await jupyter.isInstalled(); res.json(jupyter.status()); });
 app.post("/api/jupyter/start", async (req, res) => {
   const id = req.body?.projectId;
-  const dir = id && safeId(id) ? config.dirOf(id) : null;
+  const home = id && safeId(id) ? config.dirOf(id) : null;
+  // A folder of the creator's choosing, the way the Files pane is pointed anywhere. Only
+  // the project's own folder is created on demand: a mistyped path should fail, not scatter
+  // empty folders across the disk.
+  const chosen = typeof req.body?.dir === "string" ? req.body.dir.trim() : "";
+  if (chosen) {
+    if (!path.isAbsolute(chosen)) return res.status(400).json({ error: "Choose a folder with Browse" });
+    try {
+      if (!(await fs.stat(chosen)).isDirectory()) return res.status(400).json({ error: `${chosen} is a file, not a folder` });
+    } catch { return res.status(404).json({ error: `The folder ${chosen} no longer exists` }); }
+  }
+  const dir = chosen || home;
   if (!dir) return res.status(400).json({ error: "Open a valid project before starting JupyterLab" });
   try { res.json(await jupyter.start(dir)); } catch (e) { res.status(500).json({ error: e.message }); }
 });
+app.get("/api/jupyter/kernels", async (_req, res) => res.json({ count: await jupyter.kernels() }));
 app.post("/api/jupyter/stop", (_req, res) => res.json(jupyter.stop()));
 app.post("/api/jupyter/install", (_req, res) => {
   res.setHeader("Content-Type", "text/event-stream");

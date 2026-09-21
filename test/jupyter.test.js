@@ -15,6 +15,14 @@ test('Jupyter runs directly, binds loopback, and cannot silently switch ports', 
   assert.ok(!args.includes('--ServerApp.disable_check_xsrf=True'));
 });
 
+test('a folder outside the project keeps its own Lab workspaces', () => {
+  const outside = 'D:/experiments/calibration';
+  const args = launchArguments(8891, 'test-token', outside);
+  assert.ok(args.includes(`--ServerApp.root_dir=${outside}`));
+  // Workspaces follow the root, so each folder reopens the notebooks that were open in it.
+  assert.ok(args.includes(`--LabApp.workspaces_dir=${path.join(outside, '.jupyter', 'workspaces')}`));
+});
+
 test('an occupied Jupyter port is skipped without stopping its owner', async (t) => {
   const occupied = net.createServer();
   await new Promise(resolve => occupied.listen(0, '127.0.0.1', resolve));

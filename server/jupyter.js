@@ -95,7 +95,11 @@ export function createJupyter() {
     return { installed, running: Boolean(child && ready), port, rootDir, url: child && ready ? `http://127.0.0.1:${port}/lab?token=${token}` : null, log: token ? log.slice(-4000).split(token).join("[token]") : log.slice(-4000) };
   }
 
-  /** Roots JupyterLab at the project's own folder, so notebooks sit with its sources. */
+  /**
+   * Roots JupyterLab at a folder: the project's own by default, so notebooks sit with its
+   * sources, or any other folder the creator points it at. Jupyter cannot change its root
+   * without a restart, so switching folders restarts the server and its kernels with it.
+   */
   function start(notebooksDir) {
     const next = pending.then(() => startNow(notebooksDir));
     pending = next.catch(() => {});
@@ -135,6 +139,20 @@ export function createJupyter() {
     }
     stop();
     throw new Error(`Jupyter did not become ready within the startup timeout.\n${status().log.slice(-2000)}`);
+  }
+
+  /**
+   * How many kernels are alive, so a caller can tell whether a restart would cost
+   * anything. Asking Jupyter is the only way: kernels belong to it, not to us.
+   */
+  async function kernels() {
+    if (!child || !ready) return 0;
+    try {
+      const r = await fetch(`http://127.0.0.1:${port}/api/kernels?token=${token}`, { signal: AbortSignal.timeout(2000) });
+      if (!r.ok) return 0;
+      const list = await r.json();
+      return Array.isArray(list) ? list.length : 0;
+    } catch { return 0; }
   }
 
   function stop() {
@@ -215,5 +233,5 @@ export function createJupyter() {
   }
 
   process.on("exit", stop);
-  return { isInstalled, status, start, stop, shutdown, install, releaseUnder };
+  return { isInstalled, status, start, stop, shutdown, install, releaseUnder, kernels };
 }

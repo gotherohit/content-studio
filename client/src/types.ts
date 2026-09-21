@@ -129,6 +129,8 @@ export interface PaneView {
   code?: CodeView;
   slideshow?: boolean;
   slideIndex?: number;
+  /** A Jupyter pane: the folder its notebooks were open in when this was captured. */
+  jupyterRoot?: string;
 }
 
 export interface CodeView {
@@ -221,6 +223,8 @@ export interface Project {
     filesRoot?: string;
     /** Opened read-only: nothing in the Files pane can be saved. */
     filesReadOnly?: boolean;
+    /** The folder JupyterLab is rooted at; the project's own folder when unset. */
+    jupyterRoot?: string;
   };
 }
 

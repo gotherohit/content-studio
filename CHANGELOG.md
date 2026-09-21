@@ -2,6 +2,21 @@
 
 What changed in each release, newest first. Versions are the ones the app updates itself to.
 
+## 0.23.0
+
+- **Jupyter can open any folder, not only the project's.** The folder button in the pane
+  toolbar points JupyterLab at a repository of experiments, a shared drive, or last month's
+  work, and the project remembers it. Each folder keeps its own Lab tabs, so going back to one
+  reopens the notebooks that were open in it.
+- **A beat remembers which folder the notebooks were in** and opens JupyterLab there again
+  when it is restored.
+- **A running kernel is never thrown away for a folder change.** One JupyterLab serves the
+  whole app and cannot move without restarting, so Studio moves it by itself only when nothing
+  is running in it; with a kernel alive the pane says where it is and offers the move as a
+  button.
+- A folder that does not exist is refused rather than created, so a mistyped path cannot
+  scatter empty folders.
+
 ## 0.22.0
 
 - Selecting a source or following a source link now opens it in the visible Source pane, including when that pane was pinned to another article.
