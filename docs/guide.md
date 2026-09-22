@@ -14,7 +14,7 @@ this is the reference you come back to.
 - [Embedding a running app](#embedding-a-running-app)
 - [Jupyter notebooks](#jupyter-notebooks)
 - [Controlling a window](#controlling-a-window)
-- [Research with AI](#research-with-ai)
+- [Research with Vajra](#research-with-vajra)
 - [Models and keys](#models-and-keys)
 - [Shortcuts](#shortcuts)
 - [Settings that live in `.env`](#settings-that-live-in-env)
@@ -266,6 +266,11 @@ Some things are easier pointed at than quoted. The pencil in the Source toolbar 
   quote. Click it and the note opens on the source itself: the comment, and every link, each
   one clickable to jump to the other end. The pencil menu hides all the markers, and Present
   mode hides them for you while leaving the drawings on screen.
+* **Make a comment wider for recording.** Drag either side handle of the open note card.
+  The text reflows and its height adjusts automatically; the chosen width is saved with that
+  highlight. A smaller pane temporarily limits the card's width without changing that saved
+  preference. Long cards scroll within the pane. Focus a handle and use Left/Right to resize,
+  or double-click it (Home on the keyboard) to return to the default width.
 * **Move and resize it afterwards.** Click a drawing to pick it up: grips appear at its
   corners, or at both ends of an arrow. Drag the outline to move the whole thing, drag a grip
   to resize it. Dragged onto a different paragraph it belongs to that paragraph from then on;
@@ -578,7 +583,11 @@ Choose **Vajra** in a pane, select a model that supports tool calling, and ask a
 
 For substantial work, Vajra can maintain a **Task plan** above the conversation. Steps show pending, in-progress or completed work and survive reopening. This is the model's progress report, not independent verification: a finished response can still leave unfinished plan steps. The header shows the current model step out of the 12-step run budget and whether an action needs your review.
 
+Vajra's **left sidebar** lists the conversations in the selected workspace, with a search box for their titles and a **New conversation** button. **Workspace** switches between the current Studio project (shown by name) and **Global research**; it does not change the project open in Studio. **Research files** and **Settings** sit at the bottom. The sidebar button beside the conversation title collapses or opens it. Wide panes show it by default; narrow panes open it over the conversation. Pick a conversation, click outside, or press Escape to dismiss the overlay. Workspace/conversation changes are disabled during a run, but opening and closing the sidebar leaves the run untouched.
+
 Choose **Current source**, **All project sources** or **No source context** to control which saved article text and highlights are sent with the request. Project files can also be read through `project/` paths. These file tools keep the original project material read-only and put new work in the project's `research/` folder.
+
+Vajra can **search files** for a literal phrase and report matching paths, line numbers and snippets. Searches skip protected app data, symlinks and binary/large files; each search scans at most 200 files, 2,000 directory entries and 10 MB, returning at most 100 matches. Results say when work was skipped or truncated, so Vajra can narrow its search. **Targeted edits** replace one unique passage in an existing research file. Review the removed and replacement text, or expand the full proposed file. A missing/ambiguous match or a file changed during review is refused rather than overwritten.
 
 Every file write shows the proposed contents before **Allow once** or **Decline**. Every shell command shows the exact command and working folder. PowerShell works on Windows; Bash requires Git for Windows in its usual installation location. Commands run with your account and can access files outside the working folder: this is not an OS sandbox. Review the command before approving it. Commands stop after 30 seconds; output is capped.
 
@@ -588,7 +597,7 @@ Every file write shows the proposed contents before **Allow once** or **Decline*
 
 **Project research** is the default when a project is open. Conversations are stored separately from project autosave in `<project>/.ai/conversations/`, and deliverables in `<project>/research/`. They travel with the project folder. **Global research** stores conversations in `~/.content-studio/conversations/` and deliverables in `~/.content-studio/research/`; it does not include the selected project's sources or file access. Global research also works before opening a project.
 
-Use **New** to start a conversation and the conversation dropdown to resume one. **Rename** changes its title while idle. **Export** downloads Markdown containing the conversation, saved plan and tool-status list; it does not include full tool outputs or approval payloads. **Files** opens its research folder. Existing project chat can be imported explicitly; the original chat is kept. Conversation files are local JSON, not encrypted like API keys, so keep private research in a folder you trust. Selected context and tool results are sent to the model provider you choose.
+Use **New conversation** to start a conversation and the sidebar list to resume one. **Rename** changes its title while idle. **Export** downloads Markdown containing the conversation, saved plan and tool-status list; it does not include full tool outputs or approval payloads. **Research files** opens its research folder. Existing project chat can be imported explicitly; the original chat is kept. Conversation files are local JSON, not encrypted like API keys, so keep private research in a folder you trust. Selected context and tool results are sent to the model provider you choose.
 
 ### Web search
 

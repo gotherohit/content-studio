@@ -386,6 +386,7 @@ export function SourcePane(p: Props) {
             x={notePop.x}
             y={notePop.y}
             flip={notePop.flip}
+            onWidth={(noteWidth) => { const h = source.highlights.find((h) => h.id === notePop.id); if (h) p.onUpdateHighlight({ ...h, noteWidth }); }}
             onGo={(end) => { setNotePop(null); p.onGoEnd(end); }}
             onClose={() => setNotePop(null)}
           />

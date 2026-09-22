@@ -1,19 +1,29 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
+import { PanelLeft } from "lucide-react";
+import { VajraSidebar } from "./VajraSidebar";
 import type { Source } from "../types";
 import { api, type AiStatus } from "../api";
 import { research, exportResearch, type ResearchSession, type ToolActivity } from "../research";
 
 interface Props {
   projectId?: string;
+  projectTitle?: string;
   source: Source | null;
   hasLegacyChat?: boolean;
   onOpenSettings: () => void;
 }
 const renderMarkdown = (text: string) => DOMPurify.sanitize(marked.parse(text) as string);
 
-export function AiPanel({ projectId, source, hasLegacyChat, onOpenSettings }: Props) {
+export function AiPanel({ projectId, projectTitle, source, hasLegacyChat, onOpenSettings }: Props) {
+  const host = useRef<HTMLDivElement>(null);
+  const sidebarId = useId();
+  const toggle = useRef<HTMLButtonElement>(null);
+  const [compact, setCompact] = useState(true);
+  const [sidebarChoice, setSidebarChoice] = useState<boolean | null>(null);
+  const sidebarOpen = sidebarChoice ?? !compact;
+  const closeSidebar = () => { setSidebarChoice(false); toggle.current?.focus(); };
   const [scope, setScope] = useState(projectId ? "project" : "global");
   const project = scope === "project" ? projectId || null : null;
   const [rows, setRows] = useState<Pick<ResearchSession, "id" | "title" | "status" | "updatedAt">[]>([]);
@@ -35,10 +45,21 @@ export function AiPanel({ projectId, source, hasLegacyChat, onOpenSettings }: Pr
   const refreshModels = () => api.aiStatus().then((s) => { setStatus(s); setModel((m) => m || s.model || ""); }).catch((e) => setError(e.message));
   const refreshRows = () => research.list(project).then((r) => setRows(r.sessions));
 
+  useEffect(() => {
+    const el = host.current;
+    if (!el) return;
+    const observer = new ResizeObserver(([entry]) => setCompact(entry.contentRect.width < 720));
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+  useEffect(() => {
+    if (compact && sidebarOpen) host.current?.querySelector<HTMLInputElement>(".vajra-search input")?.focus();
+  }, [compact, sidebarOpen]);
+
   useEffect(() => { refreshModels(); return () => { controller.current?.abort(); generation.current++; }; }, []);
   useEffect(() => {
     const version = ++generation.current;
-    setLoading(true); setError(""); setSession(null); setPartial(""); setRenameTitle(null); setNotice("");
+    setLoading(true); setError(""); setSession(null); setRows([]); setPartial(""); setRenameTitle(null); setNotice("");
     research.list(project).then(async (result) => {
       if (version !== generation.current) return;
       setRows(result.sessions);
@@ -61,6 +82,7 @@ export function AiPanel({ projectId, source, hasLegacyChat, onOpenSettings }: Pr
   }, [session?.id, session?.status, busy, project]);
 
   async function choose(id: string) {
+    if (compact) closeSidebar();
     setRenameTitle(null); setNotice("");
     const version = ++generation.current; setLoading(true); setError("");
     try { const s = await research.load(project, id); if (version === generation.current) { setSession(s); if (s.model) setModel(s.model); setPartial(""); follow.current = true; } }
@@ -71,6 +93,7 @@ export function AiPanel({ projectId, source, hasLegacyChat, onOpenSettings }: Pr
     const s = await research.create(project, importLegacy); setSession(s); setPartial(""); follow.current = true; await refreshRows(); return s;
   }
   async function newConversation(importLegacy = false) {
+    if (compact) closeSidebar();
     setRenameTitle(null); setNotice("");
     setLoading(true); setError("");
     try { await create(importLegacy); }
@@ -140,19 +163,25 @@ export function AiPanel({ projectId, source, hasLegacyChat, onOpenSettings }: Pr
     ...(session?.activity || []).map((a) => ({ key: a.id, time: a.createdAt, message: null, activity: a })),
   ].sort((a, b) => a.time.localeCompare(b.time));
 
-  return <div className="panel-body ai research-agent">
-    <div className="row between vajra-heading"><strong>Vajra</strong><span className="muted small" role="status">{session?.activity.some((a) => a.status === "approval") ? "Waiting for your review" : running ? "Working" : session?.status || "Ready"}{session?.progress ? ` · Step ${session.progress.step}/${session.progress.maxSteps}` : ""}</span></div>
-    <div className="row wrap research-conversations">
-      <select aria-label="Conversation location" value={scope} disabled={running || loading} onChange={(e) => setScope(e.target.value)}>
-        {projectId && <option value="project">Project research</option>}<option value="global">Global research</option>
-      </select>
-      <select aria-label="Conversation" value={session?.id || ""} disabled={running || loading} onChange={(e) => choose(e.target.value)}>
-        <option value="" disabled>{loading ? "Loading…" : "Choose a conversation"}</option>
-        {rows.map((s) => <option key={s.id} value={s.id}>{s.title}</option>)}
-      </select>
-      <button className="small" onClick={() => newConversation()} disabled={running || loading}>New</button>
-      <button className="ghost small" onClick={onOpenSettings}>Settings</button>
-      {session && <button className="ghost small" onClick={() => api.reveal(session.workspace).catch((e) => setError(e.message))}>Files</button>}
+  return <div ref={host} className={`vajra-shell ${compact ? "compact" : "wide"}`} onKeyDown={(e) => {
+    if (!sidebarOpen || !compact) return;
+    if (e.key === "Escape") { e.stopPropagation(); closeSidebar(); }
+    if (e.key === "Tab") {
+      const controls = host.current?.querySelectorAll<HTMLElement>(".vajra-sidebar button:not(:disabled), .vajra-sidebar input:not(:disabled), .vajra-sidebar select:not(:disabled)");
+      if (!controls?.length) return;
+      const first = controls[0], last = controls[controls.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    }
+  }}>
+    {sidebarOpen && <>
+      {compact && <button className="vajra-sidebar-scrim" aria-label="Dismiss Vajra sidebar" onClick={closeSidebar} />}
+      <VajraSidebar id={sidebarId} modal={compact} scope={scope} projectTitle={projectId ? projectTitle || "Current project" : undefined} rows={rows} selectedId={session?.id} disabled={running || loading} loading={loading} workspace={session?.workspace}
+        onScope={setScope} onChoose={choose} onNew={() => newConversation()} onClose={closeSidebar}
+        onSettings={() => { if (compact) closeSidebar(); onOpenSettings(); }} onFiles={() => session && api.reveal(session.workspace).catch((e) => setError(e.message))} />
+    </>}
+    <div className="panel-body ai research-agent">
+    <div className="row vajra-heading"><button ref={toggle} className="icon-btn" title="Toggle Vajra sidebar" aria-controls={sidebarId} aria-expanded={sidebarOpen} onClick={() => setSidebarChoice(!sidebarOpen)}><PanelLeft size={17} /></button><div className="vajra-conversation-title"><strong title={session?.title}>{session?.title || "Vajra"}</strong><span className="muted small" role="status">{session?.activity.some((a) => a.status === "approval") ? "Waiting for your review" : running ? "Working" : session?.status || "Ready"}{session?.progress ? ` · Step ${session.progress.step}/${session.progress.maxSteps}` : ""}</span></div>
       {session && <button className="ghost small" disabled={running || loading} onClick={() => setRenameTitle(session.title)}>Rename</button>}
       {session && <button className="ghost small" disabled={running || loading} onClick={download}>Export</button>}
     </div>
@@ -196,6 +225,7 @@ export function AiPanel({ projectId, source, hasLegacyChat, onOpenSettings }: Pr
         onKeyDown={(e) => { e.stopPropagation(); if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); if (!running) send(input); } }} />
       <div className="row between"><span className="muted small">Writes and shell commands require review.</span><button className="primary small" type="submit" disabled={running || loading || !model || !input.trim()}>Send</button></div>
     </form>
+    </div>
   </div>;
 }
 
@@ -211,8 +241,9 @@ function Activity({ activity, onDecide }: { activity: ToolActivity; onDecide: (a
     {proposal && <div className="agent-approval">
       {proposal.kind === "write" ? <>
         <b>{proposal.before == null ? "Create" : "Update"} {proposal.path}</b>
+        {proposal.edit && <div className="agent-edit-review"><span className="muted small">Replace this passage</span><pre className="agent-edit-before">{proposal.edit.before}</pre><span className="muted small">With</span><pre className="agent-edit-after">{proposal.edit.after || "(delete this passage)"}</pre></div>}
         {proposal.before != null && <details><summary>Current contents</summary><pre>{proposal.before}</pre></details>}
-        <details open><summary>Proposed contents</summary><pre>{proposal.after}</pre></details>
+        <details open={!proposal.edit}><summary>Proposed contents</summary><pre>{proposal.after}</pre></details>
       </> : <><b>Run {proposal.shell} command</b><pre>{proposal.command}</pre><p className="muted small">Working folder: {proposal.cwd}. This runs with your account; the folder is not an OS sandbox.</p></>}
       <div className="row"><button className="primary small" disabled={deciding} onClick={() => decide(true)}>Allow once</button><button className="small" disabled={deciding} onClick={() => decide(false)}>Decline</button></div>
     </div>}

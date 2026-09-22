@@ -969,7 +969,7 @@ export default function App() {
           />
         );
       case "notes": return <NotesPanel value={project.notes} onChange={(notes) => mutate((p) => ({ ...p, notes }))} />;
-      case "ai": return <AiPanel key={project.id} projectId={project.id} hasLegacyChat={project.chat.length > 0} source={source} onOpenSettings={() => setShowSettings(true)} />;
+      case "ai": return <AiPanel key={project.id} projectId={project.id} projectTitle={project.title} hasLegacyChat={project.chat.length > 0} source={source} onOpenSettings={() => setShowSettings(true)} />;
       case "code": return <CodePanel projectId={project.id} snippets={project.snippets} onChange={(snippets) => mutate((p) => ({ ...p, snippets }))} />;
       case "canvas": return (
         <CanvasPanel

@@ -1,7 +1,7 @@
 export interface ResearchMessage { role: "user" | "assistant"; content: string; createdAt?: string; interrupted?: boolean; model?: string }
 export interface ToolActivity {
   id: string; name: string; arguments: string; status: string; output?: string; createdAt: string;
-  approval?: { id: string; kind: "write" | "shell"; path?: string; before?: string | null; after?: string; command?: string; shell?: string; cwd?: string };
+  approval?: { id: string; kind: "write" | "shell"; path?: string; before?: string | null; after?: string; edit?: { before: string; after: string }; command?: string; shell?: string; cwd?: string };
 }
 export interface ResearchSession {
   id: string; title: string; status: string; model: string | null; workspace: string;

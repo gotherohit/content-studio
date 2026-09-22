@@ -42,6 +42,51 @@ test('writes are reviewed, denied writes do nothing, and concurrent edits surviv
   assert.equal(await fs.readFile(file,'utf8'),'New research');
 });
 
+test('file search returns bounded literal matches and skips protected, binary and linked files', async t => {
+  const workspace = await scratch(t), projectDir = path.join(workspace, 'project'), outside = await scratch(t);
+  await fs.mkdir(projectDir); await fs.mkdir(path.join(workspace, 'notes'));
+  await fs.writeFile(path.join(workspace, 'notes', 'brief.md'), 'Distillation is useful.\nA literal [term] here.\nDISTILLATION again.');
+  await fs.writeFile(path.join(workspace, '.env'), 'Distillation secret');
+  await fs.writeFile(path.join(workspace, 'config.json'), 'Distillation config');
+  await fs.writeFile(path.join(workspace, 'binary.bin'), Buffer.from('Distillation\0binary'));
+  await fs.writeFile(path.join(outside, 'private.md'), 'Distillation outside');
+  await fs.symlink(outside, path.join(workspace, 'escape'), process.platform === 'win32' ? 'junction' : 'dir');
+  const ctx = { workspace, projectDir, signal: signal() };
+  const result = await executeTool('search_files', { query: 'distillation' }, ctx);
+  assert.deepEqual(result.matches.map(m => [m.path, m.line]), [['notes/brief.md', 1], ['notes/brief.md', 3]]);
+  assert.ok(result.skippedFiles >= 4);
+  assert.equal((await executeTool('search_files', { query: '[term]' }, ctx)).matches.length, 1);
+  assert.equal((await executeTool('search_files', { query: 'Distillation', case_sensitive: true }, ctx)).matches.length, 1);
+  const bounded = await executeTool('search_files', { query: 'distillation', max_results: 1 }, ctx); assert.equal(bounded.matches.length, 1); assert.equal(bounded.truncated, true);
+  await fs.writeFile(path.join(projectDir, 'source.md'), 'Project evidence');
+  assert.equal((await executeTool('search_files', { query: 'evidence', path: 'project/' }, ctx)).matches[0].path, 'project/source.md');
+  await fs.writeFile(path.join(projectDir, 'long.md'), 'Context '.repeat(100) + 'needle near the end');
+  assert.match((await executeTool('search_files', { query: 'needle', path: 'project/' }, ctx)).matches[0].text, /needle near the end/);
+  await assert.rejects(executeTool('search_files', { query: 'secret', path: '../' }, ctx), /inside/);
+  await assert.rejects(executeTool('search_files', { query: 'outside', path: 'escape' }, ctx), /outside/);
+  await assert.rejects(executeTool('search_files', { query: 'x', max_results: 101 }, ctx), /max_results/);
+  const aborted = new AbortController(); aborted.abort(); await assert.rejects(executeTool('search_files', { query: 'x' }, { ...ctx, signal: aborted.signal }));
+});
+
+test('targeted edits review the exact change, preserve unrelated text and refuse ambiguity or concurrent edits', async t => {
+  const workspace = await scratch(t), file = path.join(workspace, 'brief.md');
+  const before = '\uFEFFHeading\r\nOriginal passage\r\nKeep this footer\r\n'; await fs.writeFile(file, before);
+  const args = { path: 'brief.md', old_text: 'Original passage', new_text: 'Verified passage' };
+  let reviews = 0;
+  const ctx = { workspace, projectDir: workspace, signal: signal(), approve: async proposal => { reviews++; assert.deepEqual(proposal.edit, { before: args.old_text, after: args.new_text }); assert.equal(proposal.before, before); assert.equal(proposal.after, before.replace(args.old_text, args.new_text)); return true; } };
+  await executeTool('edit_file', args, ctx); assert.equal(reviews, 1); assert.equal(await fs.readFile(file, 'utf8'), before.replace(args.old_text, args.new_text));
+  await assert.rejects(executeTool('edit_file', args, ctx), /not found/);
+  await assert.rejects(executeTool('edit_file', { ...args, path: 'project/brief.md' }, ctx), /read-only/);
+  await fs.writeFile(file, 'Repeated Repeated');
+  await assert.rejects(executeTool('edit_file', { ...args, old_text: 'Repeated' }, ctx), /more than once/);
+  await fs.writeFile(file, before);
+  await assert.rejects(executeTool('edit_file', args, { ...ctx, approve: async () => false }), /declined/); assert.equal(await fs.readFile(file, 'utf8'), before);
+  await assert.rejects(executeTool('edit_file', args, { ...ctx, approve: async () => { await fs.writeFile(file, 'User changed this'); return true; } }), /changed during review/);
+  assert.equal(await fs.readFile(file, 'utf8'), 'User changed this');
+  await executeTool('edit_file', { path: 'brief.md', old_text: ' changed', new_text: '' }, { ...ctx, approve: async () => true }); assert.equal(await fs.readFile(file, 'utf8'), 'User this');
+  assert.equal((await executeTool('edit_file', { path: 'brief.md', old_text: 'User', new_text: 'User' }, ctx)).unchanged, true);
+});
+
 test('public URL guard rejects local addresses and mapped IPv6 loopback',()=>{
   for(const address of ['127.0.0.1','10.1.1.1','172.20.0.1','192.168.1.1','169.254.169.254','100.64.1.1','::1','::ffff:127.0.0.1','fd00::1','fe80::1'])assert.equal(publicAddress(address),false,address);
   assert.equal(publicAddress('8.8.8.8'),true);assert.equal(publicAddress('2606:4700:4700::1111'),true);

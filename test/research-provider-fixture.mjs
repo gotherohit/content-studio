@@ -12,13 +12,14 @@ const server=http.createServer(async(req,res)=>{
     send({choices:[{delta:{content:'Starting the cancellable fixture response…'}}]});const timer=setTimeout(()=>res.end(),60000);res.on('close',()=>clearTimeout(timer));return;
   }
   const plan = status => ({ steps: [{ text: 'Inspect workspace and create a verified brief', status }] });
-  const steps=[['update_plan',plan('in_progress')],['list_files',{}],['write_file',{path:'fixture-brief.md',content:'# Fixture research brief\n\nThis file verifies the agent write approval and persistence.\n'}],['read_file',{path:'fixture-brief.md'}],['bash',{shell:'powershell',command:"Write-Output 'fixture-shell-ok'"}],['update_plan',plan('complete')]];
+  const failed = results.some(m => { try { return Boolean(JSON.parse(m.content).error); } catch { return false; } });
+  const steps=[['update_plan',plan('in_progress')],['list_files',{}],['write_file',{path:'fixture-brief.md',content:'# Fixture research brief\n\nThis file verifies the agent write approval and persistence.\n'}],['search_files',{query:'persistence',path:'.'}],['edit_file',{path:'fixture-brief.md',old_text:'write approval and persistence',new_text:'write approval, targeted editing and persistence'}],['read_file',{path:'fixture-brief.md'}],['bash',{shell:'powershell',command:"Write-Output 'fixture-shell-ok'"}],['update_plan',plan(failed?'pending':'complete')]];
   const selected=steps[results.length];
   if(selected){
     const [name,args]=selected;
     send({choices:[{delta:{content:`Step ${results.length+1}: ${name.replaceAll('_',' ')}.\n`}}]});
     send({choices:[{delta:{tool_calls:[{index:0,id:`call_${lastUser}_${results.length}`,type:'function',function:{name,arguments:JSON.stringify(args)}}]},finish_reason:'tool_calls'}]});
-  }else send({choices:[{delta:{content:'Completed the fixture workflow. Saved **fixture-brief.md**, read it back, and ran the approved shell command. This is a local verification response.'},finish_reason:'stop'}]});
+  }else send({choices:[{delta:{content:failed?'The fixture finished with a declined or failed action. Check the tool results; the plan remains unfinished.':'Completed the fixture workflow. Saved **fixture-brief.md**, searched and edited it, read it back, and ran the approved shell command. This is a local verification response.'},finish_reason:'stop'}]});
   res.end('data: [DONE]\n\n');
 });
 server.listen(port,'127.0.0.1',()=>console.log(`Research fixture on ${port}`));

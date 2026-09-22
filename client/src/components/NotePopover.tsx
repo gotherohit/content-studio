@@ -1,8 +1,9 @@
-import { useEffect, useRef } from "react";
-import { ArrowLeft, ArrowRight, X } from "lucide-react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { ArrowLeft, ArrowRight, GripVertical, X } from "lucide-react";
 import type { Highlight, Source } from "../types";
 import { otherEnd, relationOf, type LinkEnd, type SourceLink } from "../links";
 import { shapeLabel } from "../shapes";
+import { noteCardLayout } from "../note-popover";
 
 interface Props {
   highlight: Highlight;
@@ -12,6 +13,7 @@ interface Props {
   x: number;
   y: number;
   flip: boolean;
+  onWidth: (width: number) => void;
   onGo: (end: LinkEnd) => void;
   onClose: () => void;
 }
@@ -25,6 +27,24 @@ const clip = (text: string, n = 60) => (text.trim().length > n ? `${text.trim().
  */
 export function NotePopover(p: Props) {
   const ref = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(p.highlight.noteWidth ?? 300);
+  const [anchorX, setAnchorX] = useState(p.x);
+  const [size, setSize] = useState({ width: 300, height: 300, cardHeight: 0 });
+  const drag = useRef<{ x: number; width: number; left: number; current: number; side: "left" | "right" } | null>(null);
+  useLayoutEffect(() => { setWidth(p.highlight.noteWidth ?? 300); setAnchorX(p.x); }, [p.highlight.id, p.x, p.y]);
+  useEffect(() => { setWidth(p.highlight.noteWidth ?? 300); }, [p.highlight.noteWidth]);
+  useLayoutEffect(() => {
+    const card = ref.current, parent = card?.parentElement;
+    if (!card || !parent) return;
+    const measure = () => {
+      const next = { width: parent.clientWidth, height: parent.clientHeight, cardHeight: card.offsetHeight };
+      setSize((old) => old.width === next.width && old.height === next.height && old.cardHeight === next.cardHeight ? old : next);
+    };
+    measure();
+    const observer = new ResizeObserver(measure); observer.observe(parent); observer.observe(card);
+    return () => observer.disconnect();
+  }, []);
+  const layout = noteCardLayout(width, anchorX, p.y, p.flip, size, size.cardHeight);
 
   useEffect(() => {
     const outside = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) p.onClose(); };
@@ -57,7 +77,7 @@ export function NotePopover(p: Props) {
     : clip(p.highlight.text, 90);
 
   return (
-    <div ref={ref} className={`note-pop hl-${p.highlight.color} ${p.flip ? "below" : ""}`} style={{ left: p.x, top: p.y }} onMouseDown={(e) => e.stopPropagation()}>
+    <div ref={ref} className={`note-pop hl-${p.highlight.color}`} style={layout} onMouseDown={(e) => e.stopPropagation()}>
       <div className="note-pop-head">
         <span className="muted small ellipsis">{what}</span>
         <button className="icon-btn" onClick={p.onClose} title="Close"><X size={13} /></button>
@@ -78,6 +98,14 @@ export function NotePopover(p: Props) {
       {p.links.some((l) => l.note) && (
         <p className="muted small">{p.links.filter((l) => l.note).map((l) => l.note).join(" · ")}</p>
       )}
+      {(["left", "right"] as const).map((side) => <button key={side} className={`note-pop-resize ${side}`} aria-label={`Resize comment width from ${side}`} title="Drag to change width. Arrow keys resize; double-click resets."
+        onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); e.currentTarget.setPointerCapture(e.pointerId); drag.current = { x: e.clientX, width: layout.width, left: layout.left, current: layout.width, side }; }}
+        onPointerMove={(e) => { const start = drag.current; if (!start) return; const next = noteCardLayout(start.width + (start.side === "right" ? 1 : -1) * (e.clientX - start.x), anchorX, p.y, p.flip, size, size.cardHeight).width; start.current = next; setWidth(next); setAnchorX(start.side === "right" ? start.left + next / 2 : start.left + start.width - next / 2); }}
+        onPointerUp={(e) => { const start = drag.current; if (!start) return; drag.current = null; if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId); p.onWidth(Math.round(start.current)); }}
+        onPointerCancel={() => { drag.current = null; setWidth(p.highlight.noteWidth ?? 300); setAnchorX(p.x); }}
+        onDoubleClick={() => { setWidth(300); setAnchorX(p.x); p.onWidth(300); }}
+        onKeyDown={(e) => { if (!["ArrowLeft", "ArrowRight", "Home"].includes(e.key)) return; e.preventDefault(); e.stopPropagation(); const next = noteCardLayout(e.key === "Home" ? 300 : layout.width + (e.key === "ArrowRight" ? 32 : -32), anchorX, p.y, p.flip, size, size.cardHeight).width; setWidth(next); p.onWidth(Math.round(next)); }}
+      ><GripVertical size={14} /></button>)}
     </div>
   );
 }

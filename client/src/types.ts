@@ -8,6 +8,8 @@ export interface Highlight {
   suffix: string;    // ~30 chars after
   color: HighlightColor;
   comment: string;
+  /** Preferred comment-card width; height follows the text and the current pane bounds. */
+  noteWidth?: number;
   createdAt: string;
   /** For code: the first and last line, 1-based. `text` holds those lines, to find them again after edits. */
   lines?: [number, number];

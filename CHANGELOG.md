@@ -2,6 +2,12 @@
 
 What changed in each release, newest first. Versions are the ones the app updates itself to.
 
+## 0.25.0
+
+- **Vajra has its own left sidebar.** Search and select conversations, start a new one, switch between the current Studio project and Global research, open research files, and reach Settings. Collapse it for more writing space; narrow panes use a dismissible overlay. Opening navigation never cancels a run.
+- **Search files and make precise edits.** Vajra can search research/project text with file paths and line numbers, and propose an exact passage replacement in a research file. Edits show the removed/replacement text for approval, reject ambiguous matches, and preserve concurrent user changes. Project files remain read-only through these tools.
+- **Resizable highlight comments.** Drag either side of the note shown by an article's “i” marker to widen it and reduce its height. Width is saved with the highlight; cards fit smaller panes and long notes scroll. The resize handles also support arrow keys and a double-click reset.
+
 ## 0.24.0
 
 - **Copy selected article text again.** Ctrl+C (or Cmd+C) copies the captured selection when the highlight popup's note field is empty. A Copy button also copies the passage, including after entering a note; copying selected note text keeps its normal behaviour. Shared by Original, Reader, PDF and document selections.

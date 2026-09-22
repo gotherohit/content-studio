@@ -17,6 +17,9 @@ Conversation renames and runs share an exclusion check; never let a metadata wri
 active transcript. A completed response does not automatically complete unfinished plan steps.
 The highlight popup deliberately focuses its note input. Pass its captured `selectionText` so
 Ctrl/Cmd+C can copy the passage when that note is empty; preserve native copy for typed notes.
+Highlight `noteWidth` stores a preferred comment-card width, not its height or position.
+Clamp the displayed card to its current Source pane without overwriting the saved preference
+on layout resize. Vajra's sidebar must never remount its chat or abort a run when toggled.
 
 A Windows desktop app for one person: a YouTube creator who reads technical news and blog
 posts, researches them, and records an explanation with his own analysis. Everything for
