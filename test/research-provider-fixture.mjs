@@ -11,7 +11,8 @@ const server=http.createServer(async(req,res)=>{
   if(prompt.includes('slow')){
     send({choices:[{delta:{content:'Starting the cancellable fixture response…'}}]});const timer=setTimeout(()=>res.end(),60000);res.on('close',()=>clearTimeout(timer));return;
   }
-  const steps=[['list_files',{}],['write_file',{path:'fixture-brief.md',content:'# Fixture research brief\n\nThis file verifies the agent write approval and persistence.\n'}],['read_file',{path:'fixture-brief.md'}],['bash',{shell:'powershell',command:"Write-Output 'fixture-shell-ok'"}]];
+  const plan = status => ({ steps: [{ text: 'Inspect workspace and create a verified brief', status }] });
+  const steps=[['update_plan',plan('in_progress')],['list_files',{}],['write_file',{path:'fixture-brief.md',content:'# Fixture research brief\n\nThis file verifies the agent write approval and persistence.\n'}],['read_file',{path:'fixture-brief.md'}],['bash',{shell:'powershell',command:"Write-Output 'fixture-shell-ok'"}],['update_plan',plan('complete')]];
   const selected=steps[results.length];
   if(selected){
     const [name,args]=selected;

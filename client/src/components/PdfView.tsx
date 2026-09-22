@@ -401,7 +401,7 @@ export function PdfView(p: Props) {
             />
           </div>
         ))}
-        {popup && <HighlightPopup x={popup.x} y={popup.y} flip={popup.flip} onCommit={commit} onCancel={() => setPopup(null)} />}
+{popup && <HighlightPopup selectionText={popup.shape ? undefined : popup.anchor?.text} x={popup.x} y={popup.y} flip={popup.flip} onCommit={commit} onCancel={() => setPopup(null)} />}
       </div>
       {!p.presenting && !p.slideshow && count > 0 && (
         <div className="pdf-zoom">

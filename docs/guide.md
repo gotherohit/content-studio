@@ -504,7 +504,7 @@ Everything is a **pane**. Pick 1 to 4 panes from the layout buttons in the top b
 └──────────┴──────────────────────────┴─────────────────────────┘
 ```
 
-Pane types: **Source**, **Highlights**, **Source map**, **Files**, **Notes**, **AI**, **Code** (runnable snippets), **Terminal**, **Jupyter**, **Slides** (a scratch markdown deck), **Canvas** (Excalidraw), **Browser**, **Window**, **Embed**.
+Pane types: **Source**, **Highlights**, **Source map**, **Files**, **Notes**, **Vajra**, **Code** (runnable snippets), **Terminal**, **Jupyter**, **Slides** (a scratch markdown deck), **Canvas** (Excalidraw), **Browser**, **Window**, **Embed**.
 
 Each Source pane's toolbar has, from left to right: which source it shows, Back and Forward for
 pages browsed inside it, Original or Reader, the **←** link to the source it came from, its
@@ -572,21 +572,23 @@ The toolbar names the app currently being used. Studio moves behind that app whi
 
 Interaction requires the Windows desktop app. Elsewhere, Window remains a live preview. If a target closes, rescan and select its new window. Windows may refuse to bring an app forward; Studio reports that failure instead of pretending the switch succeeded. The preview does not forward input or move your physical cursor. Native apps still run in their own windows, and a minimised app may stop updating its capture. The floating toolbar may appear in a whole-display recording; hide it before a take if needed.
 
-## Research with AI
+## Research with Vajra
 
-Choose **AI** in a pane, select a model that supports tool calling, and ask a question or describe a deliverable. The agent can investigate sources, read files, search the web and create Markdown briefs, Mermaid diagrams, SVGs and scripts. It works through several tool calls and shows their results in the conversation. Generated diagrams are files; they are not automatically inserted into the Canvas.
+Choose **Vajra** in a pane, select a model that supports tool calling, and ask a question or describe a deliverable. Vajra is the research agent previously labelled AI; existing conversations and layouts still work. The agent can investigate sources, read files, search the web and create Markdown briefs, Mermaid diagrams, SVGs and scripts. It works through several tool calls and shows their results in the conversation. Generated diagrams are files; they are not automatically inserted into the Canvas.
+
+For substantial work, Vajra can maintain a **Task plan** above the conversation. Steps show pending, in-progress or completed work and survive reopening. This is the model's progress report, not independent verification: a finished response can still leave unfinished plan steps. The header shows the current model step out of the 12-step run budget and whether an action needs your review.
 
 Choose **Current source**, **All project sources** or **No source context** to control which saved article text and highlights are sent with the request. Project files can also be read through `project/` paths. These file tools keep the original project material read-only and put new work in the project's `research/` folder.
 
 Every file write shows the proposed contents before **Allow once** or **Decline**. Every shell command shows the exact command and working folder. PowerShell works on Windows; Bash requires Git for Windows in its usual installation location. Commands run with your account and can access files outside the working folder: this is not an OS sandbox. Review the command before approving it. Commands stop after 30 seconds; output is capped.
 
-**Stop** cancels a run. Closing its AI pane also cancels it, keeping completed tool results and any partial text already received. Runs are limited to 12 model steps and 15 minutes; send a follow-up to continue. Older complete turns leave the model's working context, but remain on disk and can be read by the history tool. A provider/model without tool support will report an error; protocol compatibility alone does not guarantee tool support.
+**Stop** cancels a run. Closing its Vajra pane also cancels it, keeping completed tool results and any partial text already received. Runs are limited to 12 model steps and 15 minutes. After stopping, interruption, failure or the step limit, **Continue** starts a new turn that asks Vajra to inspect saved progress before repeating actions; it still asks for write and shell approvals. You can also send a more specific follow-up. Older complete turns leave the model's working context, but remain on disk and can be read by the history tool. A provider/model without tool support will report an error; protocol compatibility alone does not guarantee tool support.
 
 ### Conversations and files
 
 **Project research** is the default when a project is open. Conversations are stored separately from project autosave in `<project>/.ai/conversations/`, and deliverables in `<project>/research/`. They travel with the project folder. **Global research** stores conversations in `~/.content-studio/conversations/` and deliverables in `~/.content-studio/research/`; it does not include the selected project's sources or file access. Global research also works before opening a project.
 
-Use **New** to start a conversation and the conversation dropdown to resume one. **Files** opens its research folder. Existing project chat can be imported explicitly; the original chat is kept. Conversation files are local JSON, not encrypted like API keys, so keep private research in a folder you trust. Selected context and tool results are sent to the model provider you choose.
+Use **New** to start a conversation and the conversation dropdown to resume one. **Rename** changes its title while idle. **Export** downloads Markdown containing the conversation, saved plan and tool-status list; it does not include full tool outputs or approval payloads. **Files** opens its research folder. Existing project chat can be imported explicitly; the original chat is kept. Conversation files are local JSON, not encrypted like API keys, so keep private research in a folder you trust. Selected context and tool results are sent to the model provider you choose.
 
 ### Web search
 
@@ -632,6 +634,7 @@ A key that cannot be decrypted is **kept, not discarded** — the provider simpl
 | `Ctrl` + scroll | Zoom a PDF |
 | `Ctrl+Enter` | Run the current code snippet |
 | `Ctrl+S` | Save the open file, in the Files pane |
+| `Ctrl+C` / `Cmd+C` | Copy the selected article passage while the highlight popup's note is empty; with note text selected, copy that text normally. The popup's Copy button always copies the passage. |
 | `F2` / `Delete` | Rename / delete the selected file or folder, in the Files pane |
 | `Ctrl+F` | Find in the open file, in the Files pane |
 | `Ctrl+click` a link | Open it in your normal browser instead of the pane |

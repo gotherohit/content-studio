@@ -898,6 +898,15 @@ mark.hl:hover { filter: brightness(0.94); }
 .canvas-host { flex: 1; min-height: 0; position: relative; }
 .canvas-host > .excalidraw { position: absolute; inset: 0; }
 .research-agent { min-height: 0; gap: 8px; }
+.vajra-heading strong { color: var(--accent); font-size: 16px; }
+.research-agent > .row.research-conversations select { flex: 1 1 140px; min-width: 120px; }
+.vajra-plan { border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; max-height: 180px; overflow: auto; flex-shrink: 0; }
+.vajra-plan summary { cursor: pointer; font-size: 12px; }
+.vajra-plan ol { list-style: none; margin: 8px 0 0; padding: 0; font-size: 12px; }
+.vajra-plan li { padding: 3px 0; }
+.vajra-plan li[data-status="complete"] { opacity: .65; }
+.vajra-plan li[data-status="in_progress"] { font-weight: 600; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 .research-agent > .row select { max-width: 100%; min-width: 0; flex: 1; }
 .research-agent form textarea { width: 100%; }
 .research-agent .chat { min-height: 100px; }

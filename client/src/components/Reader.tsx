@@ -183,7 +183,7 @@ export function Reader({ source, scrollToId, scrollNonce, onAddHighlight, onUpda
           }}
         />
       </div>
-      {popup && <HighlightPopup x={popup.x} y={popup.y} flip={popup.flip} onCommit={commit} onCancel={() => setPopup(null)} />}
+{popup && <HighlightPopup selectionText={popup.shape ? undefined : popup.anchor?.text} x={popup.x} y={popup.y} flip={popup.flip} onCommit={commit} onCancel={() => setPopup(null)} />}
     </div>
   );
 }

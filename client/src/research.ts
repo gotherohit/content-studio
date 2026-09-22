@@ -6,6 +6,15 @@ export interface ToolActivity {
 export interface ResearchSession {
   id: string; title: string; status: string; model: string | null; workspace: string;
   messages: ResearchMessage[]; activity: ToolActivity[]; updatedAt: string; lastError?: string;
+  plan?: { text: string; status: "pending" | "in_progress" | "complete" }[];
+  progress?: { step: number; maxSteps: number; startedAt: string; finishedAt?: string };
+}
+export function exportResearch(session: ResearchSession): string {
+  const lines = [`# ${session.title}`, "", `Vajra · ${session.status} · ${session.updatedAt}`, ""];
+  if (session.plan?.length) lines.push("## Task plan", "", ...session.plan.map((s) => `- [${s.status === "complete" ? "x" : " "}] ${s.text}${s.status === "in_progress" ? " (in progress)" : ""}`), "");
+  for (const message of session.messages) if (message.content) lines.push(`## ${message.role === "user" ? "You" : "Vajra"}${message.interrupted ? " (interrupted)" : ""}`, "", message.content, "");
+  if (session.activity.length) lines.push("## Tool activity", "", ...session.activity.map((a) => `- ${a.name}: ${a.status}`), "");
+  return lines.join("\n");
 }
 export interface ResearchEvent { session?: ResearchSession; activity?: ToolActivity; text?: string; error?: string; notice?: string; done?: boolean }
 export interface SearchStatus { provider: string; hasKey: boolean; keyHint: string; secure: boolean; unreadable: boolean }
@@ -21,6 +30,7 @@ export const research = {
   list: (projectId: string | null) => json<{ sessions: Pick<ResearchSession, "id" | "title" | "status" | "updatedAt">[]; workspace: string }>(`/sessions${query(projectId)}`),
   load: (projectId: string | null, id: string) => json<ResearchSession>(`/sessions/${id}${query(projectId)}`),
   create: (projectId: string | null, importLegacy = false) => json<ResearchSession>("/sessions", { projectId, importLegacy }),
+  rename: (projectId: string | null, id: string, title: string) => json<ResearchSession>(`/sessions/${id}`, { projectId, title }, "PUT"),
   approve: (projectId: string | null, id: string, approvalId: string, allow: boolean) => json(`/sessions/${id}/approval`, { projectId, approvalId, allow }),
   stop: (projectId: string | null, id: string) => json(`/sessions/${id}/stop`, { projectId }),
   searchStatus: () => json<SearchStatus>("/search"),

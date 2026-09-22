@@ -42,7 +42,7 @@ const KINDS: { id: PaneKind; label: string }[] = [
   { id: "map", label: "Source map" },
   { id: "files", label: "Files" },
   { id: "notes", label: "Notes" },
-  { id: "ai", label: "AI" },
+  { id: "ai", label: "Vajra" },
   { id: "code", label: "Code" },
   { id: "terminal", label: "Terminal" },
   { id: "jupyter", label: "Jupyter" },
@@ -858,7 +858,7 @@ export default function App() {
 
   function renderPane(pane: PaneConfig, i: number) {
     if (!project && pane.kind === "ai") return <AiPanel key="global" source={null} onOpenSettings={() => setShowSettings(true)} />;
-    if (!project) return <div className="empty-state"><h2>No project open</h2><p>Create or open a project on the left, or choose AI for global research.</p></div>;
+    if (!project) return <div className="empty-state"><h2>No project open</h2><p>Create or open a project on the left, or choose Vajra for global research.</p></div>;
     switch (pane.kind) {
       case "source": {
         // A pinned pane keeps its own source; an unpinned one follows the sidebar.

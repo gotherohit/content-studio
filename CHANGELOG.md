@@ -2,6 +2,13 @@
 
 What changed in each release, newest first. Versions are the ones the app updates itself to.
 
+## 0.24.0
+
+- **Copy selected article text again.** Ctrl+C (or Cmd+C) copies the captured selection when the highlight popup's note field is empty. A Copy button also copies the passage, including after entering a note; copying selected note text keeps its normal behaviour. Shared by Original, Reader, PDF and document selections.
+- **Vajra, the first step toward a fuller research agent.** The AI pane is now named Vajra, retaining existing models, tools, approvals and project/global conversations. Substantial tasks can have a saved, visible plan with pending, in-progress and completed steps. The pane shows model-step progress and when review is needed.
+- Rename conversations, export their transcript and plan as Markdown, and use **Continue** after a stopped, interrupted, failed or step-limited run. Continuation reviews saved progress in a new turn; writes and shell commands still need approval. Plan completion is model-reported, not inferred from a finished response.
+
+
 ## 0.23.1
 
 - **A removed source stayed removed.** Removing a PDF, image, deck or other file source took

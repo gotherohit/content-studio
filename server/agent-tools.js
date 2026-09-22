@@ -6,10 +6,12 @@ import https from "node:https";
 import { spawn, spawnSync } from "node:child_process";
 import { JSDOM } from "jsdom";
 import { Readability } from "@mozilla/readability";
+import { validatePlan } from "./agent-plan.js";
 
 const schema = (properties, required = Object.keys(properties)) => ({ type: "object", properties, required, additionalProperties: false });
 const string = { type: "string" };
 export const AGENT_TOOLS = [
+  { name: "update_plan", description: "Save or update the visible task plan for substantial work. Send the complete plan, marking completed steps honestly and at most one step in_progress. Skip planning for simple questions.", parameters: schema({ steps: { type: "array", minItems: 1, maxItems: 12, items: schema({ text: { type: "string", maxLength: 200 }, status: { type: "string", enum: ["pending", "in_progress", "complete"] } }) } }) },
   { name: "list_files", description: "List files in the research workspace. Paths are relative to the workspace. Use before reading unfamiliar files.", parameters: schema({ path: string }, []) },
   { name: "read_file", description: "Read a UTF-8 research file, with optional line offset and limit. Project files are available using the project/ prefix in a project conversation. Credentials and app state are unavailable.", parameters: schema({ path: string, offset: { type: "integer" }, limit: { type: "integer" } }, ["path"]) },
   { name: "write_file", description: "Create or replace a UTF-8 file in the research workspace. Use Markdown for research reports and Mermaid or SVG for diagrams. The user reviews the path and full contents before each write. Read an existing file first; do not overwrite unrelated work.", parameters: schema({ path: string, content: string }) },
@@ -119,9 +121,10 @@ export async function runShell(command, kind, cwd, signal) {
   });
 }
 
-export async function executeTool(name, args, { workspace, projectDir, search, signal, approve, history }) {
+export async function executeTool(name, args, { workspace, projectDir, search, signal, approve, history, updatePlan }) {
   signal.throwIfAborted();
   if (!args || typeof args !== "object" || Array.isArray(args)) throw new Error("Tool arguments must be an object");
+  if (name === "update_plan") return updatePlan(validatePlan(args.steps));
   const text = (key, max = 3000) => { if (typeof args[key] !== "string" || !args[key].trim() || args[key].length > max) throw new Error(`Invalid ${key}`); return args[key]; };
   if (name === "web_search") return search.search(text("query", 1000), signal);
   if (name === "read_url") return readPublicUrl(text("url"), signal);

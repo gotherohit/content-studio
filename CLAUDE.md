@@ -11,6 +11,13 @@ is allowed to touch this machine. Keep them in step.
 
 ## What this is
 
+The research pane is branded **Vajra**; its persisted pane kind remains `ai` for compatibility.
+`update_plan` stores bounded model-reported steps alongside conversations, not in project autosave.
+Conversation renames and runs share an exclusion check; never let a metadata write overwrite an
+active transcript. A completed response does not automatically complete unfinished plan steps.
+The highlight popup deliberately focuses its note input. Pass its captured `selectionText` so
+Ctrl/Cmd+C can copy the passage when that note is empty; preserve native copy for typed notes.
+
 A Windows desktop app for one person: a YouTube creator who reads technical news and blog
 posts, researches them, and records an explanation with his own analysis. Everything for
 one video — sources, highlights, notes, slides, notebooks, terminal, canvas, AI chat and

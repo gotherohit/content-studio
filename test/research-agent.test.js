@@ -139,3 +139,34 @@ test('stopping during approval persists an interrupted tool result and releases 
   const stored=JSON.parse(await fs.readFile(path.join(home,'conversations',session.id+'.json'),'utf8'));
   assert.equal(stored.status,'stopped');assert.equal(stored.messages.at(-1).role,'tool');
 });
+
+test('Vajra persists plans and step progress, resumes limited runs, and serializes renames', async t => {
+  const home = await scratch(t);
+  const credentials = { list: () => ({ providers: [] }), find: () => null, resolve: () => ({ provider: { kind: 'openai' }, model: 'fixture', ref: 'fixture/model' }) };
+  let calls = 0, finish = false;
+  const agent = createResearchAgent({ config: { appDir: () => home, dirOf: () => null }, credentials, search: {}, readProject: async () => ({}), step: async ({ system }) => {
+    calls++;
+    if (calls > 1) assert.match(system, /Investigate sources/);
+    return finish ? { role: 'assistant', content: 'Resumed from saved progress.', toolCalls: [] } : { role: 'assistant', content: '', toolCalls: [{ id: `plan${calls}`, name: 'update_plan', arguments: JSON.stringify({ steps: [{ text: 'Investigate sources', status: 'in_progress' }] }) }] };
+  } });
+  const app = express(); app.use(express.json()); app.use('/api/research', agent.router); const url = await listening(t, app);
+  const request = (route, body, method = 'POST') => fetch(url + '/api/research' + route, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const session = await request('/sessions', {}).then(r => r.json());
+  const endpoint = `/sessions/${session.id}`;
+  assert.equal((await request(endpoint, { title: ' ' }, 'PUT')).status, 400);
+  assert.equal((await request(endpoint, { title: 'My Vajra research' }, 'PUT').then(r => r.json())).title, 'My Vajra research');
+  const response = await request(endpoint + '/run', { message: 'Investigate' });
+  let completed;
+  for await (const data of sse(response.body)) {
+    if (!data) continue; const event = JSON.parse(data);
+    if (event.session?.status === 'running' && event.session.progress.step === 0) assert.equal((await request(endpoint, { title: 'Race' }, 'PUT')).status, 400);
+    if (event.done) completed = event.session;
+  }
+  assert.equal(completed.status, 'limited'); assert.equal(completed.progress.step, 12); assert.ok(completed.progress.finishedAt);
+  const stored = JSON.parse(await fs.readFile(path.join(home, 'conversations', session.id + '.json'), 'utf8'));
+  assert.deepEqual(stored.plan, [{ text: 'Investigate sources', status: 'in_progress' }]); assert.equal(stored.title, 'My Vajra research');
+  finish = true;
+  const resume = await request(endpoint + '/run', { message: 'Continue from saved progress' });
+  for await (const data of sse(resume.body)) { if (data) { const event = JSON.parse(data); if (event.done) completed = event.session; } }
+  assert.equal(completed.status, 'complete'); assert.equal(completed.progress.step, 1); assert.equal(completed.plan[0].status, 'in_progress', 'the harness never fabricates plan completion');
+});

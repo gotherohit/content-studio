@@ -3,7 +3,7 @@ import { marked } from "marked";
 import DOMPurify from "dompurify";
 import type { Source } from "../types";
 import { api, type AiStatus } from "../api";
-import { research, type ResearchSession, type ToolActivity } from "../research";
+import { research, exportResearch, type ResearchSession, type ToolActivity } from "../research";
 
 interface Props {
   projectId?: string;
@@ -19,6 +19,7 @@ export function AiPanel({ projectId, source, hasLegacyChat, onOpenSettings }: Pr
   const [rows, setRows] = useState<Pick<ResearchSession, "id" | "title" | "status" | "updatedAt">[]>([]);
   const [session, setSession] = useState<ResearchSession | null>(null);
   const [input, setInput] = useState("");
+  const [renameTitle, setRenameTitle] = useState<string | null>(null);
   const [partial, setPartial] = useState("");
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -37,7 +38,7 @@ export function AiPanel({ projectId, source, hasLegacyChat, onOpenSettings }: Pr
   useEffect(() => { refreshModels(); return () => { controller.current?.abort(); generation.current++; }; }, []);
   useEffect(() => {
     const version = ++generation.current;
-    setLoading(true); setError(""); setSession(null); setPartial("");
+    setLoading(true); setError(""); setSession(null); setPartial(""); setRenameTitle(null); setNotice("");
     research.list(project).then(async (result) => {
       if (version !== generation.current) return;
       setRows(result.sessions);
@@ -60,6 +61,7 @@ export function AiPanel({ projectId, source, hasLegacyChat, onOpenSettings }: Pr
   }, [session?.id, session?.status, busy, project]);
 
   async function choose(id: string) {
+    setRenameTitle(null); setNotice("");
     const version = ++generation.current; setLoading(true); setError("");
     try { const s = await research.load(project, id); if (version === generation.current) { setSession(s); if (s.model) setModel(s.model); setPartial(""); follow.current = true; } }
     catch (e) { setError((e as Error).message); }
@@ -69,6 +71,7 @@ export function AiPanel({ projectId, source, hasLegacyChat, onOpenSettings }: Pr
     const s = await research.create(project, importLegacy); setSession(s); setPartial(""); follow.current = true; await refreshRows(); return s;
   }
   async function newConversation(importLegacy = false) {
+    setRenameTitle(null); setNotice("");
     setLoading(true); setError("");
     try { await create(importLegacy); }
     catch (e) { setError((e as Error).message); }
@@ -86,7 +89,11 @@ export function AiPanel({ projectId, source, hasLegacyChat, onOpenSettings }: Pr
       setInput("");
       await research.run(selected.id, { projectId: project, message: text, model, context: project ? context : "none", sourceId: source?.id }, abort.signal, (event) => {
         if (version !== generation.current) return;
-        if (event.session) { setSession(event.session); setPartial(""); }
+        if (event.session) {
+          const saved = event.session;
+          setSession(saved); setPartial("");
+          setRows((items) => items.map((item) => item.id === saved.id ? { id: saved.id, title: saved.title, status: saved.status, updatedAt: saved.updatedAt } : item));
+        }
         if (event.text) setPartial((p) => p + event.text);
         if (event.activity) {
           const activity = event.activity;
@@ -109,6 +116,19 @@ export function AiPanel({ projectId, source, hasLegacyChat, onOpenSettings }: Pr
     try { await research.stop(project, session.id); }
     catch (e) { setError((e as Error).message); }
   }
+  async function rename() {
+    if (!session || renameTitle == null) return;
+    setLoading(true); setError("");
+    try { setSession(await research.rename(project, session.id, renameTitle)); setRenameTitle(null); await refreshRows(); }
+    catch (e) { setError((e as Error).message); }
+    finally { setLoading(false); }
+  }
+  function download() {
+    if (!session) return;
+    const url = URL.createObjectURL(new Blob([exportResearch(session)], { type: "text/markdown;charset=utf-8" }));
+    const link = document.createElement("a"); link.href = url; link.download = `vajra-${session.id}.md`; link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
   async function decide(activity: ToolActivity, allow: boolean) {
     if (!session || !activity.approval) return;
     try { await research.approve(project, session.id, activity.approval.id, allow); }
@@ -121,7 +141,8 @@ export function AiPanel({ projectId, source, hasLegacyChat, onOpenSettings }: Pr
   ].sort((a, b) => a.time.localeCompare(b.time));
 
   return <div className="panel-body ai research-agent">
-    <div className="row wrap">
+    <div className="row between vajra-heading"><strong>Vajra</strong><span className="muted small" role="status">{session?.activity.some((a) => a.status === "approval") ? "Waiting for your review" : running ? "Working" : session?.status || "Ready"}{session?.progress ? ` · Step ${session.progress.step}/${session.progress.maxSteps}` : ""}</span></div>
+    <div className="row wrap research-conversations">
       <select aria-label="Conversation location" value={scope} disabled={running || loading} onChange={(e) => setScope(e.target.value)}>
         {projectId && <option value="project">Project research</option>}<option value="global">Global research</option>
       </select>
@@ -132,7 +153,13 @@ export function AiPanel({ projectId, source, hasLegacyChat, onOpenSettings }: Pr
       <button className="small" onClick={() => newConversation()} disabled={running || loading}>New</button>
       <button className="ghost small" onClick={onOpenSettings}>Settings</button>
       {session && <button className="ghost small" onClick={() => api.reveal(session.workspace).catch((e) => setError(e.message))}>Files</button>}
+      {session && <button className="ghost small" disabled={running || loading} onClick={() => setRenameTitle(session.title)}>Rename</button>}
+      {session && <button className="ghost small" disabled={running || loading} onClick={download}>Export</button>}
     </div>
+    {renameTitle !== null && <form className="row" onSubmit={(e) => { e.preventDefault(); void rename(); }}>
+      <input aria-label="Conversation title" value={renameTitle} maxLength={120} disabled={loading || running} onChange={(e) => setRenameTitle(e.target.value)} autoFocus />
+      <button className="small" disabled={loading || running || !renameTitle.trim()}>Save title</button><button className="ghost small" type="button" onClick={() => setRenameTitle(null)}>Cancel</button>
+    </form>}
     <div className="row wrap">
       <select aria-label="Research model" value={model} disabled={running} onFocus={refreshModels} onChange={(e) => setModel(e.target.value)}>
         <option value="">Choose a model</option>{status?.models.map((m) => <option key={m.ref} value={m.ref}>{m.provider} — {m.model}</option>)}
@@ -146,9 +173,11 @@ export function AiPanel({ projectId, source, hasLegacyChat, onOpenSettings }: Pr
     {(error || session?.lastError) && <div className="error-bar" role="alert">{error || session?.lastError}</div>}
     {session?.status === "limited" && !notice && <div className="note-bar">Reached the step limit. Review the work and send Continue to proceed.</div>}
     {notice && <div className="note-bar">{notice}</div>}
+    {!running && session && ["limited", "stopped", "interrupted", "error"].includes(session.status) && <div className="row between note-bar"><span>Saved progress is available.</span><button className="small" disabled={loading || !model} onClick={() => send("Continue the previous task from saved progress. Check the plan and previous tool results before repeating actions; finish outstanding work and report any blockers.")}>Continue</button></div>}
+    {!!session?.plan?.length && <details className="vajra-plan" open><summary>Task plan · {session.plan.filter((s) => s.status === "complete").length}/{session.plan.length} complete</summary><ol>{session.plan.map((s, i) => <li key={i} data-status={s.status}><span aria-hidden="true">{s.status === "complete" ? "✓" : s.status === "in_progress" ? "→" : "○"}</span> {s.text}<span className="sr-only"> — {s.status.replaceAll("_", " ")}</span></li>)}</ol></details>}
     <div className="chat" ref={chat} onScroll={() => { const el = chat.current; if (el) follow.current = el.scrollHeight - el.scrollTop - el.clientHeight < 100; }}>
       {!session?.messages.length && <div className="research-intro">
-        <h3>Research, then make something useful</h3>
+        <h3>Turn questions into work you can use</h3>
         <p>Ask a question, investigate sources, or create a research brief, diagram or script. You can review file changes and shell commands before they run.</p>
         <div className="row wrap quick">
           {["Research this topic and save a sourced brief", "Compare the evidence across my sources", "Create an editable Mermaid diagram explaining this topic"].map((p) => <button className="chip" key={p} onClick={() => setInput(p)}>{p}</button>)}

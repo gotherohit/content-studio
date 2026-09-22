@@ -180,7 +180,7 @@ export function OriginalView({ source, apiPort, scripts, onAddHighlight, onUpdat
         title={source.title}
         sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals"
       />
-      {popup && <HighlightPopup x={popup.x} y={popup.y} flip={popup.flip} onCommit={commit} onCancel={() => show(null)} onType={() => (noteTyped.current = true)} />}
+{popup && <HighlightPopup selectionText={popup.shape ? undefined : popup.anchor?.text} x={popup.x} y={popup.y} flip={popup.flip} onCommit={commit} onCancel={() => show(null)} onType={() => (noteTyped.current = true)} />}
     </div>
   );
 }
