@@ -185,6 +185,53 @@ test('stopping during approval persists an interrupted tool result and releases 
   assert.equal(stored.status,'stopped');assert.equal(stored.messages.at(-1).role,'tool');
 });
 
+test('project source tools page article text, expose highlights, and deny global access', async t => {
+  const workspace = await scratch(t);
+  const sources = [{ id: 'article', title: 'Research article', url: 'https://example.org/article', textContent: 'A'.repeat(30000), summary: 'A short summary', highlights: [{ text: 'Evidence', comment: 'Important' }] }];
+  const ctx = { workspace, projectDir: workspace, projectSources: async () => sources, signal: signal() };
+  assert.deepEqual((await executeTool('list_sources', {}, ctx)).sources[0].highlights, 1);
+  assert.deepEqual((await executeTool('search_sources', { query: 'important' }, ctx)).matches.map((m) => m.id), ['article']);
+  const paged = { ...ctx, projectSources: async () => [...Array.from({ length: 200 }, (_, index) => ({ id: `filler-${index}`, title: 'Other', textContent: '' })), ...sources] };
+  assert.equal((await executeTool('list_sources', { offset: 200, limit: 1 }, paged)).sources[0].id, 'article');
+  assert.equal((await executeTool('search_sources', { query: 'important', source_offset: 200 }, paged)).matches[0].id, 'article');
+  const page = await executeTool('read_source', { source_id: 'article', offset: 20000, limit: 10000 }, ctx);
+  assert.equal(page.text.length, 10000); assert.equal(page.totalChars, 30000); assert.equal(page.highlights[0].comment, 'Important');
+  assert.equal((await executeTool('list_highlights', { source_id: 'article', offset: 0, limit: 1 }, ctx)).highlights[0].text, 'Evidence');
+  await assert.rejects(executeTool('read_source', { source_id: 'missing' }, ctx), /no longer/);
+  await assert.rejects(executeTool('read_source', { source_id: 'article', limit: 100000 }, ctx), /limit/);
+  await assert.rejects(executeTool('list_sources', {}, { ...ctx, projectDir: null }), /project conversation/);
+});
+
+test('attached text reaches the model and persists, while visible transcript hides contents and rejects oversized input', async t => {
+  const root = await scratch(t), projectDir = path.join(root, 'project'), home = path.join(root, 'home');
+  await fs.mkdir(projectDir); await fs.mkdir(home); await fs.writeFile(path.join(projectDir, 'project.json'), '{}');
+  const credentials = { list: () => ({ providers: [] }), find: () => null, resolve: () => ({ provider: { kind: 'openai' }, model: 'fixture', ref: 'fixture/model' }) };
+  const sources = [{ id: 'source-b', title: 'Second', url: 'https://example.org/b', textContent: 'SECOND SOURCE TEXT', highlights: [] }, { id: 'source-a', title: 'First', url: 'https://example.org/a', textContent: 'FIRST SOURCE TEXT', highlights: [] }];
+  let modelCalls = 0;
+  const agent = createResearchAgent({ config: { appDir: () => home, dirOf: (id) => id === 'scratch' ? projectDir : null }, credentials, search: {}, readProject: async () => ({ sources }), step: async ({ messages, system }) => {
+    modelCalls++;
+    assert.match(messages.at(-1).content, /PRIVATE ATTACHMENT TEXT/);
+    assert.match(system, /FIRST SOURCE TEXT/); assert.doesNotMatch(system, /SECOND SOURCE TEXT/);
+    return { role: 'assistant', content: 'Used the attachment.', toolCalls: [] };
+  } });
+  const app = express(); app.use(express.json()); app.use('/api/research', agent.router); const url = await listening(t, app);
+  const post = (route, body) => fetch(url + '/api/research' + route, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const session = await post('/sessions', { projectId: 'scratch' }).then((r) => r.json());
+  const endpoint = `/sessions/${session.id}/run`;
+  const base = { projectId: 'scratch', message: 'Summarize this', model: 'fixture/model', context: 'source', sourceId: 'source-a' };
+  const bad = await post(endpoint, { ...base, attachments: [{ name: 'huge.txt', kind: 'text', content: 'X'.repeat(60001), truncated: false }] });
+  assert.equal(bad.status, 400); assert.equal(modelCalls, 0);
+  const before = await fetch(url + `/api/research/sessions/${session.id}?projectId=scratch`).then((r) => r.json());
+  assert.equal(before.messages.length, 0);
+  const response = await post(endpoint, { ...base, attachments: [{ name: 'notes.txt', kind: 'text', content: 'PRIVATE ATTACHMENT TEXT', truncated: false }] });
+  let completed;
+  for await (const data of sse(response.body)) if (data) { const event = JSON.parse(data); if (event.session) { assert.ok(!JSON.stringify(event.session).includes('PRIVATE ATTACHMENT TEXT')); completed = event.session; } }
+  assert.equal(completed.status, 'complete'); assert.equal(modelCalls, 1);
+  assert.equal(completed.messages[0].attachments[0].name, 'notes.txt');
+  const stored = JSON.parse(await fs.readFile(path.join(projectDir, '.ai', 'conversations', session.id + '.json'), 'utf8'));
+  assert.equal(stored.messages[0].attachments[0].content, 'PRIVATE ATTACHMENT TEXT');
+});
+
 test('Vajra persists plans and step progress, resumes limited runs, and serializes renames', async t => {
   const home = await scratch(t);
   const credentials = { list: () => ({ providers: [] }), find: () => null, resolve: () => ({ provider: { kind: 'openai' }, model: 'fixture', ref: 'fixture/model' }) };

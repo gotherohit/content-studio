@@ -897,7 +897,8 @@ mark.hl:hover { filter: brightness(0.94); }
  */
 .canvas-host { flex: 1; min-height: 0; position: relative; }
 .canvas-host > .excalidraw { position: absolute; inset: 0; }
-.vajra-shell { flex: 1; min-height: 0; min-width: 0; display: flex; position: relative; overflow: hidden; }
+.vajra-shell { --accent: #08798c; --accent-soft: #e8f8fa; --accent-text: #fff; flex: 1; min-height: 0; min-width: 0; display: flex; position: relative; overflow: hidden; }
+:root[data-theme="dark"] .vajra-shell { --accent: #58d3e4; --accent-soft: #12313b; --accent-text: #09252d; }
 .research-agent { min-height: 0; min-width: 0; gap: 8px; }
 .vajra-sidebar { width: 220px; flex: 0 0 220px; min-height: 0; display: flex; flex-direction: column; gap: 10px; padding: 12px; background: var(--panel-2); border-right: 1px solid var(--border); }
 .vajra-sidebar > .row, .vajra-sidebar > button, .vajra-sidebar-footer { flex-shrink: 0; }
@@ -922,6 +923,7 @@ mark.hl:hover { filter: brightness(0.94); }
 .vajra-shell.compact > .vajra-sidebar { position: absolute; z-index: 4; inset: 0 auto 0 0; width: min(260px, calc(100% - 36px)); box-shadow: 8px 0 24px #0003; }
 .vajra-sidebar-scrim { position: absolute; z-index: 3; inset: 0; width: 100%; height: 100%; border: 0; border-radius: 0; background: #0005; }
 .vajra-heading strong { color: var(--accent); font-size: 16px; }
+.vajra-heading-mark { color: var(--accent); display: inline-flex; align-items: center; flex: none; }
 .vajra-plan { border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; max-height: 180px; overflow: auto; flex-shrink: 0; }
 .vajra-plan summary { cursor: pointer; font-size: 12px; }
 .vajra-plan ol { list-style: none; margin: 8px 0 0; padding: 0; font-size: 12px; }
@@ -933,7 +935,30 @@ mark.hl:hover { filter: brightness(0.94); }
 .research-agent form textarea { width: 100%; }
 .research-agent .chat { min-height: 100px; }
 .research-location { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.research-intro { padding: 12px 2px; }
+.research-intro { flex: 1; min-height: 180px; padding: 32px 12px; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; }
+.research-intro h3 { font-size: 21px; font-weight: 590; letter-spacing: -.025em; margin: 14px 0 1px; }
+.research-intro p { max-width: 320px; margin: 0 0 14px; color: var(--muted); font-size: 12.5px; }
+.vajra-setup { color: var(--accent); }
+.vajra-intro-mark { display: grid; place-items: center; width: 78px; height: 78px; color: var(--accent); border: 1px solid color-mix(in srgb, var(--accent) 21%, var(--border)); border-radius: 22px; background: radial-gradient(circle, var(--accent-soft), transparent 75%); }
+.vajra-composer { flex: none; display: flex; flex-direction: column; gap: 4px; padding: 7px 9px 7px; border: 1px solid var(--border-strong); border-radius: 15px; background: var(--panel); box-shadow: var(--shadow-1); transition: border-color var(--t-fast), box-shadow var(--t-fast); }
+.vajra-composer:focus-within { border-color: color-mix(in srgb, var(--accent) 65%, var(--border)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent); }
+.vajra-composer .chat-input { min-height: 76px; max-height: 180px; padding: 8px 7px; border: 0; outline: 0; box-shadow: none; background: transparent; color: var(--text); font-size: 13.5px; line-height: 1.55; overflow-y: auto; }
+.vajra-composer .chat-input:focus { outline: 0; box-shadow: none; }
+.vajra-composer-toolbar { display: flex; align-items: center; gap: 5px; min-width: 0; }
+.vajra-composer-toolbar select { flex: 0 1 auto; min-width: 0; max-width: 44%; height: 30px; padding: 4px 22px 4px 7px; border: 1px solid transparent; border-radius: 7px; background: transparent; color: var(--text-2); font-size: 11.5px; text-overflow: ellipsis; }
+.vajra-composer-toolbar select:hover, .vajra-composer-toolbar select:focus { background: var(--panel-2); border-color: var(--border); }
+.vajra-composer-toolbar .vajra-attach-btn, .vajra-composer-toolbar .vajra-send-btn { flex: none; display: inline-grid; place-items: center; width: 31px; height: 31px; padding: 0; border-radius: 8px; }
+.vajra-composer-toolbar .vajra-attach-btn { background: transparent; border: 1px solid transparent; color: var(--text-2); }
+.vajra-composer-toolbar .vajra-attach-btn:hover { background: var(--panel-2); border-color: var(--border); }
+.vajra-composer-toolbar .vajra-send-btn { margin-left: auto; background: var(--accent); border: 0; color: var(--accent-text); }
+.vajra-composer-toolbar .vajra-send-btn.stop { background: var(--danger); color: #fff; }
+.vajra-composer-toolbar .vajra-send-btn:disabled { background: var(--panel-3); color: var(--muted); }
+.vajra-attachments { display: flex; flex-wrap: wrap; gap: 5px; padding: 3px 4px; }
+.vajra-attachment, .vajra-message-file { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; padding: 4px 7px; border-radius: 7px; border: 1px solid var(--border); background: var(--panel-2); color: var(--text-2); font-size: 11px; }
+.vajra-attachment span { max-width: 175px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vajra-attachment button { width: 18px; height: 18px; padding: 0; display: grid; place-items: center; border: 0; background: transparent; color: var(--muted); }
+.vajra-message-file { margin: 7px 4px 0 0; background: color-mix(in srgb, var(--panel) 18%, transparent); color: inherit; border-color: color-mix(in srgb, currentColor 24%, transparent); }
+.vajra-shell.compact .vajra-composer-toolbar select { max-width: 37%; }
 .agent-tool { border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font-size: 12px; flex-shrink: 0; }
 .agent-tool summary { cursor: pointer; }
 .agent-tool summary > span { float: right; opacity: .7; }

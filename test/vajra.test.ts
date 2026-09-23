@@ -11,3 +11,7 @@ test('Vajra Markdown export includes plan, conversation, interruption and tool s
   const result = exportResearch({ id: 'test', title: 'Research', status: 'stopped', model: null, workspace: '', updatedAt: 'today', plan: [{ text: 'Read', status: 'complete' }, { text: 'Write', status: 'in_progress' }], messages: [{ role: 'user', content: 'Question' }, { role: 'assistant', content: 'Partial answer', interrupted: true }], activity: [{ id: 'a', name: 'write_file', status: 'interrupted', arguments: 'private arguments', createdAt: 'today' }] });
   assert.match(result, /\[x\] Read/); assert.match(result, /Write \(in progress\)/); assert.match(result, /Vajra \(interrupted\)/); assert.match(result, /write_file: interrupted/); assert.ok(!result.includes('private arguments'));
 });
+test('Vajra export names attachments without embedding their stored contents', () => {
+  const result = exportResearch({ id: 'test', title: 'Research', status: 'complete', model: null, workspace: '', updatedAt: 'today', activity: [], messages: [{ role: 'user', content: 'Analyze this', attachments: [{ name: 'brief.pdf', kind: 'pdf', truncated: true }] }] });
+  assert.match(result, /Attachment: brief.pdf \(excerpt\)/);
+});

@@ -28,7 +28,7 @@ test('Vajra sidebar selects and searches conversations, scopes workspaces, and a
     const exports = {}; new Function('require', 'exports', code)(id => imports[id] || require(id), exports); return exports;
   };
   try {
-    const { AiPanel } = load('AiPanel', { './VajraSidebar': load('VajraSidebar'), '../api': { api: { aiStatus: async () => ({ models: [] }), reveal: async () => {} } }, '../research': { research }, marked: { marked: { parse: text => text } }, dompurify: { sanitize: text => text } });
+    const { AiPanel } = load('AiPanel', { './VajraSidebar': load('VajraSidebar'), './VajraMark': { VajraMark: () => null }, '../research-attachments': { MAX_ATTACHMENTS: 3, MAX_TOTAL_CHARS: 90000, readResearchAttachment: async () => {} }, '../api': { api: { aiStatus: async () => ({ models: [], model: 'stale/provider' }), reveal: async () => {} } }, '../research': { research }, marked: { marked: { parse: text => text } }, dompurify: { sanitize: text => text } });
     root = require('react-dom/client').createRoot(document.getElementById('root'));
     await React.act(async () => root.render(React.createElement(AiPanel, { projectId: 'scratch', projectTitle: 'Scratch project', source: null, onOpenSettings: () => settings++ })));
     const click = async selector => { const el = document.querySelector(selector); assert.ok(el, selector); await React.act(async () => el.click()); };
@@ -39,6 +39,12 @@ test('Vajra sidebar selects and searches conversations, scopes workspaces, and a
     await search(' ALPHA '); assert.equal(document.querySelectorAll('.vajra-conversation').length, 1);
     await search('missing'); assert.match(document.querySelector('.vajra-conversation-list').textContent, /No matching/);
     await click('.vajra-sidebar > button'); assert.equal(created, 1); assert.equal(document.querySelector('[aria-label="Search conversations"]').value, '');
+    assert.ok(document.querySelector('.vajra-composer [aria-label="Research model"]'));
+    assert.ok(document.querySelector('.vajra-composer [aria-label="Research context"]'));
+    assert.ok(document.querySelector('.vajra-composer [aria-label="Attach file"]'));
+    assert.equal(document.querySelectorAll('.research-intro .quick button').length, 0);
+    await React.act(async () => { const el = document.querySelector('.vajra-composer textarea'); Object.getOwnPropertyDescriptor(dom.window.HTMLTextAreaElement.prototype, 'value').set.call(el, 'A real question'); el.dispatchEvent(new dom.window.Event('input', { bubbles: true })); });
+    assert.equal(document.querySelector('.vajra-composer [aria-label="Send"]').disabled, true, 'a stale default cannot send to an unavailable model');
     await React.act(async () => { const select = document.querySelector('[aria-label="Conversation location"]'); select.value = 'global'; select.dispatchEvent(new dom.window.Event('change', { bubbles: true })); });
     assert.match(document.querySelector('.chat').textContent, /Global research answer/); assert.equal(calls.at(-1), null);
     await React.act(async () => resize([{ contentRect: { width: 400 } }])); assert.equal(document.querySelector('.vajra-sidebar'), null);

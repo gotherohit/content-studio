@@ -2,6 +2,11 @@
 
 What changed in each release, newest first. Versions are the ones the app updates itself to.
 
+## 0.26.0
+
+- **Vajra has a focused prompt composer.** Model and source selection now sit beside the prompt, including a choice of any saved project source. Attach local text or selectable-text PDF files; attached excerpts persist with the conversation and filenames appear in its transcript. The empty state uses a compact vajra emblem instead of preset questions, and Vajra has its own cyan styling in light and dark themes.
+- **Deeper source research.** Vajra can list saved project sources, search their article text and highlights, and read a specific source in bounded pages. These read-only tools stay inside the current project; Global research has no project-source access.
+
 ## 0.25.0
 
 - **Vajra has its own left sidebar.** Search and select conversations, start a new one, switch between the current Studio project and Global research, open research files, and reach Settings. Collapse it for more writing space; narrow panes use a dismissible overlay. Opening navigation never cancels a run.

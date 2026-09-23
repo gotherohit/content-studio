@@ -15,6 +15,10 @@ The research pane is branded **Vajra**; its persisted pane kind remains `ai` for
 `update_plan` stores bounded model-reported steps alongside conversations, not in project autosave.
 Conversation renames and runs share an exclusion check; never let a metadata write overwrite an
 active transcript. A completed response does not automatically complete unfinished plan steps.
+Vajra attachments store extracted text in the server-owned conversation, while visible user
+messages and Markdown exports contain only attachment metadata. Keep attachment limits enforced
+on the server. A later `read_history` tool call can reveal a bounded attachment excerpt in its
+visible activity output so an agent can recover context after a long conversation.
 The highlight popup deliberately focuses its note input. Pass its captured `selectionText` so
 Ctrl/Cmd+C can copy the passage when that note is empty; preserve native copy for typed notes.
 Highlight `noteWidth` stores a preferred comment-card width, not its height or position.

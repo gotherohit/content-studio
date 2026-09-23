@@ -1,4 +1,4 @@
-export interface ResearchMessage { role: "user" | "assistant"; content: string; createdAt?: string; interrupted?: boolean; model?: string }
+export interface ResearchMessage { role: "user" | "assistant"; content: string; createdAt?: string; interrupted?: boolean; model?: string; attachments?: { name: string; kind: "text" | "pdf"; truncated: boolean }[] }
 export interface ToolActivity {
   id: string; name: string; arguments: string; status: string; output?: string; createdAt: string;
   approval?: { id: string; kind: "write" | "shell"; path?: string; before?: string | null; after?: string; edit?: { before: string; after: string }; command?: string; shell?: string; cwd?: string };
@@ -12,7 +12,7 @@ export interface ResearchSession {
 export function exportResearch(session: ResearchSession): string {
   const lines = [`# ${session.title}`, "", `Vajra · ${session.status} · ${session.updatedAt}`, ""];
   if (session.plan?.length) lines.push("## Task plan", "", ...session.plan.map((s) => `- [${s.status === "complete" ? "x" : " "}] ${s.text}${s.status === "in_progress" ? " (in progress)" : ""}`), "");
-  for (const message of session.messages) if (message.content) lines.push(`## ${message.role === "user" ? "You" : "Vajra"}${message.interrupted ? " (interrupted)" : ""}`, "", message.content, "");
+  for (const message of session.messages) if (message.content) lines.push(`## ${message.role === "user" ? "You" : "Vajra"}${message.interrupted ? " (interrupted)" : ""}`, "", message.content, ...(message.attachments?.length ? ["", ...message.attachments.map((file) => `Attachment: ${file.name}${file.truncated ? " (excerpt)" : ""}`)] : []), "");
   if (session.activity.length) lines.push("## Tool activity", "", ...session.activity.map((a) => `- ${a.name}: ${a.status}`), "");
   return lines.join("\n");
 }
