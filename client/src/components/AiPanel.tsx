@@ -15,7 +15,7 @@ interface Props {
   source: Source | null;
   sources?: Source[];
   hasLegacyChat?: boolean;
-  onOpenSettings: () => void;
+  onOpenSettings: (tab?: "models" | "extensions") => void;
 }
 const renderMarkdown = (text: string) => DOMPurify.sanitize(marked.parse(text) as string);
 
@@ -203,7 +203,7 @@ export function AiPanel({ projectId, projectTitle, source, sources = [], hasLega
       {compact && <button className="vajra-sidebar-scrim" aria-label="Dismiss Vajra sidebar" onClick={closeSidebar} />}
       <VajraSidebar id={sidebarId} modal={compact} scope={scope} projectTitle={projectId ? projectTitle || "Current project" : undefined} rows={rows} selectedId={session?.id} disabled={running || loading} loading={loading} workspace={session?.workspace}
         onScope={setScope} onChoose={choose} onNew={() => newConversation()} onClose={closeSidebar}
-        onSettings={() => { if (compact) closeSidebar(); onOpenSettings(); }} onFiles={() => session && api.reveal(session.workspace).catch((e) => setError(e.message))} />
+        onSettings={() => { if (compact) closeSidebar(); onOpenSettings("models"); }} onExtensions={() => { if (compact) closeSidebar(); onOpenSettings("extensions"); }} onFiles={() => session && api.reveal(session.workspace).catch((e) => setError(e.message))} />
     </>}
     <div className="panel-body ai research-agent">
     <div className="row vajra-heading"><button ref={toggle} className="icon-btn" title="Toggle Vajra sidebar" aria-controls={sidebarId} aria-expanded={sidebarOpen} onClick={() => setSidebarChoice(!sidebarOpen)}><PanelLeft size={17} /></button><span className="vajra-heading-mark"><VajraMark size={20} /></span><div className="vajra-conversation-title"><strong title={session?.title}>{session?.title || "Vajra"}</strong><span className="muted small" role="status">{session?.activity.some((a) => a.status === "approval") ? "Waiting for your review" : running ? "Working" : session?.status || "Ready"}{session?.progress ? ` · Step ${session.progress.step}/${session.progress.maxSteps}` : ""}</span></div>
@@ -225,7 +225,7 @@ export function AiPanel({ projectId, projectTitle, source, sources = [], hasLega
         <div className="vajra-intro-mark"><VajraMark size={56} /></div>
         <h3>Vajra</h3>
         <p>Your research, sources and work in one conversation.</p>
-        {status && !status.models.length && <button className="ghost small vajra-setup" onClick={onOpenSettings}>Configure a model in Settings</button>}
+        {status && !status.models.length && <button className="ghost small vajra-setup" onClick={() => onOpenSettings("models")}>Configure a model in Settings</button>}
         {project && hasLegacyChat && <button className="small" onClick={() => newConversation(true)} disabled={running || loading}>Import previous project chat</button>}
       </div>}
       {timeline.map((item) => item.activity ? <Activity key={item.key} activity={item.activity} onDecide={(allow) => decide(item.activity!, allow)} /> : item.message?.content ? <div key={item.key} className={`msg ${item.message.role}`}>
@@ -251,7 +251,7 @@ export function AiPanel({ projectId, projectTitle, source, sources = [], hasLega
         </select>}
         {running ? <button className="vajra-send-btn stop" type="button" aria-label="Stop" title="Stop" onClick={() => void stop()}><Square size={15} fill="currentColor" /></button> : <button className="vajra-send-btn" type="submit" aria-label="Send" title="Send" disabled={loading || attaching || !selectedModel || (!input.trim() && !attachments.length)}><ArrowUp size={18} strokeWidth={2.4} /></button>}
       </div>
-      <span className="sr-only">Writes and shell commands require review.</span>
+      <span className="sr-only">Writes, shell commands and MCP calls require review.</span>
     </form>
     </div>
   </div>;
@@ -272,7 +272,7 @@ function Activity({ activity, onDecide }: { activity: ToolActivity; onDecide: (a
         {proposal.edit && <div className="agent-edit-review"><span className="muted small">Replace this passage</span><pre className="agent-edit-before">{proposal.edit.before}</pre><span className="muted small">With</span><pre className="agent-edit-after">{proposal.edit.after || "(delete this passage)"}</pre></div>}
         {proposal.before != null && <details><summary>Current contents</summary><pre>{proposal.before}</pre></details>}
         <details open={!proposal.edit}><summary>Proposed contents</summary><pre>{proposal.after}</pre></details>
-      </> : <><b>Run {proposal.shell} command</b><pre>{proposal.command}</pre><p className="muted small">Working folder: {proposal.cwd}. This runs with your account; the folder is not an OS sandbox.</p></>}
+      </> : proposal.kind === "mcp" ? <><b>Call {proposal.tool} on {proposal.server}</b><pre>{JSON.stringify(proposal.arguments, null, 2)}</pre><p className="muted small">This external server may access files or services under your account. Review the arguments before allowing.</p></> : <><b>Run {proposal.shell} command</b><pre>{proposal.command}</pre><p className="muted small">Working folder: {proposal.cwd}. This runs with your account; the folder is not an OS sandbox.</p></>}
       <div className="row"><button className="primary small" disabled={deciding} onClick={() => decide(true)}>Allow once</button><button className="small" disabled={deciding} onClick={() => decide(false)}>Decline</button></div>
     </div>}
   </div>;

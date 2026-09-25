@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { FolderOpen, MessageSquare, Plus, Search, Settings, X } from "lucide-react";
+import { FolderOpen, MessageSquare, Plus, Search, Settings, Plug, X } from "lucide-react";
 import type { ResearchSession } from "../research";
 
 interface Props {
@@ -16,6 +16,7 @@ interface Props {
   onChoose: (id: string) => void;
   onNew: () => void;
   onSettings: () => void;
+  onExtensions: () => void;
   onFiles: () => void;
   onClose: () => void;
 }
@@ -42,6 +43,7 @@ export function VajraSidebar(p: Props) {
     </div>
     <div className="vajra-sidebar-footer">
       {p.workspace && <button className="ghost small" onClick={p.onFiles} title={p.workspace}><FolderOpen size={14} /> Research files</button>}
+      <button className="ghost small" onClick={p.onExtensions}><Plug size={14} /> Skills &amp; MCP</button>
       <button className="ghost small" onClick={p.onSettings}><Settings size={14} /> Settings</button>
     </div>
   </nav>;

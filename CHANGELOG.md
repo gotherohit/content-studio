@@ -2,6 +2,11 @@
 
 What changed in each release, newest first. Versions are the ones the app updates itself to.
 
+## 0.27.0
+
+- **Vajra extensions.** Add project or global `SKILL.md` instructions and local stdio or Streamable HTTP MCP servers in Settings. The sidebar links directly to Skills & MCP, and a connection test lists discovered tools. Project extensions live under `.ai`; global extensions live in the app folder. MCP calls show their server, tool and arguments for one-time approval. Imported or externally changed servers require review in Settings before they can connect. HTTP credentials can reference system environment variables instead of being stored in settings.
+- **Stronger file tools.** Vajra can grep research and project files with regular expressions, read skill support files, and propose a unified diff for one existing research or project text file. Each patch shows full before/after contents and rejects stale context or concurrent changes. Project app state and secrets remain protected.
+
 ## 0.26.0
 
 - **Vajra has a focused prompt composer.** Model and source selection now sit beside the prompt, including a choice of any saved project source. Attach local text or selectable-text PDF files; attached excerpts persist with the conversation and filenames appear in its transcript. The empty state uses a compact vajra emblem instead of preset questions, and Vajra has its own cyan styling in light and dark themes.

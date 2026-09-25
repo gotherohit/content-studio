@@ -130,6 +130,7 @@ export default function App() {
   const goToBeatRef = useRef<(i: number) => void>(() => {});
   const presentationKeyRef = useRef<(key: string) => boolean>(() => false);
   const [showSettings, setShowSettings] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<"models" | "extensions">("models");
   const [showNewProject, setShowNewProject] = useState(false);
   const [collapsed, setCollapsed] = useState(lsGet("collapsed", "0") === "1");
   /** Collapsing the source summary is the creator's choice, and nothing reopens it for them. */
@@ -857,7 +858,7 @@ export default function App() {
   }
 
   function renderPane(pane: PaneConfig, i: number) {
-    if (!project && pane.kind === "ai") return <AiPanel key="global" source={null} onOpenSettings={() => setShowSettings(true)} />;
+    if (!project && pane.kind === "ai") return <AiPanel key="global" source={null} onOpenSettings={(tab) => { setSettingsTab(tab || "models"); setShowSettings(true); }} />;
     if (!project) return <div className="empty-state"><h2>No project open</h2><p>Create or open a project on the left, or choose Vajra for global research.</p></div>;
     switch (pane.kind) {
       case "source": {
@@ -969,7 +970,7 @@ export default function App() {
           />
         );
       case "notes": return <NotesPanel value={project.notes} onChange={(notes) => mutate((p) => ({ ...p, notes }))} />;
-      case "ai": return <AiPanel key={project.id} projectId={project.id} projectTitle={project.title} hasLegacyChat={project.chat.length > 0} source={source} sources={project.sources} onOpenSettings={() => setShowSettings(true)} />;
+      case "ai": return <AiPanel key={project.id} projectId={project.id} projectTitle={project.title} hasLegacyChat={project.chat.length > 0} source={source} sources={project.sources} onOpenSettings={(tab) => { setSettingsTab(tab || "models"); setShowSettings(true); }} />;
       case "code": return <CodePanel projectId={project.id} snippets={project.snippets} onChange={(snippets) => mutate((p) => ({ ...p, snippets }))} />;
       case "canvas": return (
         <CanvasPanel
@@ -1244,6 +1245,7 @@ export default function App() {
       {showSettings && (
         <SettingsDialog
           project={project}
+          initialTab={settingsTab}
           onClose={() => setShowSettings(false)}
           onProjectMoved={(dir) => { setProject((p) => (p ? { ...p, dir } : p)); refreshList(); }}
           onOpenedFolder={(id) => { refreshList(); openProject(id); }}

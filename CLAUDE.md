@@ -449,6 +449,17 @@ wait. The AI request aborts when the pane closes. Assume a recording is in progr
 
 ## Releasing
 
+Vajra extensions are scoped at the server boundary. Global skills are under the app folder's
+`skills/<id>/SKILL.md` and project skills under `<project>/.ai/skills/<id>/SKILL.md`;
+MCP configuration is `mcp.json` in the corresponding scope. Do not let extension reads follow
+symlinks, expose secret environment values, or let MCP tool calls bypass per-call review.
+Only server configurations fingerprinted in app-level `mcp-trust.json` by a Settings save may
+connect automatically; importing a project or editing `mcp.json` invalidates that trust.
+Connections belong to one agent run and must close on cancellation. `apply_patch` may change
+an existing project text file after review, but must not change `project.json`, `.ai`, secrets,
+or files outside the configured project. Verify both scope isolation and the approval event
+when adding another extension transport or tool.
+
 ```bash
 npm version minor && git push --follow-tags
 ```

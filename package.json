@@ -1,10 +1,10 @@
 {
   "name": "content-studio",
-  "version": "0.26.0",
+  "version": "0.27.0",
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --experimental-strip-types --test test/beats.test.ts test/reading-position.test.js test/pages.test.js test/links.test.ts test/files.test.js test/assets.test.js test/sources.test.ts test/code.test.ts test/pdf.test.ts test/shapes.test.ts test/shapes-dom.test.js test/shapes-original.test.js test/highlight-source.test.ts test/source-navigation.test.ts test/handoff.test.js test/research-agent.test.js test/jupyter.test.js test/jupyter-folder.test.ts test/highlights.test.js test/scrolls.test.js test/highlight-copy.test.js test/vajra.test.ts test/vajra-sidebar.test.js test/note-popover.test.ts",
+    "test": "node --experimental-strip-types --test test/beats.test.ts test/reading-position.test.js test/pages.test.js test/links.test.ts test/files.test.js test/assets.test.js test/sources.test.ts test/code.test.ts test/pdf.test.ts test/shapes.test.ts test/shapes-dom.test.js test/shapes-original.test.js test/highlight-source.test.ts test/source-navigation.test.ts test/handoff.test.js test/research-agent.test.js test/vajra-extensions.test.js test/jupyter.test.js test/jupyter-folder.test.ts test/highlights.test.js test/scrolls.test.js test/highlight-copy.test.js test/vajra.test.ts test/vajra-sidebar.test.js test/note-popover.test.ts",
     "dev": "concurrently -n server,client -c blue,green \"npm run dev:server\" \"npm run dev:client\"",
     "dev:server": "node server/index.js",
     "dev:client": "npm --prefix client run dev",
@@ -19,8 +19,11 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "latest",
+    "@modelcontextprotocol/client": "2.1.0",
     "@mozilla/readability": "^0.6.0",
+    "@vscode/ripgrep": "1.18.0",
     "cors": "^2.8.5",
+    "diff": "9.0.0",
     "dotenv": "^16.4.5",
     "electron-updater": "^6.8.9",
     "express": "^4.21.0",

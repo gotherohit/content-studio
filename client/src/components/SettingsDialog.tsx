@@ -6,6 +6,7 @@ import { FolderField } from "./FolderField";
 import { ModelSettings } from "./ModelSettings";
 import { UpdateSettings } from "./UpdateSettings";
 import { SearchSettings } from "./SearchSettings";
+import { VajraExtensions } from "./VajraExtensions";
 
 interface Props {
   project: Project | null;
@@ -16,7 +17,7 @@ interface Props {
   initialTab?: Tab;
 }
 
-type Tab = "models" | "folders" | "updates" | "search";
+type Tab = "models" | "folders" | "updates" | "search" | "extensions";
 
 /**
  * Content Studio's own settings, as opposed to a project's.
@@ -44,6 +45,7 @@ export function SettingsDialog({ project, onClose, onProjectMoved, onOpenedFolde
           <button className={tab === "models" ? "tab active" : "tab"} onClick={() => setTab("models")}>
             <Sparkles size={13} /> Models and keys
           </button>
+          <button className={tab === "extensions" ? "tab active" : "tab"} onClick={() => setTab("extensions")}>Vajra skills &amp; MCP</button>
           <button className={tab === "folders" ? "tab active" : "tab"} onClick={() => setTab("folders")}>
             <FolderOpen size={13} /> Project folders
           </button>
@@ -53,6 +55,7 @@ export function SettingsDialog({ project, onClose, onProjectMoved, onOpenedFolde
         </div>
 
         {tab === "models" && <ModelSettings />}
+        {tab === "extensions" && <VajraExtensions projectId={project?.id || null} />}
         {tab === "search" && <SearchSettings />}
         {tab === "folders" && (
           <FolderSettings project={project} onProjectMoved={onProjectMoved} onOpenedFolder={onOpenedFolder} />
