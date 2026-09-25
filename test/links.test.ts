@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { buildGraph, layoutGraph, linkedPassages, linksFor, linksOf, otherEnd, passageEdges, pruneLinks, type SourceLink } from "../client/src/links.ts";
+import { buildGraph, graphNeighborhood, graphPathMarkdown, layoutGraph, linkedPassages, linksFor, linksOf, otherEnd, passageEdges, pruneLinks, shortestGraphPath, type SourceLink } from "../client/src/links.ts";
 import type { Source } from "../client/src/types.ts";
 
 const source = (id: string, highlights: string[] = [], extra: Partial<Source> = {}): Source => ({
@@ -113,4 +113,44 @@ test("the map can see links passage by passage", () => {
   assert.deepEqual(edges[0].to, { sourceId: "b", highlightId: "k1" });
   // Only passages at one end of a link are drawn, in the order they were highlighted.
   assert.deepEqual(linkedPassages(sources, links), { a: ["h1", "h2"], b: ["k1"] });
+});
+
+test("map focus includes exactly the requested neighborhood and only its internal links", () => {
+  const graph = buildGraph(["a", "b", "c", "d", "isolated"].map((id) => source(id)), [link("ab", "a", "b"), link("bc", "b", "c"), link("cd", "c", "d")]);
+  const one = graphNeighborhood(graph, "a", 1);
+  assert.deepEqual(one.nodes.map((node) => node.id), ["a", "b"]);
+  assert.deepEqual(one.edges.map((edge) => edge.key), ["a>b:supports"]);
+  assert.deepEqual(graphNeighborhood(graph, "a", 2).nodes.map((node) => node.id), ["a", "b", "c"]);
+  assert.deepEqual(graphNeighborhood(graph, "missing", 2), { nodes: [], edges: [] });
+  assert.deepEqual(graphNeighborhood(graph, "isolated", 1).nodes.map((node) => node.id), ["isolated"]);
+});
+
+test("a research trail finds the shortest visible route in either direction", () => {
+  const graph = buildGraph(["a", "b", "c", "d", "alone"].map((id) => source(id)), [
+    link("ab", "a", "b", "supports"), link("bc", "b", "c", "cites"),
+    link("cd", "c", "d", "related"), link("ad", "a", "d", "contradicts"),
+  ]);
+  assert.deepEqual(shortestGraphPath(graph, "a", "d")?.ids, ["a", "d"]);
+  assert.deepEqual(shortestGraphPath(graph, "d", "b")?.ids, ["d", "c", "b"]);
+  const withoutContradiction = { ...graph, edges: graph.edges.filter((edge) => edge.kind !== "contradicts") };
+  assert.deepEqual(shortestGraphPath(withoutContradiction, "a", "d")?.ids, ["a", "b", "c", "d"]);
+  assert.equal(shortestGraphPath(withoutContradiction, "a", "alone"), null);
+  assert.equal(shortestGraphPath(graph, "missing", "a"), null);
+  assert.deepEqual(shortestGraphPath(graph, "a", "a"), { ids: ["a"], edges: [] });
+});
+
+test("a copied trail names the direction, source URLs, exact passages and notes", () => {
+  const sources = [source("paper", ["finding"]), source("blog", ["claim"])];
+  const evidence = { ...link("l1", "paper", "blog", "contradicts", "finding", "claim"), note: "Different sample size" };
+  const graph = buildGraph(sources, [evidence]);
+  const forward = graphPathMarkdown(shortestGraphPath(graph, "paper", "blog")!, sources);
+  assert.match(forward, /paper\*\* contradicts \*\*blog/);
+  assert.match(forward, /\[paper\]\(<https:\/\/example.com\/paper>\)/);
+  assert.match(forward, /From “finding”/);
+  assert.match(forward, /To “claim”/);
+  assert.match(forward, /Different sample size/);
+  const reverse = graphPathMarkdown(shortestGraphPath(graph, "blog", "paper")!, sources);
+  assert.match(reverse, /blog\*\* contradicted by \*\*paper/);
+  assert.match(reverse, /From “claim”/);
+  assert.match(reverse, /To “finding”/);
 });

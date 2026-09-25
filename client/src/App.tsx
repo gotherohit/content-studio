@@ -962,11 +962,14 @@ export default function App() {
       case "map":
         return (
           <SourceMap
+            key={project.id}
             sources={project.sources}
             links={project.links ?? []}
             activeSourceId={activeSourceId}
+            presenting={present}
             onOpen={(id) => goToEnd({ sourceId: id })}
             onGo={goToEnd}
+            onCreateLink={setLinkFrom}
           />
         );
       case "notes": return <NotesPanel value={project.notes} onChange={(notes) => mutate((p) => ({ ...p, notes }))} />;
@@ -1224,15 +1227,17 @@ export default function App() {
           <div className="modal map-modal" onMouseDown={(e) => e.stopPropagation()}>
             <div className="modal-head">
               <h3>Source map</h3>
-              <span className="muted small grow">Click a source to open it · drag to move · scroll to zoom · put it in a pane with “Source map” to show it in a beat</span>
+              <span className="muted small grow">Click to inspect · double-click to open · drag to arrange · trace and filter connections</span>
               <button className="icon-btn" onClick={() => setShowMap(false)}><X size={16} /></button>
             </div>
             <SourceMap
+              key={project.id}
               sources={project.sources}
               links={project.links ?? []}
               activeSourceId={activeSourceId}
               onOpen={(id) => { goToEnd({ sourceId: id }); setShowMap(false); }}
               onGo={(end) => { goToEnd(end); setShowMap(false); }}
+              onCreateLink={(from) => { setShowMap(false); setLinkFrom(from); }}
             />
           </div>
         </div>

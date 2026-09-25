@@ -2,6 +2,11 @@
 
 What changed in each release, newest first. Versions are the ones the app updates itself to.
 
+## 0.28.0
+
+- **Research map investigation.** Search and centre sources, inspect a source's incoming and outgoing evidence or a connection's exact passages and notes, and create a new source link directly from the map. Single-click inspects; double-click opens the source or nearer linked passage. Relationship chips filter the graph and show counts; Focus shows one or two hops around a source. Trace reveals the shortest visible connection between two sources, lets you inspect each step, reports when filters leave no route, and copies the evidence trail with source URLs and passage quotes as Markdown.
+- **Clearer map controls.** Zoom buttons, keyboard shortcuts, a true fit-to-visible-graph control, and a separate restore-layout action make navigation predictable. Dragged positions remain temporary and the automatic layout remains deterministic for beats. Each map pane has its own arrow markers, and Present mode hides the investigation controls.
+
 ## 0.27.0
 
 - **Vajra extensions.** Add project or global `SKILL.md` instructions and local stdio or Streamable HTTP MCP servers in Settings. The sidebar links directly to Skills & MCP, and a connection test lists discovered tools. Project extensions live under `.ai`; global extensions live in the app folder. MCP calls show their server, tool and arguments for one-time approval. Imported or externally changed servers require review in Settings before they can connect. HTTP credentials can reference system environment variables instead of being stored in settings.

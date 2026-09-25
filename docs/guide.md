@@ -220,19 +220,35 @@ In more detail:
 line coloured by how they relate; a dashed line means one source was opened from another.
 Bigger circles have more highlights and links.
 
-* **Click a source** to open it. **Hover** one to fade everything not connected to it.
+* **Click a source** to inspect it: the side card lists its incoming and outgoing evidence,
+  notes and linked passages. **Double-click** or use **Open source** to navigate there.
+  **Link source** starts a new relationship from that source. Hover fades unrelated items.
 * **Links are drawn where they land.** A passage at one end of a link shows as a small
   coloured dot on the rim of its source, and the line runs between the dots — so a link between
   two sentences does not pretend to be a link between two whole documents. Hover a dot to read
-  the passage, click it to open it. The **passages** button in the legend turns this off, which
-  gives the older picture: one line per pair of sources.
-* **Hover a line** to read the passages and the note behind it; **click** the end you want and
-  it opens there.
-* **Drag** a source to move it, drag the background to pan, **scroll** to zoom, and use the
-  fit button in the legend to reset. Moved sources go back when the map is reopened.
+  the passage, click it to open it. The **Passages / Sources** button switches between each
+  individual passage link and one line per relationship type and source pair.
+* **Click a line** to inspect the underlying passage pairs and notes. Open either end from
+  its card, or double-click the line to jump to the nearer end.
+* **Find a source** by title in the map search box; choosing a result centres and selects it.
+  The relationship chips filter the lines by type, with counts for each type. The **Focus**
+  button in a source card cycles through one hop, two hops and the whole map.
+* **Trace a connection** chooses two sources and reveals the shortest route through the
+  currently enabled relationship types. Click a step to inspect its evidence. If there is no
+  route with those filters, the map says so; turn types back on to broaden the search.
+  **Copy trail** puts the route, source URLs, quoted passages and link notes into Markdown
+  for your research notes or script. **Fit route** brings the whole trail into view. In a
+  narrow pane, the trail card collapses after you pick a route; choose **Show trail** to
+  inspect its steps without ending the trace.
+* **Drag** a source to move it for the current view, drag the background to pan, and scroll
+  or use +/− to zoom. **Fit** centres the visible graph without moving sources; the separate
+  restore-layout button puts dragged sources back in their automatic positions. Keyboard
+  shortcuts +, − and 0 zoom and fit when the map has focus, and map nodes and lines can be
+  inspected with Tab and Enter. Moved positions reset when the map is reopened.
 * Code sources appear on the map like any other source.
 * To show the map on camera, pick **Source map** as a pane's kind. It can be part of a beat
   like any pane, and it is drawn the same way every time for the same sources and links.
+  Present mode hides the research controls so the graph stays clean on camera.
 
 **Every Source pane picks its own source.** The dropdown at the left of a Source pane's toolbar either follows the sidebar selection or pins one source, so a slide deck can sit in one pane and the article it discusses in another.
 

@@ -78,6 +78,85 @@ export type EdgeKind = Relation | "opened";
 
 export interface GraphNode { id: string; title: string; file: boolean; weight: number }
 export interface GraphEdge { key: string; source: string; target: string; kind: EdgeKind; links: SourceLink[] }
+export interface Graph { nodes: GraphNode[]; edges: GraphEdge[] }
+
+/** A focused view keeps only sources within the requested number of connections. */
+export function graphNeighborhood(graph: Graph, sourceId: string, hops: number): Graph {
+  if (!graph.nodes.some((node) => node.id === sourceId)) return { nodes: [], edges: [] };
+  const seen = new Set([sourceId]);
+  let frontier = [sourceId];
+  for (let depth = 0; depth < hops; depth++) {
+    const next: string[] = [];
+    for (const edge of graph.edges) {
+      if (frontier.includes(edge.source) && !seen.has(edge.target)) { seen.add(edge.target); next.push(edge.target); }
+      if (frontier.includes(edge.target) && !seen.has(edge.source)) { seen.add(edge.source); next.push(edge.source); }
+    }
+    frontier = next;
+    if (!frontier.length) break;
+  }
+  return {
+    nodes: graph.nodes.filter((node) => seen.has(node.id)),
+    edges: graph.edges.filter((edge) => seen.has(edge.source) && seen.has(edge.target)),
+  };
+}
+
+/** Shortest evidence trail through the visible graph. Links can be followed in either direction. */
+export function shortestGraphPath(graph: Graph, from: string, to: string): { ids: string[]; edges: GraphEdge[] } | null {
+  if (!graph.nodes.some((node) => node.id === from) || !graph.nodes.some((node) => node.id === to)) return null;
+  if (from === to) return { ids: [from], edges: [] };
+  const visited = new Set([from]);
+  const previous = new Map<string, { id: string; edge: GraphEdge }>();
+  const queue = [from];
+  for (let i = 0; i < queue.length; i++) {
+    const id = queue[i];
+    for (const edge of graph.edges) {
+      const other = edge.source === id ? edge.target : edge.target === id ? edge.source : null;
+      if (!other || visited.has(other)) continue;
+      visited.add(other);
+      previous.set(other, { id, edge });
+      if (other === to) {
+        const ids = [to], edges: GraphEdge[] = [];
+        while (ids[0] !== from) {
+          const step = previous.get(ids[0])!;
+          ids.unshift(step.id);
+          edges.unshift(step.edge);
+        }
+        return { ids, edges };
+      }
+      queue.push(other);
+    }
+  }
+  return null;
+}
+
+/** Copyable, source-attributed evidence trail for notes or a video script. */
+export function graphPathMarkdown(path: { ids: string[]; edges: GraphEdge[] }, sources: Source[]): string {
+  const byId = new Map(sources.map((source) => [source.id, source]));
+  const clean = (value: string) => value.replace(/\s+/g, " ").trim().replace(/([\\`*_\[\]])/g, "\\$1");
+  const title = (id: string) => clean(byId.get(id)?.title ?? id);
+  const citation = (id: string) => {
+    const source = byId.get(id);
+    const url = source?.url;
+    return url && /^https?:\/\//i.test(url) ? `[${title(id)}](<${url.replace(/>/g, "%3E")}>)` : title(id);
+  };
+  const quote = (end: LinkEnd) => byId.get(end.sourceId)?.highlights.find((highlight) => highlight.id === end.highlightId)?.text;
+  const out = [`# Connection: ${title(path.ids[0] ?? "")} → ${title(path.ids.at(-1) ?? "")}`, ""];
+  for (let i = 0; i < path.edges.length; i++) {
+    const edge = path.edges[i];
+    const from = path.ids[i], to = path.ids[i + 1];
+    const forward = edge.source === from;
+    const relation = edge.kind === "opened" ? forward ? "opened from" : "led to" : forward ? relationOf(edge.kind).label : relationOf(edge.kind).backlink;
+    out.push(`${i + 1}. **${title(from)}** ${relation} **${title(to)}**`);
+    out.push(`   - Sources: ${citation(from)} · ${citation(to)}`);
+    for (const link of edge.links) {
+      const fromQuote = quote(forward ? link.from : link.to), toQuote = quote(forward ? link.to : link.from);
+      if (fromQuote) out.push(`   - From “${clean(fromQuote)}”`);
+      if (toQuote) out.push(`   - To “${clean(toQuote)}”`);
+      if (link.note) out.push(`   - Note: ${clean(link.note)}`);
+    }
+  }
+  return out.join("\n").trimEnd() + "\n";
+}
 
 /**
  * Sources as nodes; links, and the "opened from" trail of 0.12.0, as edges. Several links of

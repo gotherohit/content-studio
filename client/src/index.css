@@ -1094,10 +1094,55 @@ mark.hl:hover { filter: brightness(0.94); }
 .map-node circle { fill: var(--accent); stroke: var(--panel); stroke-width: 2; transition: r var(--t-fast); }
 .map-node.file circle { fill: #d9822b; }
 .map-node.active circle { stroke: var(--text); stroke-width: 3; }
+.map-node.selected circle { stroke: var(--text); stroke-width: 3; }
+.map-node.traced circle { stroke: var(--text); stroke-width: 3; }
 .map-node.hover circle { filter: brightness(1.2); }
 .map-node text { fill: var(--text-2); font-size: 11.5px; paint-order: stroke; stroke: var(--panel); stroke-width: 4px; stroke-linejoin: round; pointer-events: none; }
 .map-node.hover text, .map-node.active text { fill: var(--text); font-weight: 600; }
 .faded { opacity: 0.15; transition: opacity var(--t-fast); }
+.map-edge.selected .map-edge-line, .map-edge.traced .map-edge-line { stroke-width: 3.4; opacity: 1; }
+.map-chrome { z-index: 4; }
+.map-toolbar {
+  position: absolute; top: 8px; left: 8px; right: 8px; min-height: 36px;
+  display: flex; align-items: center; gap: 8px; padding: 3px 5px;
+  border: 1px solid var(--border); border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--panel) 95%, transparent); box-shadow: var(--shadow-1); cursor: default;
+}
+.map-search { position: relative; min-width: 100px; width: clamp(140px, 30%, 310px); display: flex; align-items: center; gap: 5px; padding: 0 5px; color: var(--muted); }
+.map-search input { min-width: 0; width: 100%; border: 0; outline: 0; background: transparent; color: var(--text); font-size: 12px; }
+.map-search-results { position: absolute; z-index: 9; top: calc(100% + 8px); left: -5px; width: min(340px, 70vw); max-height: 240px; overflow: auto; padding: 4px; background: var(--panel); border: 1px solid var(--border); border-radius: var(--r-md); box-shadow: var(--shadow-2); }
+.map-search-results button { display: block; width: 100%; border: 0; background: transparent; text-align: left; padding: 7px 8px; border-radius: var(--r-sm); color: var(--text); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.map-search-results button:hover, .map-search-results button:focus-visible { background: var(--panel-2); }
+.map-search-results .muted { padding: 7px; }
+.map-count { min-width: 0; flex: 1; color: var(--muted); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.map-toolbar-actions { display: flex; align-items: center; gap: 1px; }
+.map-toolbar-actions .on, .map-inspector-actions .on { background: var(--panel-2); color: var(--accent); }
+.map-trace, .map-inspector { position: absolute; width: min(320px, calc(100% - 16px)); max-height: min(65%, 500px); overflow: auto; padding: 12px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--panel); box-shadow: var(--shadow-2); cursor: default; }
+.map-trace { top: 52px; left: 8px; }
+.map-trace-compact { position: absolute; top: 52px; left: 8px; max-width: calc(100% - 16px); display: flex; align-items: center; gap: 3px; padding: 3px 5px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--panel); box-shadow: var(--shadow-1); cursor: default; }
+.map-trace-compact > button:first-child { display: flex; align-items: center; gap: 5px; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; border: 0; background: transparent; color: var(--text); font-size: 11px; }
+.map-trace-compact > button:first-child:hover { color: var(--accent); }
+.map-inspector { top: 52px; right: 8px; bottom: 62px; max-height: none; }
+.map-trace-head, .map-inspector-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; }
+.map-inspector h3 { margin: 7px 0 4px; font-size: 14px; line-height: 1.3; overflow-wrap: anywhere; }
+.map-inspector-actions { display: flex; flex-wrap: wrap; gap: 4px; margin: 10px 0; }
+.map-inspector-actions button { display: inline-flex; align-items: center; gap: 4px; }
+.map-inspector-list { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.map-inspector-link { padding: 8px; border: 1px solid var(--border); border-left: 3px solid var(--rel, var(--border)); border-radius: var(--r-sm); }
+.map-inspector-link .small { display: flex; align-items: center; gap: 6px; color: var(--rel, var(--muted)); font-weight: 600; }
+.map-rel-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--rel, var(--muted)); }
+.map-inspector-link button { display: flex; align-items: center; gap: 4px; width: 100%; padding: 4px 0 0; border: 0; background: transparent; color: var(--text); font-size: 12px; font-weight: 600; text-align: left; overflow-wrap: anywhere; }
+.map-inspector-link button:hover { color: var(--accent); }
+.map-inspector-link button svg { flex: none; }
+.map-inspector-link p { margin: 4px 0 0; color: var(--text-2); font-size: 11px; line-height: 1.35; overflow-wrap: anywhere; }
+.map-trace-pickers { display: grid; gap: 6px; margin: 10px 0; }
+.map-trace-pickers select { width: 100%; min-width: 0; padding: 5px 7px; border: 1px solid var(--border); border-radius: var(--r-sm); background: var(--panel-2); color: var(--text); font-size: 12px; }
+.map-trace-results { display: grid; gap: 5px; }
+.map-trace-step { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; width: 100%; border: 1px solid var(--border); border-left: 3px solid var(--rel); border-radius: var(--r-sm); background: var(--panel-2); padding: 6px; color: var(--text); text-align: left; font-size: 11px; }
+.map-trace-step:hover { border-color: var(--rel); }
+.map-trace-step b { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.map-trace-step em { color: var(--rel); font-style: normal; }
+.map-trace-step span { color: var(--muted); }
 .map-tip {
   position: absolute; z-index: 5; max-width: 340px; padding: 8px 10px; pointer-events: none;
   background: var(--panel); border: 1px solid var(--border); border-radius: var(--r-md); box-shadow: var(--shadow-2);
@@ -1105,14 +1150,19 @@ mark.hl:hover { filter: brightness(0.94); }
 }
 .map-tip-link { display: flex; flex-direction: column; gap: 2px; }
 .map-legend {
-  position: absolute; left: 8px; bottom: 8px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+  position: absolute; left: 8px; right: 8px; bottom: 8px; max-height: 78px; overflow: auto; display: flex; flex-wrap: wrap; align-items: center; gap: 5px;
   padding: 4px 8px; background: color-mix(in srgb, var(--panel) 88%, transparent); border: 1px solid var(--border);
   border-radius: var(--r-md); font-size: 11px; color: var(--text-2); cursor: default;
 }
-.map-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.map-filter { display: inline-flex; align-items: center; gap: 5px; padding: 3px 5px; border: 1px solid transparent; border-radius: var(--r-sm); background: transparent; color: var(--text-2); font-size: 11px; cursor: pointer; }
+.map-filter:hover, .map-filter:focus-visible { background: var(--panel-2); border-color: var(--border); }
+.map-filter:not(.on) { opacity: .4; text-decoration: line-through; }
+.map-filter small { min-width: 13px; padding: 0 3px; border-radius: 8px; background: var(--panel-2); font-size: 10px; }
 .map-legend i { width: 14px; height: 3px; border-radius: 2px; background: var(--rel); }
 .map-legend .edge-opened i { background: repeating-linear-gradient(90deg, var(--rel) 0 4px, transparent 4px 7px); }
-.map-hint { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 6px; padding: 5px 10px; font-size: 12px; color: var(--muted); background: var(--panel-2); border-radius: 999px; pointer-events: none; }
+.map-hint { position: absolute; top: 52px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 6px; padding: 5px 10px; font-size: 12px; color: var(--muted); background: var(--panel-2); border-radius: 999px; pointer-events: none; }
+.map-node:focus-visible circle { stroke: var(--text); stroke-width: 3; }
+.map-edge-hit:focus-visible { stroke: var(--text); stroke-width: 3; }
 .map-modal { width: min(1200px, calc(100vw - 48px)); height: min(820px, calc(100vh - 48px)); display: flex; flex-direction: column; }
 .map-modal .source-map { border: 1px solid var(--border); border-radius: var(--r-md); }
 .link-dialog .field input { font-family: var(--font); }

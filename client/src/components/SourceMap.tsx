@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Dot, Maximize2, Network } from "lucide-react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { Dot, Maximize2, Network, Search, X, Plus, Minus, Route, Focus, RotateCcw, ExternalLink, Link2, Copy } from "lucide-react";
 import type { Source } from "../types";
-import { buildGraph, layoutGraph, linkedPassages, passageEdges, relationOf, RELATIONS, type EdgeKind, type GraphEdge, type LinkEnd, type PassageEdge, type Point, type SourceLink } from "../links";
+import { buildGraph, graphNeighborhood, graphPathMarkdown, layoutGraph, linkedPassages, passageEdges, relationOf, RELATIONS, shortestGraphPath, type EdgeKind, type GraphEdge, type LinkEnd, type PassageEdge, type Point, type SourceLink } from "../links";
 
 interface Props {
   sources: Source[];
@@ -11,6 +11,8 @@ interface Props {
   onOpen: (sourceId: string) => void;
   /** Clicking a line opens the passage that made the link. */
   onGo: (end: LinkEnd) => void;
+  onCreateLink?: (from: LinkEnd) => void;
+  presenting?: boolean;
 }
 
 const KINDS: EdgeKind[] = ["supports", "contradicts", "cites", "same", "related", "opened"];
@@ -25,8 +27,9 @@ const clip = (text: string, n: number) => (text.length > n ? text.slice(0, n - 1
  * The layout is computed, not saved, and is the same for the same sources and links, so a
  * beat showing the map looks the same every take. Dragging a source moves it for now only.
  */
-export function SourceMap({ sources, links, activeSourceId, onOpen, onGo }: Props) {
+export function SourceMap({ sources, links, activeSourceId, onOpen, onGo, onCreateLink, presenting = false }: Props) {
   const host = useRef<HTMLDivElement>(null);
+  const mapId = useId().replace(/:/g, "");
   const [size, setSize] = useState({ w: 600, h: 400 });
   const graph = useMemo(() => buildGraph(sources, links), [sources, links]);
   const signature = graph.nodes.map((n) => n.id).join(",") + "|" + graph.edges.map((e) => e.key).join(",");
@@ -39,8 +42,26 @@ export function SourceMap({ sources, links, activeSourceId, onOpen, onGo }: Prop
   // Links drawn where they really land. A map that joins two whole documents when the link is
   // between two sentences is telling a smaller truth than it knows.
   const [byPassage, setByPassage] = useState(true);
+  const [query, setQuery] = useState("");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedEdge, setSelectedEdge] = useState<GraphEdge | PassageEdge | null>(null);
+  const [enabled, setEnabled] = useState<Set<EdgeKind>>(() => new Set(KINDS));
+  const [focusHops, setFocusHops] = useState<0 | 1 | 2>(0);
+  const [tracing, setTracing] = useState(false);
+  const [traceCollapsed, setTraceCollapsed] = useState(false);
+  const [pathFrom, setPathFrom] = useState("");
+  const [pathTo, setPathTo] = useState("");
+  const [copyState, setCopyState] = useState<"idle" | "copied" | "error">("idle");
   const lines = useMemo(() => passageEdges(sources, links), [sources, links]);
-  const spots = useMemo(() => linkedPassages(sources, links), [sources, links]);
+  const filtered = useMemo(() => ({ nodes: graph.nodes, edges: graph.edges.filter((edge) => enabled.has(edge.kind)) }), [graph, enabled]);
+  const visible = useMemo(() => selectedId && focusHops ? graphNeighborhood(filtered, selectedId, focusHops) : filtered, [filtered, selectedId, focusHops]);
+  const visibleIds = useMemo(() => new Set(visible.nodes.map((node) => node.id)), [visible.nodes]);
+  const visibleLines = useMemo(() => lines.filter((edge) => enabled.has(edge.kind) && edge.from.sourceId !== edge.to.sourceId && visibleIds.has(edge.from.sourceId) && visibleIds.has(edge.to.sourceId)), [lines, enabled, visibleIds]);
+  const spots = useMemo(() => linkedPassages(sources, visibleLines.map((edge) => edge.link)), [sources, visibleLines]);
+  const searchResults = useMemo(() => query.trim() ? graph.nodes.filter((node) => node.title.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())) : [], [graph.nodes, query]);
+  const trace = useMemo(() => pathFrom && pathTo ? shortestGraphPath(filtered, pathFrom, pathTo) : null, [filtered, pathFrom, pathTo]);
+  const traceIds = useMemo(() => new Set(trace?.ids ?? []), [trace]);
+  const traceEdges = useMemo(() => new Set(trace?.edges.map((edge) => edge.key) ?? []), [trace]);
   const drag = useRef<{ id: string | null; startX: number; startY: number; origin: Point; view: typeof view; moved: boolean } | null>(null);
 
   useEffect(() => {
@@ -62,12 +83,40 @@ export function SourceMap({ sources, links, activeSourceId, onOpen, onGo }: Prop
   const neighbours = useMemo(() => {
     if (!hover) return null;
     const set = new Set([hover]);
-    for (const e of graph.edges) {
+    for (const e of visible.edges) {
       if (e.source === hover) set.add(e.target);
       if (e.target === hover) set.add(e.source);
     }
     return set;
-  }, [hover, graph.edges]);
+  }, [hover, visible.edges]);
+
+  const centerOn = (id: string) => {
+    const p = at(id);
+    setView((v) => ({ ...v, x: size.w / 2 - p.x * v.k, y: size.h / 2 - p.y * v.k }));
+    setSelectedId(id);
+    setSelectedEdge(null);
+    setFocusHops(0);
+  };
+  const zoom = (factor: number) => setView((v) => {
+    const k = Math.min(4, Math.max(0.15, v.k * factor));
+    return { k, x: size.w / 2 - (size.w / 2 - v.x) * k / v.k, y: size.h / 2 - (size.h / 2 - v.y) * k / v.k };
+  });
+  const fitIds = (ids: string[]) => {
+    if (!ids.length) return;
+    const points = ids.map(at);
+    const xs = points.map((p) => p.x), ys = points.map((p) => p.y);
+    const left = Math.min(...xs), right = Math.max(...xs), top = Math.min(...ys), bottom = Math.max(...ys);
+    // Reserve room for the search bar and legend; otherwise the end of a narrow route lands
+    // underneath those controls even though its node centre is technically inside the SVG.
+    const padX = size.w < 520 ? 55 : 80, padY = size.w < 520 ? 130 : 95;
+    const k = ids.length === 1 ? 1.5 : Math.min(3, Math.max(0.15, Math.min(Math.max(80, size.w - 2 * padX) / Math.max(1, right - left), Math.max(80, size.h - 2 * padY) / Math.max(1, bottom - top))));
+    setView({ k, x: size.w / 2 - (left + right) * k / 2, y: size.h / 2 - (top + bottom) * k / 2 });
+  };
+
+  useEffect(() => {
+    if (tracing && trace) fitIds(trace.ids);
+    if (tracing && trace && size.w < 520) setTraceCollapsed(true);
+  }, [size.w, size.h, tracing, trace]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function down(e: React.PointerEvent, id: string | null) {
     e.stopPropagation();
@@ -91,18 +140,20 @@ export function SourceMap({ sources, links, activeSourceId, onOpen, onGo }: Prop
   function up() {
     const d = drag.current;
     drag.current = null;
-    if (d?.id && !d.moved) onOpen(d.id);
+    if (d?.id && !d.moved) { setSelectedId(d.id); setSelectedEdge(null); }
+    else if (d && !d.moved) { setSelectedId(null); setSelectedEdge(null); }
   }
   function wheel(e: React.WheelEvent) {
+    if ((e.target as Element).closest(".map-chrome")) return;
     const box = host.current!.getBoundingClientRect();
     const cx = e.clientX - box.left, cy = e.clientY - box.top;
-    const k = Math.min(4, Math.max(0.3, view.k * Math.exp(-e.deltaY * 0.0015)));
+    const k = Math.min(4, Math.max(0.15, view.k * Math.exp(-e.deltaY * 0.0015)));
     setView({ k, x: cx - ((cx - view.x) * k) / view.k, y: cy - ((cy - view.y) * k) / view.k });
   }
 
   /** Two kinds of link between the same pair bow apart instead of drawing on top of each other. */
   const bend = (edge: GraphEdge) => {
-    const siblings = graph.edges.filter((e) => (e.source === edge.source && e.target === edge.target) || (e.source === edge.target && e.target === edge.source));
+    const siblings = visible.edges.filter((e) => (e.source === edge.source && e.target === edge.target) || (e.source === edge.target && e.target === edge.source));
     if (siblings.length < 2) return 0;
     const i = siblings.indexOf(edge);
     const sign = edge.source < edge.target ? 1 : -1;
@@ -160,52 +211,80 @@ export function SourceMap({ sources, links, activeSourceId, onOpen, onGo }: Prop
     return { d: `M${start.x},${start.y} Q${mx},${my} ${end.x},${end.y}`, a, b };
   };
   const titleOf = (id: string) => graph.nodes.find((n) => n.id === id)?.title ?? "";
+  const selectedSource = graph.nodes.find((node) => node.id === selectedId);
+  const selectedLinks = selectedId ? links.filter((link) => link.from.sourceId === selectedId || link.to.sourceId === selectedId) : [];
+  const edgeLinks = selectedEdge ? "link" in selectedEdge ? [selectedEdge.link] : selectedEdge.links : [];
+
+  useEffect(() => setCopyState("idle"), [pathFrom, pathTo, enabled]);
+
+  useEffect(() => {
+    if (selectedId && !graph.nodes.some((node) => node.id === selectedId)) setSelectedId(null);
+    if (selectedEdge) {
+      const current = "key" in selectedEdge ? graph.edges.find((edge) => edge.key === selectedEdge.key) : lines.find((edge) => edge.id === selectedEdge.id);
+      if (!current) setSelectedEdge(null);
+      else if (current !== selectedEdge) setSelectedEdge(current);
+    }
+  }, [graph, lines, selectedId, selectedEdge]);
 
   if (!sources.length) return <div className="panel-empty">Add sources to see how they connect.</div>;
 
   return (
-    <div className="source-map" ref={host} onWheel={wheel} onPointerDown={(e) => down(e, null)} onPointerMove={move} onPointerUp={up}>
-      <svg width={size.w} height={size.h}>
+    <div className="source-map" ref={host} onWheel={wheel} onPointerDown={(e) => down(e, null)} onPointerMove={move} onPointerUp={up}
+      tabIndex={0} aria-label="Source map" onKeyDown={(e) => {
+        if ((e.target as Element).closest("input, select, button, textarea")) return;
+        if (e.key === "Escape") { setSelectedId(null); setSelectedEdge(null); setFocusHops(0); }
+        if (e.key === "+" || e.key === "=") zoom(1.25);
+        if (e.key === "-") zoom(0.8);
+        if (e.key === "0") fitIds(visible.nodes.map((node) => node.id));
+      }}>
+      <svg width={size.w} height={size.h} role="img" aria-label={`${visible.nodes.length} sources and ${visible.edges.length} connections`}>
         <defs>
           {KINDS.map((k) => (
-            <marker key={k} id={`arrow-${k}`} viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <marker key={k} id={`${mapId}-arrow-${k}`} viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
               <path d="M0,0 L10,5 L0,10 z" className={`map-arrow edge-${k}`} />
             </marker>
           ))}
         </defs>
         <g transform={`translate(${view.x},${view.y}) scale(${view.k})`}>
-          {graph.edges.filter((edge) => !byPassage || edge.kind === "opened").map((edge) => {
-            const faded = neighbours && !(neighbours.has(edge.source) && neighbours.has(edge.target));
+          {visible.edges.filter((edge) => !byPassage || edge.kind === "opened").map((edge) => {
+            const faded = (neighbours && !(neighbours.has(edge.source) && neighbours.has(edge.target))) || (tracing && trace && !traceEdges.has(edge.key));
             return (
-              <g key={edge.key} className={`map-edge edge-${edge.kind} ${faded ? "faded" : ""}`}>
-                <path d={path(edge)} className="map-edge-line" markerEnd={`url(#arrow-${edge.kind})`} />
+              <g key={edge.key} className={`map-edge edge-${edge.kind} ${faded ? "faded" : ""} ${selectedEdge && "key" in selectedEdge && selectedEdge.key === edge.key ? "selected" : ""} ${traceEdges.has(edge.key) && tracing ? "traced" : ""}`}>
+                <path d={path(edge)} className="map-edge-line" markerEnd={`url(#${mapId}-arrow-${edge.kind})`} />
                 <path
                   d={path(edge)}
                   className="map-edge-hit"
                   onPointerDown={(e) => e.stopPropagation()}
+                  tabIndex={0} role="button" aria-label={`Inspect ${titleOf(edge.source)} ${edge.kind} ${titleOf(edge.target)}`}
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedEdge(edge); setSelectedId(null); } }}
                   onPointerEnter={(e) => setTip({ x: e.clientX, y: e.clientY, kind: "edge", edge })}
                   onPointerMove={(e) => setTip({ x: e.clientX, y: e.clientY, kind: "edge", edge })}
                   onPointerLeave={() => setTip(null)}
-                  onClick={() => onGo(edge.links[0]?.from ?? { sourceId: edge.source })}
+                  onClick={() => { setSelectedEdge(edge); setSelectedId(null); }}
+                  onDoubleClick={() => onGo(edge.links[0]?.from ?? { sourceId: edge.source })}
                 />
               </g>
             );
           })}
-          {byPassage && lines.map((edge) => {
-            const faded = neighbours && !(neighbours.has(edge.from.sourceId) && neighbours.has(edge.to.sourceId));
+          {byPassage && visibleLines.map((edge) => {
+            const faded = (neighbours && !(neighbours.has(edge.from.sourceId) && neighbours.has(edge.to.sourceId))) || (tracing && trace && !traceEdges.has(`${edge.from.sourceId}>${edge.to.sourceId}:${edge.kind}`));
             const line = linkPath(edge);
             return (
-              <g key={edge.id} className={`map-edge edge-${edge.kind} ${faded ? "faded" : ""}`}>
-                <path d={line.d} className="map-edge-line" markerEnd={`url(#arrow-${edge.kind})`} />
+              <g key={edge.id} className={`map-edge edge-${edge.kind} ${faded ? "faded" : ""} ${selectedEdge && "id" in selectedEdge && selectedEdge.id === edge.id ? "selected" : ""} ${tracing && traceEdges.has(`${edge.from.sourceId}>${edge.to.sourceId}:${edge.kind}`) ? "traced" : ""}`}>
+                <path d={line.d} className="map-edge-line" markerEnd={`url(#${mapId}-arrow-${edge.kind})`} />
                 <path
                   d={line.d}
                   className="map-edge-hit"
                   onPointerDown={(e) => e.stopPropagation()}
+                  tabIndex={0} role="button" aria-label={`Inspect ${titleOf(edge.from.sourceId)} ${edge.kind} ${titleOf(edge.to.sourceId)}`}
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedEdge(edge); setSelectedId(null); } }}
                   onPointerEnter={(e) => setTip({ x: e.clientX, y: e.clientY, kind: "link", edge })}
                   onPointerMove={(e) => setTip({ x: e.clientX, y: e.clientY, kind: "link", edge })}
                   onPointerLeave={() => setTip(null)}
-                  // Clicking a line opens the end you were nearest, not always the same one.
-                  onClick={(e) => {
+                  onClick={() => {
+                    setSelectedEdge(edge); setSelectedId(null);
+                  }}
+                  onDoubleClick={(e) => {
                     const box = (e.currentTarget.ownerSVGElement as SVGSVGElement).getBoundingClientRect();
                     const px = (e.clientX - box.left - view.x) / view.k, py = (e.clientY - box.top - view.y) / view.k;
                     const near = Math.hypot(px - line.a.x, py - line.a.y) <= Math.hypot(px - line.b.x, py - line.b.y);
@@ -219,7 +298,7 @@ export function SourceMap({ sources, links, activeSourceId, onOpen, onGo }: Prop
             const end = { sourceId, highlightId: hid };
             const spot = dotAt(end);
             if (!spot) return null;
-            const faded = neighbours && !neighbours.has(sourceId);
+            const faded = (neighbours && !neighbours.has(sourceId)) || (tracing && trace && !traceIds.has(sourceId));
             return (
               <circle
                 key={`${sourceId}:${hid}`}
@@ -234,18 +313,21 @@ export function SourceMap({ sources, links, activeSourceId, onOpen, onGo }: Prop
               />
             );
           }))}
-          {graph.nodes.map((node) => {
+          {visible.nodes.map((node) => {
             const p = at(node.id);
             const r = radius(node.weight);
-            const faded = neighbours && !neighbours.has(node.id);
+            const faded = (neighbours && !neighbours.has(node.id)) || (tracing && trace && !traceIds.has(node.id));
             return (
               <g
                 key={node.id}
-                className={`map-node ${node.file ? "file" : ""} ${node.id === activeSourceId ? "active" : ""} ${faded ? "faded" : ""} ${hover === node.id ? "hover" : ""}`}
+                className={`map-node ${node.file ? "file" : ""} ${node.id === activeSourceId ? "active" : ""} ${node.id === selectedId ? "selected" : ""} ${tracing && traceIds.has(node.id) ? "traced" : ""} ${faded ? "faded" : ""} ${hover === node.id ? "hover" : ""}`}
                 transform={`translate(${p.x},${p.y})`}
+                tabIndex={0} role="button" aria-label={`Inspect source ${node.title}`}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedId(node.id); setSelectedEdge(null); } }}
                 onPointerDown={(e) => down(e, node.id)}
                 onPointerEnter={() => setHover(node.id)}
                 onPointerLeave={() => setHover(null)}
+                onDoubleClick={() => onOpen(node.id)}
               >
                 <title>{node.title}</title>
                 <circle r={r} />
@@ -255,6 +337,44 @@ export function SourceMap({ sources, links, activeSourceId, onOpen, onGo }: Prop
           })}
         </g>
       </svg>
+
+      {!presenting && <div className="map-toolbar map-chrome" onPointerDown={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()}>
+        <div className="map-search">
+          <Search size={15} />
+          <input aria-label="Find source in map" placeholder="Find a source…" value={query} onChange={(e) => setQuery(e.target.value)} />
+          {query && <button className="icon-btn" aria-label="Clear search" onClick={() => setQuery("")}><X size={13} /></button>}
+          {query && <div className="map-search-results">
+            {searchResults.length ? searchResults.slice(0, 20).map((node) => <button key={node.id} onClick={() => { centerOn(node.id); setQuery(""); }} title={node.title}>{node.title}</button>) : <div className="muted small">No matching source</div>}
+            {searchResults.length > 20 && <div className="muted small">Showing first 20 of {searchResults.length}</div>}
+          </div>}
+        </div>
+        <span className="map-count">{visible.nodes.length} {visible.nodes.length === 1 ? "source" : "sources"} · {visible.edges.length} {visible.edges.length === 1 ? "connection" : "connections"}</span>
+        <div className="map-toolbar-actions">
+          <button className="icon-btn" aria-label="Zoom out" title="Zoom out (−)" onClick={() => zoom(0.8)}><Minus size={14} /></button>
+          <button className="icon-btn" aria-label="Zoom in" title="Zoom in (+)" onClick={() => zoom(1.25)}><Plus size={14} /></button>
+          <button className="icon-btn" aria-label="Fit map" title="Fit map (0)" onClick={() => fitIds(visible.nodes.map((node) => node.id))}><Maximize2 size={14} /></button>
+          <button className={`icon-btn ${tracing ? "on" : ""}`} aria-label={tracing ? traceCollapsed ? "Show trail" : "Hide trail" : "Trace a connection"} title={tracing ? traceCollapsed ? "Show trail" : "Hide trail" : "Trace a connection"} onClick={() => { if (tracing) setTraceCollapsed((v) => !v); else { setTracing(true); setTraceCollapsed(false); setPathFrom(selectedId ?? activeSourceId ?? ""); setPathTo(""); setSelectedId(null); setSelectedEdge(null); } }}><Route size={15} /></button>
+        </div>
+      </div>}
+
+      {!presenting && tracing && traceCollapsed && !selectedSource && !selectedEdge && <div className="map-trace-compact map-chrome" onPointerDown={(e) => e.stopPropagation()}>
+        <button onClick={() => setTraceCollapsed(false)}><Route size={13} /> {pathFrom && pathTo ? `${clip(titleOf(pathFrom), 18)} → ${clip(titleOf(pathTo), 18)}` : "Trace a connection"} · Show trail</button>
+        <button className="icon-btn" aria-label="End trace" title="End trace" onClick={() => { setTracing(false); setTraceCollapsed(false); }}><X size={13} /></button>
+      </div>}
+      {!presenting && tracing && !traceCollapsed && !selectedSource && !selectedEdge && <div className="map-trace map-chrome" onPointerDown={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()}>
+        <div className="map-trace-head"><strong>Trace a connection</strong><span className="grow" />{trace && <button className="icon-btn" aria-label="Copy trail as Markdown" title="Copy trail as Markdown" onClick={async () => { try { await navigator.clipboard.writeText(graphPathMarkdown(trace, sources)); setCopyState("copied"); } catch { setCopyState("error"); } }}><Copy size={14} /></button>}{trace && <button className="icon-btn" aria-label="Fit route" title="Fit route" onClick={() => fitIds(trace.ids)}><Maximize2 size={14} /></button>}<button className="icon-btn" aria-label="Close trace" onClick={() => { setTracing(false); setTraceCollapsed(false); }}><X size={14} /></button></div>
+        <div className="map-trace-pickers">
+          <select aria-label="Trace from source" value={pathFrom} onChange={(e) => { setPathFrom(e.target.value); const route = shortestGraphPath(filtered, e.target.value, pathTo); if (route) fitIds(route.ids); }}><option value="">From source…</option>{graph.nodes.map((node) => <option key={node.id} value={node.id}>{node.title}</option>)}</select>
+          <select aria-label="Trace to source" value={pathTo} onChange={(e) => { setPathTo(e.target.value); const route = shortestGraphPath(filtered, pathFrom, e.target.value); if (route) { fitIds(route.ids); if (size.w < 520) setTraceCollapsed(true); } }}><option value="">To source…</option>{graph.nodes.map((node) => <option key={node.id} value={node.id}>{node.title}</option>)}</select>
+        </div>
+        {pathFrom && pathTo && (trace ? <div className="map-trace-results">
+          <div className="muted small">{trace.edges.length} {trace.edges.length === 1 ? "step" : "steps"} through visible connections</div>
+          {trace.edges.map((edge, i) => <button key={`${edge.key}-${i}`} className={`map-trace-step edge-${edge.kind}`} onClick={() => { setSelectedEdge(edge); setSelectedId(null); }}>
+            <span>{i + 1}</span><b>{clip(titleOf(trace.ids[i]), 28)}</b><em>{edge.source === trace.ids[i] ? edge.kind === "opened" ? "opened from" : relationOf(edge.kind).label : edge.kind === "opened" ? "opened" : relationOf(edge.kind).backlink}</em><b>{clip(titleOf(trace.ids[i + 1]), 28)}</b>
+          </button>)}
+        </div> : <div className="muted small">No route with the selected relationship filters.</div>)}
+        {copyState !== "idle" && <div className="muted small" role="status">{copyState === "copied" ? "Evidence trail copied as Markdown." : "Could not copy the trail. Check clipboard access."}</div>}
+      </div>}
 
       {tip && (
         <div className="map-tip" style={{ left: tip.x - (host.current?.getBoundingClientRect().left ?? 0) + 12, top: tip.y - (host.current?.getBoundingClientRect().top ?? 0) + 12 }}>
@@ -273,7 +393,7 @@ export function SourceMap({ sources, links, activeSourceId, onOpen, onGo }: Prop
               {passage(tip.edge.to) && <div className="muted">→ “{clip(passage(tip.edge.to)!, 120)}”</div>}
               {!tip.edge.to.highlightId && <div className="muted">→ the whole source</div>}
               {tip.edge.link.note && <div>{tip.edge.link.note}</div>}
-              <div className="muted small">Click the end you want to open</div>
+              <div className="muted small">Click to inspect · double-click to open</div>
             </div>
           ) : tip.edge.kind === "opened" ? (
             <div><b>{clip(titleOf(tip.edge.source), 50)}</b> was opened from <b>{clip(titleOf(tip.edge.target), 50)}</b></div>
@@ -285,22 +405,62 @@ export function SourceMap({ sources, links, activeSourceId, onOpen, onGo }: Prop
               {l.note && <div>{l.note}</div>}
             </div>
           ))}
-          {tip.kind === "edge" && tip.edge.kind !== "opened" && <div className="muted small">Click to open the linked passage</div>}
+          {tip.kind === "edge" && tip.edge.kind !== "opened" && <div className="muted small">Click to inspect · double-click to open</div>}
         </div>
       )}
 
-      <div className="map-legend" onPointerDown={(e) => e.stopPropagation()}>
-        {RELATIONS.map((r) => <span key={r.id} className={`edge-${r.id}`}><i />{r.label}</span>)}
-        <span className="edge-opened"><i />opened from</span>
+      {!presenting && <div className="map-legend map-chrome" onPointerDown={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()}>
+        {RELATIONS.map((r) => <button key={r.id} className={`map-filter edge-${r.id} ${enabled.has(r.id) ? "on" : ""}`} aria-pressed={enabled.has(r.id)} onClick={() => { setSelectedEdge(null); setEnabled((old) => { const next = new Set(old); if (next.has(r.id)) next.delete(r.id); else next.add(r.id); return next; }); }}><i />{r.label}<small>{graph.edges.filter((edge) => edge.kind === r.id).length}</small></button>)}
+        <button className={`map-filter edge-opened ${enabled.has("opened") ? "on" : ""}`} aria-pressed={enabled.has("opened")} onClick={() => { setSelectedEdge(null); setEnabled((old) => { const next = new Set(old); if (next.has("opened")) next.delete("opened"); else next.add("opened"); return next; }); }}><i />opened from<small>{graph.edges.filter((edge) => edge.kind === "opened").length}</small></button>
         <button
           className={`ghost small ${byPassage ? "on" : ""}`}
           onClick={() => setByPassage((v) => !v)}
-          title={byPassage ? "Draw one line per pair of sources instead" : "Draw each link where it really lands"}
+          title={byPassage ? "Group links by source pair" : "Show individual passage links"}
         >
-          <Dot size={13} /> passages
+          <Dot size={13} /> {byPassage ? "Passages" : "Sources"}
         </button>
-        <button className="icon-btn" title="Fit the whole map" onClick={() => { setView({ x: 0, y: 0, k: 1 }); setMoved({}); }}><Maximize2 size={13} /></button>
-      </div>
+        {Object.keys(moved).length > 0 && <button className="icon-btn" title="Restore automatic node layout" aria-label="Restore automatic node layout" onClick={() => setMoved({})}><RotateCcw size={13} /></button>}
+      </div>}
+      {!presenting && (selectedSource || selectedEdge) && <aside className="map-inspector map-chrome" onPointerDown={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()}>
+        <div className="map-inspector-head">
+          <strong>{selectedSource ? "Source" : "Connection"}</strong>
+          <button className="icon-btn" aria-label="Close map details" onClick={() => { setSelectedId(null); setSelectedEdge(null); setFocusHops(0); }}><X size={15} /></button>
+        </div>
+        {selectedSource ? <>
+          <h3 title={selectedSource.title}>{selectedSource.title}</h3>
+          <div className="muted small">{selectedSource.file ? "File" : "Source"} · {selectedLinks.length} {selectedLinks.length === 1 ? "link" : "links"}</div>
+          <div className="map-inspector-actions">
+            <button className="ghost small" onClick={() => onOpen(selectedSource.id)}><ExternalLink size={13} /> Open source</button>
+            {onCreateLink && <button className="ghost small" onClick={() => onCreateLink({ sourceId: selectedSource.id })}><Link2 size={13} /> Link source</button>}
+            <button className={`ghost small ${focusHops ? "on" : ""}`} onClick={() => { const next = focusHops === 0 ? 1 : focusHops === 1 ? 2 : 0; setFocusHops(next); fitIds((next ? graphNeighborhood(filtered, selectedSource.id, next) : filtered).nodes.map((node) => node.id)); }} title="Show this source and its one-hop or two-hop neighborhood"><Focus size={13} /> {focusHops ? `${focusHops} hop${focusHops > 1 ? "s" : ""}` : "Focus"}</button>
+            <button className="ghost small" onClick={() => { setTracing(true); setPathFrom(selectedSource.id); setPathTo(""); setSelectedId(null); }}><Route size={13} /> Trace from here</button>
+          </div>
+          <div className="map-inspector-list">
+            {selectedLinks.length ? selectedLinks.map((link) => {
+              const outgoing = link.from.sourceId === selectedSource.id;
+              const other = outgoing ? link.to : link.from;
+              const own = outgoing ? link.from : link.to;
+              return <div key={link.id} className={`map-inspector-link edge-${link.relation}`}>
+                <div className="small"><span className="map-rel-dot" />{outgoing ? relationOf(link.relation).label : relationOf(link.relation).backlink}</div>
+                <button onClick={() => onGo(other)} title="Open linked passage">{titleOf(other.sourceId)} <ExternalLink size={12} /></button>
+                {passage(own) && <p>“{clip(passage(own)!, 150)}”</p>}
+                {link.note && <p>{link.note}</p>}
+              </div>;
+            }) : <p className="muted small">No saved links yet. Create a link from a highlighted passage to connect this source.</p>}
+          </div>
+        </> : selectedEdge && <>
+          <h3>{titleOf("from" in selectedEdge ? selectedEdge.from.sourceId : selectedEdge.source)} → {titleOf("to" in selectedEdge ? selectedEdge.to.sourceId : selectedEdge.target)}</h3>
+          <div className="muted small">{selectedEdge.kind === "opened" ? "Opened from" : relationOf(selectedEdge.kind).label} · {edgeLinks.length || 1} {edgeLinks.length === 1 ? "link" : "links"}</div>
+          <div className="map-inspector-list">
+            {edgeLinks.length ? edgeLinks.map((link) => <div key={link.id} className={`map-inspector-link edge-${link.relation}`}>
+              <div className="small"><span className="map-rel-dot" />{relationOf(link.relation).label}</div>
+              <button onClick={() => onGo(link.from)} title="Open starting passage">{titleOf(link.from.sourceId)}{passage(link.from) ? `: “${clip(passage(link.from)!, 90)}”` : ""} <ExternalLink size={12} /></button>
+              <button onClick={() => onGo(link.to)} title="Open target passage">→ {titleOf(link.to.sourceId)}{passage(link.to) ? `: “${clip(passage(link.to)!, 90)}”` : ""} <ExternalLink size={12} /></button>
+              {link.note && <p>{link.note}</p>}
+            </div>) : "source" in selectedEdge && <div className="map-inspector-link"><button onClick={() => onGo({ sourceId: selectedEdge.source })}>Open {titleOf(selectedEdge.source)} <ExternalLink size={12} /></button><p>This source was opened from {titleOf(selectedEdge.target)}.</p></div>}
+          </div>
+        </>}
+      </aside>}
       {!graph.edges.length && !lines.length && (
         <div className="map-hint"><Network size={14} /> Link a highlighted passage to another source from the Highlights pane, and the sources connect here.</div>
       )}

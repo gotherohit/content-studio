@@ -213,6 +213,11 @@ wait. The AI request aborts when the pane closes. Assume a recording is in progr
   in the same `mutate`: a missing source removes the link, a missing highlight degrades it to
   the whole source. The map's layout (`layoutGraph`) is deterministic on purpose — beats can
   show it, so it must look the same every take; never seed it randomly.
+- **Map filters change visibility, not coordinates.** Keep layout based on the whole graph so
+  narrowing relationships or focusing a source does not make a beat's map jump. Fit changes
+  only the viewport; restoring dragged nodes is a separate action. A route uses currently
+  enabled relationship types and must fit its visible path when picked. Give every mounted
+  map its own SVG marker IDs, because several map panes can appear at once.
 - **The Files pane can write anywhere the creator points it.** Existing paths go through
   `resolveInside` and new names through `resolveNew`; both check the folder before *and after*
   following links, because a junction inside the folder can point anywhere. Saves carry the
