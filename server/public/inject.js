@@ -46,13 +46,14 @@
   // measured origin (the site's body may be positioned), and never takes the pointer except
   // the note markers and the shapes' own
   // strokes, or the article underneath would stop being clickable.
-  var SHAPE_COLOURS = { yellow: "#e0b528", green: "#2fae51", pink: "#dd5f92", blue: "#3d84dd" };
+  var SHAPE_COLOURS = geomModule.COLOURS;
   var SVG_NS = "http://www.w3.org/2000/svg";
   var shapeRoot = null;
   var shapeList = [];
   var showNotes = true;
   var drawTool = null;
   var drawColour = "yellow";
+  var drawStyle = null;
   var drawLayer = null;
   var placeTimer = null;
   var selectedId = null;
@@ -67,41 +68,70 @@
     return shapeRoot;
   }
 
-  function shapeSvg(h, size) {
-    var svg = document.createElementNS(SVG_NS, "svg");
-    svg.setAttribute("width", String(size.width));
-    svg.setAttribute("height", String(size.height));
+  function svgNode(tag, attrs) {
+    var node = document.createElementNS(SVG_NS, tag);
+    Object.keys(attrs).forEach(function (k) { if (attrs[k] !== null && attrs[k] !== undefined && attrs[k] !== "") node.setAttribute(k, String(attrs[k])); });
+    return node;
+  }
+
+  /**
+   * One drawing, from the outline and paint the app itself uses, so a drawing looks the same
+   * here as in Reader. Grabbed by a wide invisible stroke along its edge, and by its inside
+   * only when the inside is painted: an empty box must not stop the words under it being
+   * selected.
+   */
+  function shapeSvg(h, size, live) {
+    var svg = svgNode("svg", { width: size.width, height: size.height });
     svg.style.cssText = "position:absolute;left:0;top:0;overflow:visible;pointer-events:none";
-    var colour = SHAPE_COLOURS[h.color] || SHAPE_COLOURS.yellow;
-    var node;
-    if (h.shape.kind === "arrow") {
-      node = document.createElementNS(SVG_NS, "g");
-      var line = geomModule.arrowLine(h.shape, size);
-      var seg = document.createElementNS(SVG_NS, "line");
-      seg.setAttribute("x1", String(line.x1)); seg.setAttribute("y1", String(line.y1));
-      seg.setAttribute("x2", String(line.x2)); seg.setAttribute("y2", String(line.y2));
-      var head = document.createElementNS(SVG_NS, "polyline");
-      head.setAttribute("points", geomModule.arrowHead(h.shape, size).map(function (p) { return p.x + "," + p.y; }).join(" "));
-      node.appendChild(seg); node.appendChild(head);
-    } else if (h.shape.kind === "oval") {
-      var box = geomModule.toBox(h.shape, size);
-      node = document.createElementNS(SVG_NS, "ellipse");
-      node.setAttribute("cx", String(box.left + box.width / 2));
-      node.setAttribute("cy", String(box.top + box.height / 2));
-      node.setAttribute("rx", String(Math.max(1, box.width / 2)));
-      node.setAttribute("ry", String(Math.max(1, box.height / 2)));
-    } else {
-      var rect = geomModule.toBox(h.shape, size);
-      node = document.createElementNS(SVG_NS, "rect");
-      node.setAttribute("x", String(rect.left)); node.setAttribute("y", String(rect.top));
-      node.setAttribute("width", String(Math.max(1, rect.width))); node.setAttribute("height", String(Math.max(1, rect.height)));
-      node.setAttribute("rx", "3");
+    var style = geomModule.resolveStyle(h.shape);
+    var stroke = geomModule.paint(style.stroke, h.color);
+    var fill = geomModule.isLine(h.shape.kind) ? null : geomModule.paint(style.fill, h.color);
+    var d = geomModule.shapePath(h.shape, size);
+    var filled = Boolean(fill && style.fillOpacity > 0);
+    var body = svgNode("path", {
+      d: d, fill: fill || "none", "fill-opacity": style.fillOpacity, stroke: stroke || "none",
+      "stroke-width": style.width, "stroke-dasharray": geomModule.dashArray(style.dash, style.width),
+      "stroke-linecap": "round", "stroke-linejoin": "round",
+    });
+    body.style.pointerEvents = live && filled ? "visiblePainted" : "none";
+    svg.appendChild(body);
+    geomModule.shapeHeads(h.shape, size).forEach(function (head) {
+      var node = svgNode("path", { d: head, fill: stroke || "none", stroke: stroke || "none", "stroke-width": 1, "stroke-linejoin": "round" });
+      node.style.pointerEvents = "none";
+      svg.appendChild(node);
+    });
+    if (live && h.id === selectedId) {
+      var ring = svgNode("path", { d: d, fill: "none", stroke: "#6366f1", "stroke-width": 1.5, "stroke-dasharray": "4 3" });
+      ring.style.pointerEvents = "none";
+      svg.appendChild(ring);
     }
-    node.style.cssText = "fill:none;stroke:" + colour + ";stroke-width:2.5px;stroke-linecap:round;stroke-linejoin:round;pointer-events:stroke;cursor:pointer";
-    node.addEventListener("pointerdown", function (e) { beginDrag(h, "move", e); });
-    node.addEventListener("click", function (e) { e.preventDefault(); e.stopPropagation(); send({ type: "hlclick", id: h.id }); });
-    svg.appendChild(node);
+    if (!live) return svg;
+    var hit = svgNode("path", { d: d, fill: "none", stroke: "transparent", "stroke-width": Math.max(12, style.width + 8) });
+    hit.style.cssText = "pointer-events:stroke;cursor:pointer";
+    svg.appendChild(hit);
+    [hit, body].forEach(function (node) {
+      node.style.cursor = "pointer";
+      node.addEventListener("pointerdown", function (e) { beginDrag(h, "move", e); });
+      node.addEventListener("click", function (e) { e.preventDefault(); e.stopPropagation(); send({ type: "hlclick", id: h.id }); });
+    });
     return svg;
+  }
+
+  /** A callout says its note on the page itself; the text never takes the pointer. */
+  function calloutText(h, size) {
+    if (h.shape.kind !== "callout" || !h.comment || !h.comment.trim()) return null;
+    var b = geomModule.calloutBody(h.shape, size);
+    var style = geomModule.resolveStyle(h.shape);
+    var fill = geomModule.paint(style.fill, h.color);
+    var solid = Boolean(fill && style.fillOpacity >= 0.5);
+    var el = document.createElement("div");
+    el.textContent = h.comment;
+    el.style.cssText = "all:initial;position:absolute;box-sizing:border-box;overflow:hidden;pointer-events:none;" +
+      "left:" + b.left + "px;top:" + b.top + "px;width:" + b.width + "px;height:" + b.height + "px;" +
+      "padding:6px 9px;display:flex;align-items:center;justify-content:center;text-align:center;" +
+      "font:500 " + geomModule.calloutFont(b, h.comment) + "px/1.35 system-ui,-apple-system,'Segoe UI',sans-serif;white-space:pre-wrap;overflow-wrap:anywhere;" +
+      "color:" + (solid ? geomModule.inkOn(fill) : "#1f2328") + (solid ? "" : ";text-shadow:0 0 3px #fff,0 0 3px #fff");
+    return el;
   }
 
   function shapeNote(h, size, spot) {
@@ -134,7 +164,7 @@
 
   function pointsOf(h, rect) {
     var size = { width: rect.width, height: rect.height };
-    if (h.shape.kind === "arrow") {
+    if (geomModule.isLine(h.shape.kind)) {
       var line = geomModule.arrowLine(h.shape, size);
       return { from: { x: rect.left + line.x1, y: rect.top + line.y1 }, to: { x: rect.left + line.x2, y: rect.top + line.y2 } };
     }
@@ -180,7 +210,7 @@
       { x: dragging.now.to.x - rect.left, y: dragging.now.to.y - rect.top },
       rect,
     );
-    if (shape) drawDragged(Object.assign({}, dragging.h, { shape: shape }), rect);
+    if (shape) drawDragged(Object.assign({}, dragging.h, { shape: Object.assign({}, dragging.h.shape, shape) }), rect);
   }
 
   /** The shape as it is being pulled, drawn in place of the saved one. */
@@ -191,6 +221,8 @@
     var size = { width: rect.width, height: rect.height };
     wrap.textContent = "";
     wrap.appendChild(shapeSvg(h, size));
+    var words = calloutText(h, size);
+    if (words) wrap.appendChild(words);
     wrap.appendChild(handlesFor(h, size));
   }
 
@@ -228,7 +260,7 @@
     var group = document.createElement("div");
     if (h.id !== selectedId || drawTool) return group;
     var spots;
-    if (h.shape.kind === "arrow") {
+    if (geomModule.isLine(h.shape.kind)) {
       var line = geomModule.arrowLine(h.shape, size);
       spots = [{ grab: "from", x: line.x1, y: line.y1 }, { grab: "to", x: line.x2, y: line.y2 }];
     } else {
@@ -269,7 +301,9 @@
       wrap.setAttribute("data-hid", h.id);
       wrap.style.cssText = "position:absolute;pointer-events:none;left:" + r.left + "px;top:" + r.top +
         "px;width:" + r.width + "px;height:" + r.height + "px";
-      wrap.appendChild(shapeSvg(h, size));
+      wrap.appendChild(shapeSvg(h, size, true));
+      var words = calloutText(h, size);
+      if (words) wrap.appendChild(words);
       wrap.appendChild(handlesFor(h, size));
       if (showNotes && marked(h)) wrap.appendChild(shapeNote(h, size, geomModule.badgeAt(h.shape, size)));
       root.appendChild(wrap);
@@ -292,7 +326,10 @@
   }
 
   /** A note or a link is worth a marker on the page; a bare highlight is not. */
-  function marked(h) { return Boolean((h.comment && h.comment.trim()) || h.linked); }
+  function marked(h) {
+    if (h.shape && h.shape.kind === "callout") return Boolean(h.linked);
+    return Boolean((h.comment && h.comment.trim()) || h.linked);
+  }
 
   function schedulePlace() {
     // Continuous page updates must not keep postponing a resize indefinitely.
@@ -304,9 +341,10 @@
     shapeWatcher.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["style", "class", "hidden"] });
   }
 
-  function setDraw(tool, colour) {
+  function setDraw(tool, colour, style) {
     drawTool = tool || null;
     if (colour) drawColour = colour;
+    drawStyle = style || null;
     if (!drawTool) {
       if (drawLayer) { drawLayer.remove(); drawLayer = null; }
       return;
@@ -316,22 +354,30 @@
     drawLayer.className = "rs-shapes";
     drawLayer.style.cssText = "position:fixed;left:0;top:0;right:0;bottom:0;z-index:2147483001;cursor:crosshair;background:transparent";
     var start = null, band = null;
+    // What is being drawn is shown as the shape it will be, in its own paint.
+    var preview = function (to) {
+      if (!band) return;
+      band.textContent = "";
+      var w = window.innerWidth, hgt = window.innerHeight;
+      var shape = geomModule.fromDrag(drawTool, start, to, { width: w, height: hgt });
+      if (!shape) return;
+      shape = Object.assign({}, drawStyle || {}, shape);
+      var svg = shapeSvg({ id: "", color: drawColour, shape: shape }, { width: w, height: hgt });
+      svg.style.opacity = "0.85";
+      band.appendChild(svg);
+    };
     drawLayer.addEventListener("pointerdown", function (e) {
       if (e.button !== 0) return;
       e.preventDefault();
       drawLayer.setPointerCapture(e.pointerId);
       start = { x: e.clientX, y: e.clientY };
       band = document.createElement("div");
-      band.style.cssText = "position:fixed;pointer-events:none;border:2px dashed " + (SHAPE_COLOURS[drawColour] || SHAPE_COLOURS.yellow) +
-        ";border-radius:" + (drawTool === "oval" ? "50%" : "3px");
+      band.style.cssText = "position:fixed;left:0;top:0;width:0;height:0;overflow:visible;pointer-events:none";
       drawLayer.appendChild(band);
     });
     drawLayer.addEventListener("pointermove", function (e) {
       if (!start || !band) return;
-      band.style.left = Math.min(start.x, e.clientX) + "px";
-      band.style.top = Math.min(start.y, e.clientY) + "px";
-      band.style.width = Math.abs(e.clientX - start.x) + "px";
-      band.style.height = Math.abs(e.clientY - start.y) + "px";
+      preview({ x: e.clientX, y: e.clientY });
     });
     drawLayer.addEventListener("pointerup", function (e) {
       if (!start) return;
@@ -459,7 +505,7 @@
     }
     if (m.type === "notes") { showNotes = m.show !== false; schedulePlace(); }
     if (m.type === "selected") { selectedId = m.id || null; schedulePlace(); }
-    if (m.type === "draw") setDraw(m.tool, m.color);
+    if (m.type === "draw") setDraw(m.tool, m.color, m.style);
     if (m.type === "scrollTo") {
       userScrolled = true;
       if (stopTracking) stopTracking();

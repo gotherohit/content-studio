@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { MessageSquareText } from "lucide-react";
-import type { HighlightColor, Shape, ShapeKind } from "../types";
-import { arrowHead, arrowLine, badgeAt, toBox, type Box } from "../shapes";
+import type { HighlightColor, Shape, ShapeKind, ShapeStyle } from "../types";
+import { arrowLine, badgeAt, calloutBody, calloutFont, dashArray, inkOn, isLine, paint, resolveStyle, shapeHeads, shapePath, toBox, type Box } from "../shapes";
 
 export interface LayerItem {
   id: string;
@@ -32,6 +32,8 @@ interface Props {
   items: LayerItem[];
   tool: ShapeKind | null;
   color: HighlightColor;
+  /** How the tool paints, so what is being drawn looks like what will be kept. */
+  toolStyle?: ShapeStyle;
   selectedId?: string | null;
   showNotes?: boolean;
   /** The drag in pixels within this layer; the caller decides what it was drawn on. */
@@ -92,7 +94,7 @@ export function ShapeLayer(p: Props) {
   const pointsOf = (item: LayerItem): Drag => {
     const host = item.host ?? whole;
     const inner = { width: host.width, height: host.height };
-    if (item.shape!.kind === "arrow") {
+    if (isLine(item.shape!.kind)) {
       const line = arrowLine(item.shape!, inner);
       return { from: { x: host.left + line.x1, y: host.top + line.y1 }, to: { x: host.left + line.x2, y: host.top + line.y2 } };
     }
@@ -143,41 +145,43 @@ export function ShapeLayer(p: Props) {
     if (shifted > 2) p.onEdit?.(id, finished);
   };
 
+  /**
+   * One drawing, from the outline the injected script also uses. It is grabbed by an invisible
+   * wide stroke along its edge, and by its inside only when the inside is painted — an empty
+   * box over an article must not stop the words under it being selected.
+   */
   const draw = (shape: Shape, host: Box, key: string, item?: LayerItem) => {
     const inner = { width: host.width, height: host.height };
-    const stroke = item ? `hl-${item.color}` : `hl-${p.color}`;
-    const classes = `shape ${stroke} ${item && p.selectedId === item.id ? "selected" : ""} ${item ? "" : "drawing"}`;
-    const common = item && !p.tool
-      ? { className: classes, onPointerDown: startEdit(item, "move" as Grab), onPointerMove: moveEdit, onPointerUp: endEdit }
-      : { className: classes };
-    if (shape.kind === "arrow") {
-      const line = arrowLine(shape, inner);
-      const head = arrowHead(shape, inner).map((pt) => `${pt.x + host.left},${pt.y + host.top}`).join(" ");
-      return (
-        <g key={key} {...common}>
-          <line x1={line.x1 + host.left} y1={line.y1 + host.top} x2={line.x2 + host.left} y2={line.y2 + host.top} />
-          <polyline points={head} fill="none" />
-        </g>
-      );
-    }
-    const box = toBox(shape, inner);
-    if (shape.kind === "oval") {
-      return (
-        <ellipse
-          key={key}
-          {...common}
-          cx={host.left + box.left + box.width / 2}
-          cy={host.top + box.top + box.height / 2}
-          rx={Math.max(1, box.width / 2)}
-          ry={Math.max(1, box.height / 2)}
+    const own = item?.color ?? p.color;
+    const style = resolveStyle(shape);
+    const stroke = paint(style.stroke, own);
+    const fill = isLine(shape.kind) ? null : paint(style.fill, own);
+    const d = shapePath(shape, inner);
+    const selected = Boolean(item && p.selectedId === item.id);
+    const grab = item && !p.tool ? { onPointerDown: startEdit(item, "move" as Grab), onPointerMove: moveEdit, onPointerUp: endEdit } : {};
+    return (
+      <g key={key} className={`shape ${selected ? "selected" : ""} ${item ? "" : "drawing"}`} transform={`translate(${host.left} ${host.top})`} {...grab}>
+        <path
+          className={`shape-body ${fill && style.fillOpacity > 0 ? "filled" : ""}`}
+          d={d}
+          fill={fill ?? "none"}
+          fillOpacity={style.fillOpacity}
+          stroke={stroke ?? "none"}
+          strokeWidth={style.width}
+          strokeDasharray={dashArray(style.dash, style.width) || undefined}
         />
-      );
-    }
-    return <rect key={key} {...common} x={host.left + box.left} y={host.top + box.top} width={Math.max(1, box.width)} height={Math.max(1, box.height)} rx={3} />;
+        {shapeHeads(shape, inner).map((head, i) => (
+          <path key={i} className="shape-head" d={head} fill={stroke ?? "none"} stroke={stroke ?? "none"} strokeWidth={1} />
+        ))}
+        {selected && <path className="shape-selection" d={d} />}
+        {item && <path className="shape-hit" d={d} strokeWidth={Math.max(12, style.width + 8)} />}
+      </g>
+    );
   };
 
-  /** A drawing being dragged about is drawn from the pointer, in the layer's own pixels. */
-  const asShape = (points: Drag, kind: ShapeKind): Shape => ({
+  /** A drawing being dragged about is drawn from the pointer, in the layer's own pixels, in its own paint. */
+  const asShape = (points: Drag, kind: ShapeKind, style?: ShapeStyle): Shape => ({
+    ...style,
     kind,
     x: points.from.x / (size.width || 1),
     y: points.from.y / (size.height || 1),
@@ -185,13 +189,13 @@ export function ShapeLayer(p: Props) {
     h: (points.to.y - points.from.y) / (size.height || 1),
   });
 
-  const preview = drag && p.tool ? asShape(drag, p.tool) : null;
+  const preview = drag && p.tool ? asShape(drag, p.tool, p.toolStyle) : null;
 
   /** The grips on the chosen drawing: its corners, or the two ends of an arrow. */
   const handles = (item: LayerItem) => {
     if (!p.onEdit || p.tool || p.selectedId !== item.id) return null;
     const points = edit?.id === item.id ? { from: edit.from, to: edit.to } : pointsOf(item);
-    const spots: { grab: Grab; at: Point; cursor: string }[] = item.shape!.kind === "arrow"
+    const spots: { grab: Grab; at: Point; cursor: string }[] = isLine(item.shape!.kind)
       ? [
           { grab: "from", at: points.from, cursor: "move" },
           { grab: "to", at: points.to, cursor: "move" },
@@ -231,13 +235,33 @@ export function ShapeLayer(p: Props) {
           // The element being dragged keeps its identity, or the pointer capture that follows
           // the drag would be lost with the node and the drawing would stop moving.
           const pulling = edit?.id === item.id;
-          const shape = pulling ? asShape({ from: edit!.from, to: edit!.to }, item.shape.kind) : item.shape;
+          const shape = pulling ? asShape({ from: edit!.from, to: edit!.to }, item.shape.kind, item.shape) : item.shape;
           return draw(shape, pulling ? whole : item.host ?? whole, item.id, item);
         })}
         {preview && draw(preview, whole, "preview")}
         {p.items.map((item) => (item.shape ? handles(item) : null))}
       </svg>
-      {p.showNotes !== false && p.items.filter((i) => i.comment?.trim() || i.linked).map((item) => {
+      {p.items.map((item) => {
+        if (item.shape?.kind !== "callout" || !item.comment?.trim()) return null;
+        // A callout says its note on the source itself, which is the point of drawing one.
+        const pulling = edit?.id === item.id;
+        const shape = pulling ? asShape({ from: edit!.from, to: edit!.to }, "callout", item.shape) : item.shape;
+        const host = pulling ? whole : item.host ?? whole;
+        const body = calloutBody(shape, { width: host.width, height: host.height });
+        const style = resolveStyle(shape);
+        const fill = paint(style.fill, item.color);
+        const solid = Boolean(fill && style.fillOpacity >= 0.5);
+        return (
+          <div
+            key={`${item.id}:text`}
+            className={`callout-text ${solid ? "" : "on-page"}`}
+            style={{ left: host.left + body.left, top: host.top + body.top, width: body.width, height: body.height, fontSize: calloutFont(body, item.comment), color: solid ? inkOn(fill!) : undefined }}
+          >
+            {item.comment}
+          </div>
+        );
+      })}
+      {p.showNotes !== false && p.items.filter((i) => (i.shape?.kind === "callout" ? false : i.comment?.trim()) || i.linked).map((item) => {
         const host = item.host ?? whole;
         const open = (e: React.SyntheticEvent) => {
           e.stopPropagation();

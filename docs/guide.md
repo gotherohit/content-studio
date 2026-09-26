@@ -254,12 +254,36 @@ Bigger circles have more highlights and links.
 
 ### Drawing on a source
 
-Some things are easier pointed at than quoted. The pencil in the Source toolbar draws a
-**rectangle**, an **oval** or an **arrow** straight onto the source.
+Some things are easier pointed at than quoted. The pencil in the Source toolbar draws
+straight onto the source:
 
-* Choose a shape and a colour from the pencil menu, then drag on the source. Let go and the
-  usual note box appears, ready for typing, so the drawing can carry a comment like any
-  highlight.
+| Tool | What it is for |
+|---|---|
+| **Highlighter** | A see-through wash with no border — the way to highlight part of a picture, a slide or a PDF page, where there is no text to select |
+| **Rectangle, Oval, Triangle, Diamond, Star** | Boxing in, circling and flagging |
+| **Callout** | A speech-bubble box that shows its note on the source itself |
+| **Line, Arrow, Double arrow** | Pointing, underlining, and "this relates to that" |
+
+* Choose a tool from the pencil menu, then drag on the source. Let go and the usual note box
+  appears, ready for typing; `Enter` keeps the colour you drew with, or click another. A
+  drawing is offered all nine colours — yellow, green, pink, blue, red, orange, purple, black
+  and white — while a passage of text keeps the four soft ones that words stay readable through.
+* **Style it like PowerPoint.** Below the tools the menu sets **Colour**, **Fill** (none, the
+  drawing's own colour, or any other), fill **Opacity**, **Border** colour or none, border
+  **Width** and **Style** (solid, dashed or dotted). The menu stays open after you choose a
+  tool, so you can set it up before drawing; it closes as you start to draw.
+  - With nothing chosen, the settings are for the **next** drawing of that kind, and each kind
+    remembers its own — red dashed rectangles and yellow highlighters can both be the default.
+    They are kept with the project.
+  - With a drawing chosen (click it with the pointer), the same settings **restyle that
+    drawing** — the menu says "Chosen rectangle".
+* **Highlighting a picture.** Text on an image cannot be selected, so a text highlight cannot
+  land there. Use the **Highlighter**: it is a filled rectangle at 35 per cent opacity with no
+  border, which looks and behaves like a highlight — card, comment, links, beats — and its
+  opacity can be changed like any fill.
+* **A callout shows its note.** Type the note when you draw it and it appears inside the
+  bubble, sized to fit; resize the callout and the words resize with it. It carries a marker
+  only when it is linked, since its note is already on screen.
 * **Draw around what you mean.** A drawing belongs to whatever it mostly covers — the paragraph,
   the picture, the page — and may reach a little outside it, so a box drawn around a paragraph
   starting in the gap above it is a box around that paragraph, and stays one when the pane
@@ -288,7 +312,8 @@ Some things are easier pointed at than quoted. The pencil in the Source toolbar 
   preference. Long cards scroll within the pane. Focus a handle and use Left/Right to resize,
   or double-click it (Home on the keyboard) to return to the default width.
 * **Move and resize it afterwards.** Click a drawing to pick it up: grips appear at its
-  corners, or at both ends of an arrow. Drag the outline to move the whole thing, drag a grip
+  corners, or at both ends of a line or arrow. A filled drawing can be picked up anywhere
+  inside it; an empty one by its edge, so the text under an empty box can still be selected. Drag the outline to move the whole thing, drag a grip
   to resize it. Dragged onto a different paragraph it belongs to that paragraph from then on;
   dragged into the white space of a page it belongs to the page itself.
 * **`Delete` removes the drawing you are holding.** A quoted passage keeps to the bin on its

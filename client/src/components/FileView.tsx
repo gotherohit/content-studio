@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
-import type { Highlight, HighlightColor, Shape, ShapeKind, Source } from "../types";
+import type { Highlight, HighlightColor, Shape, ShapeKind, Source, ShapeStyle } from "../types";
 import { applyHighlights, captureSelection } from "../highlighter";
 import { HighlightPopup } from "./HighlightPopup";
 import { NotebookView } from "./NotebookView";
@@ -9,7 +9,7 @@ import { DeckView } from "./DeckView";
 import { PdfView } from "./PdfView";
 import { ShapeLayer, type LayerItem } from "./ShapeLayer";
 import { boxWithin } from "../../../server/public/shapes-dom.js";
-import { fromDrag, shapeHighlights, textHighlights } from "../shapes";
+import { fromDrag, shapeHighlights, textHighlights, PALETTE } from "../shapes";
 import type { AppConfig } from "../api";
 
 interface Props {
@@ -29,6 +29,8 @@ interface Props {
   presenting: boolean;
   tool?: ShapeKind | null;
   drawColor?: HighlightColor;
+  /** How the armed tool paints, so the drawing in progress looks like the one that will be kept. */
+  drawStyle?: ShapeStyle;
   showNotes?: boolean;
   linkedIds?: string[];
   onNote?: (id: string, at: { x: number; y: number }) => void;
@@ -167,6 +169,7 @@ export function FileView(p: Props) {
         scrollNonce={p.scrollNonce}
         tool={p.tool}
         drawColor={p.drawColor}
+        drawStyle={p.drawStyle}
         showNotes={p.showNotes}
         linkedIds={p.linkedIds}
         onNote={p.onNote}
@@ -184,6 +187,7 @@ export function FileView(p: Props) {
             items={shapeHighlights(source.highlights).map((h) => ({ id: h.id, shape: h.shape!, color: h.color, comment: h.comment, linked: p.linkedIds?.includes(h.id) }))}
             tool={p.tool ?? null}
             color={p.drawColor ?? "yellow"}
+            toolStyle={p.drawStyle}
             selectedId={p.scrollToId}
             showNotes={p.showNotes !== false && !p.presenting}
             onSelect={p.onSelectHighlight}
@@ -192,7 +196,7 @@ export function FileView(p: Props) {
               const frame = imageFrame.current;
               const was = source.highlights.find((h) => h.id === id);
               const shape = frame && was?.shape && fromDrag(was.shape.kind, drag.from, drag.to, frame.getBoundingClientRect());
-              if (was && shape) p.onUpdateHighlight?.({ ...was, shape });
+              if (was && shape) p.onUpdateHighlight?.({ ...was, shape: { ...was.shape, ...shape } });
             }}
             onDraw={(drag) => {
               const frame = imageFrame.current;
@@ -209,7 +213,7 @@ export function FileView(p: Props) {
               });
             }}
           />
-{popup && <HighlightPopup selectionText={popup.shape ? undefined : popup.anchor?.text} x={popup.x} y={popup.y} flip={popup.flip} onCommit={commit} onCancel={() => setPopup(null)} />}
+{popup && <HighlightPopup selectionText={popup.shape ? undefined : popup.anchor?.text} drawing={popup.shape ? p.drawColor ?? "yellow" : undefined} palette={PALETTE} x={popup.x} y={popup.y} flip={popup.flip} onCommit={commit} onCancel={() => setPopup(null)} />}
         </div>
       </div>
     );
@@ -276,7 +280,7 @@ export function FileView(p: Props) {
           onNote={p.onNote}
         />
       </div>
-      {popup && <HighlightPopup selectionText={popup.shape ? undefined : popup.anchor?.text} x={popup.x} y={popup.y} flip={popup.flip} onCommit={commit} onCancel={() => setPopup(null)} />}
+      {popup && <HighlightPopup selectionText={popup.shape ? undefined : popup.anchor?.text} drawing={popup.shape ? p.drawColor ?? "yellow" : undefined} palette={PALETTE} x={popup.x} y={popup.y} flip={popup.flip} onCommit={commit} onCancel={() => setPopup(null)} />}
     </div>
   );
 }

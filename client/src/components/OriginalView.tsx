@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { Highlight, HighlightColor, ReadingPosition, Shape, ShapeKind, Source } from "../types";
+import type { Highlight, HighlightColor, ReadingPosition, Shape, ShapeKind, Source, ShapeStyle } from "../types";
 import { HighlightPopup } from "./HighlightPopup";
+import { PALETTE } from "../shapes";
 import { samePage } from "../../../server/public/pages.js";
 
 type Anchor = { text: string; prefix: string; suffix: string };
@@ -28,6 +29,7 @@ interface Props {
   /** The drawing tool in the toolbar; while one is out the page itself cannot be clicked. */
   tool?: ShapeKind | null;
   drawColor?: HighlightColor;
+  drawStyle?: ShapeStyle;
   showNotes?: boolean;
   /** Passages that are one end of a link, which earn a marker even without a note. */
   linkedIds?: string[];
@@ -43,7 +45,7 @@ export function proxiedUrl(url: string, apiPort: number, scripts: boolean): stri
 }
 
 /** The page exactly as the site serves it, running its own scripts, with highlights layered on top. */
-export function OriginalView({ source, apiPort, scripts, onAddHighlight, onUpdateHighlight, onDeleteHighlight, onSelectHighlight, onOpenLink, page, onPage, scrollToId, scrollNonce, position, restoreNonce, onPosition, presenting, onPresentationKey, tool, drawColor, showNotes, linkedIds, onNote }: Props) {
+export function OriginalView({ source, apiPort, scripts, onAddHighlight, onUpdateHighlight, onDeleteHighlight, onSelectHighlight, onOpenLink, page, onPage, scrollToId, scrollNonce, position, restoreNonce, onPosition, presenting, onPresentationKey, tool, drawColor, drawStyle, showNotes, linkedIds, onNote }: Props) {
   const frame = useRef<HTMLIFrameElement>(null);
   const [ready, setReady] = useState(false);
   const [restoredNonce, setRestoredNonce] = useState<number | null>(null);
@@ -53,8 +55,8 @@ export function OriginalView({ source, apiPort, scripts, onAddHighlight, onUpdat
   // page. Deriving it from `target` would reload a page the frame has just arrived at.
   const [frameUrl, setFrameUrl] = useState(target);
   const shown = useRef(target);
-  const latest = useRef({ position, restoreNonce, onPosition, presenting, onPresentationKey, target, onPage, tool, drawColor, showNotes, onNote, scrollToId, onDeleteHighlight });
-  latest.current = { position, restoreNonce, onPosition, presenting, onPresentationKey, target, onPage, tool, drawColor, showNotes, onNote, scrollToId, onDeleteHighlight };
+  const latest = useRef({ position, restoreNonce, onPosition, presenting, onPresentationKey, target, onPage, tool, drawColor, drawStyle, showNotes, onNote, scrollToId, onDeleteHighlight });
+  latest.current = { position, restoreNonce, onPosition, presenting, onPresentationKey, target, onPage, tool, drawColor, drawStyle, showNotes, onNote, scrollToId, onDeleteHighlight };
   const [popup, setPopup] = useState<{ x: number; y: number; flip: boolean; anchor: Anchor; shape?: Shape; onImage?: string } | null>(null);
   // Once something has been typed into the note, only the person may close the card: the page
   // carries on scrolling, loading and firing events underneath, and a comment thrown away
@@ -79,7 +81,7 @@ export function OriginalView({ source, apiPort, scripts, onAddHighlight, onUpdat
         post({ type: "restorePosition", position: latest.current.position, nonce: latest.current.restoreNonce, page: latest.current.target });
         post({ type: "presentation", enabled: latest.current.presenting });
         post({ type: "notes", show: latest.current.showNotes !== false && !latest.current.presenting });
-        post({ type: "draw", tool: latest.current.tool ?? null, color: latest.current.drawColor });
+        post({ type: "draw", tool: latest.current.tool ?? null, color: latest.current.drawColor, style: latest.current.drawStyle });
         post({ type: "selected", id: latest.current.scrollToId });
       }
       if (m.type === "navigated" && m.url) arrived(m.url);
@@ -109,7 +111,7 @@ export function OriginalView({ source, apiPort, scripts, onAddHighlight, onUpdat
       if (m.type === "shapeEdited" && m.shape) {
         const was = source.highlights.find((h) => h.id === m.id);
         // Moved onto other text, it belongs to that text now.
-        if (was) onUpdateHighlight?.({ ...was, ...(m.anchor ?? { text: "", prefix: "", suffix: "" }), shape: m.shape, onImage: m.onImage });
+        if (was) onUpdateHighlight?.({ ...was, ...(m.anchor ?? { text: "", prefix: "", suffix: "" }), shape: { ...was.shape, ...m.shape }, onImage: m.onImage });
       }
       if (m.type === "noteClick") {
         const host = frame.current!.getBoundingClientRect();
@@ -145,7 +147,7 @@ export function OriginalView({ source, apiPort, scripts, onAddHighlight, onUpdat
   }, [target]);
   useLayoutEffect(() => { if (ready && samePage(shown.current, target)) post({ type: "restorePosition", position, nonce: restoreNonce, page: target }); }, [restoreNonce, ready]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (ready) post({ type: "presentation", enabled: presenting }); }, [presenting, ready]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { if (ready) post({ type: "draw", tool: tool ?? null, color: drawColor }); }, [tool, drawColor, ready]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (ready) post({ type: "draw", tool: tool ?? null, color: drawColor, style: drawStyle }); }, [tool, drawColor, drawStyle, ready]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (ready) post({ type: "notes", show: showNotes !== false && !presenting }); }, [showNotes, presenting, ready]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { setReady(false); show(null); }, [source.id, scripts]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
@@ -180,7 +182,7 @@ export function OriginalView({ source, apiPort, scripts, onAddHighlight, onUpdat
         title={source.title}
         sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals"
       />
-{popup && <HighlightPopup selectionText={popup.shape ? undefined : popup.anchor?.text} x={popup.x} y={popup.y} flip={popup.flip} onCommit={commit} onCancel={() => show(null)} onType={() => (noteTyped.current = true)} />}
+{popup && <HighlightPopup selectionText={popup.shape ? undefined : popup.anchor?.text} drawing={popup.shape ? drawColor ?? "yellow" : undefined} palette={PALETTE} x={popup.x} y={popup.y} flip={popup.flip} onCommit={commit} onCancel={() => show(null)} onType={() => (noteTyped.current = true)} />}
     </div>
   );
 }

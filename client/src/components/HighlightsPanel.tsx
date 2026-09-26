@@ -1,6 +1,6 @@
 import { ArrowLeft, ArrowRight, ClipboardCopy, Link2, Trash2, X } from "lucide-react";
-import { shapeLabel } from "../shapes";
-import type { Highlight, Source } from "../types";
+import { PALETTE, shapeLabel } from "../shapes";
+import { TEXT_COLORS, type Highlight, type Source } from "../types";
 import { linksFor, relationOf, type LinkEnd, type SourceLink } from "../links";
 
 interface Props {
@@ -112,8 +112,9 @@ export function HighlightsPanel({ source, sources, links, selectedId, onSelect, 
             {chips.length > 0 && <div className="link-list">{chips}</div>}
             <div className="row between" onClick={(e) => e.stopPropagation()}>
               <div className="hl-colors">
-                {(["yellow", "green", "pink", "blue"] as const).map((c) => (
-                  <button key={c} className={`swatch hl-${c} ${h.color === c ? "active" : ""}`} onClick={() => onUpdate({ ...h, color: c })} />
+                {/* A drawing is painted in strong colours from the whole palette; a passage in the soft four. */}
+                {(h.shape ? PALETTE : TEXT_COLORS).map((c) => (
+                  <button key={c} title={c} className={`swatch hl-${c} ${h.shape ? "strong small" : ""} ${h.color === c ? "active" : ""}`} onClick={() => onUpdate({ ...h, color: c })} />
                 ))}
               </div>
               <div className="row">

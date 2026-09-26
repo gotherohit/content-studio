@@ -2,6 +2,26 @@
 
 What changed in each release, newest first. Versions are the ones the app updates itself to.
 
+## 0.29.0
+
+- **Many more shapes.** Besides the rectangle, oval and arrow, the pencil now draws a
+  highlighter, triangle, diamond, star, callout, plain line and double-headed arrow.
+- **Styling, the way PowerPoint does it.** Fill (none, the drawing's own colour or any other),
+  fill opacity, border colour or none, border width, and solid, dashed or dotted borders. With
+  a drawing chosen, the pencil menu restyles it; otherwise it sets up the next drawing of that
+  kind, and each kind remembers its own look, kept with the project.
+- **Nine colours for drawings**: red, orange, purple, black and white join yellow, green, pink
+  and blue, so a mistake can be circled in red and a busy screenshot annotated in black or
+  white. Text highlights keep the four soft colours.
+- **Highlighting pictures.** The Highlighter is a see-through wash with no border — a highlight
+  for images, slides and PDF pages, where there is no text to select.
+- **Callouts show their note on the source**, sized to fit the bubble.
+- Filled drawings can be picked up anywhere inside them; lines and outlines have a wider edge
+  to grab. Moving or resizing a drawing keeps its style.
+- Choosing a tool no longer closes the pencil menu, so it can be styled before drawing, and the
+  menu closes as soon as drawing starts.
+- Drawings made before this release look exactly as they did.
+
 ## 0.28.0
 
 - **Research map investigation.** Search and centre sources, inspect a source's incoming and outgoing evidence or a connection's exact passages and notes, and create a new source link directly from the map. Single-click inspects; double-click opens the source or nearer linked passage. Relationship chips filter the graph and show counts; Focus shows one or two hops around a source. Trace reveals the shortest visible connection between two sources, lets you inspect each step, reports when filters leave no route, and copies the evidence trail with source URLs and passage quotes as Markdown.

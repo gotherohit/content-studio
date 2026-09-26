@@ -1,5 +1,12 @@
 import type { SourceLink } from "./links";
-export type HighlightColor = "yellow" | "green" | "pink" | "blue";
+/**
+ * The first four are the passage colours a text highlight is offered. The rest are for
+ * drawings — red for a mistake, black or white to read on a busy screenshot — and a drawing's
+ * card, marker and map dot carry its colour like any other.
+ */
+export type HighlightColor = "yellow" | "green" | "pink" | "blue" | "red" | "orange" | "purple" | "black" | "white";
+/** The colours a text highlight is offered: soft enough to read the words through. */
+export const TEXT_COLORS: HighlightColor[] = ["yellow", "green", "pink", "blue"];
 
 export interface Highlight {
   id: string;
@@ -23,14 +30,32 @@ export interface Highlight {
   blocks?: { text: string; prefix: string; suffix: string }[];
 }
 
-export type ShapeKind = "rect" | "oval" | "arrow";
+export type ShapeKind =
+  | "marker" | "rect" | "oval" | "triangle" | "diamond" | "star" | "callout"
+  | "line" | "arrow" | "darrow";
+
+/** A palette colour, the drawing's own colour, or nothing at all. */
+export type ShapePaint = HighlightColor | "match" | "none";
+export type ShapeDash = "solid" | "dashed" | "dotted";
+
+/** How a drawing is painted. Each field is optional: a drawing without it keeps its kind's default. */
+export interface ShapeStyle {
+  fill?: ShapePaint;
+  /** 0 to 1. */
+  fillOpacity?: number;
+  stroke?: ShapePaint;
+  /** Stroke width in pixels. */
+  width?: number;
+  dash?: ShapeDash;
+}
 
 /**
  * A drawn annotation, in fractions of whatever it was drawn on: a PDF page, an image, or the
- * paragraph its highlight is anchored to. An arrow runs from (x, y) by (w, h), so its width
- * and height may be negative; a rectangle and an oval never are.
+ * paragraph its highlight is anchored to. A line runs from (x, y) by (w, h), so its width and
+ * height may be negative; a box never is. The style travels with the geometry, so a beat that
+ * shows the drawing shows it painted the same way.
  */
-export interface Shape {
+export interface Shape extends ShapeStyle {
   kind: ShapeKind;
   x: number;
   y: number;
@@ -227,6 +252,8 @@ export interface Project {
     filesReadOnly?: boolean;
     /** The folder JupyterLab is rooted at; the project's own folder when unset. */
     jupyterRoot?: string;
+    /** How each kind of drawing is painted when it is drawn next, as last set in the drawing menu. */
+    drawStyles?: Partial<Record<ShapeKind, ShapeStyle>>;
   };
 }
 

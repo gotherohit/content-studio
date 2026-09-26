@@ -3,11 +3,11 @@ import { GlobalWorkerOptions, TextLayer, getDocument, type PDFDocumentProxy, typ
 import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import "pdfjs-dist/web/pdf_viewer.css";
 import { Minus, Plus } from "lucide-react";
-import type { Highlight, HighlightColor, Shape, ShapeKind } from "../types";
+import type { Highlight, HighlightColor, Shape, ShapeKind, ShapeStyle } from "../types";
 import { applyHighlights, captureSelection } from "../highlighter";
 import { HighlightPopup } from "./HighlightPopup";
 import { ShapeLayer, type LayerItem } from "./ShapeLayer";
-import { fromDrag, shapeHighlights, textHighlights } from "../shapes";
+import { fromDrag, shapeHighlights, textHighlights, PALETTE } from "../shapes";
 import { boxWithin } from "../../../server/public/shapes-dom.js";
 import { PAGE_GAP, clampPage, fitScale, highlightsOnPage, layoutPages, offsetOf, pageAt, pageOf, stepZoom, visiblePages, type PageSize } from "../pdf";
 
@@ -42,6 +42,7 @@ interface Props {
   /** The drawing tool in the toolbar, and the colour it draws in. */
   tool?: ShapeKind | null;
   drawColor?: HighlightColor;
+  drawStyle?: ShapeStyle;
   showNotes?: boolean;
   linkedIds?: string[];
   onNote?: (id: string, at: { x: number; y: number }) => void;
@@ -377,6 +378,7 @@ export function PdfView(p: Props) {
               ]}
               tool={p.onAddHighlight ? p.tool ?? null : null}
               color={p.drawColor ?? "yellow"}
+              toolStyle={p.drawStyle}
               selectedId={p.scrollToId}
               showNotes={p.showNotes !== false && !p.presenting}
               onSelect={(id) => p.onSelectHighlight?.(id)}
@@ -384,7 +386,7 @@ export function PdfView(p: Props) {
               onEdit={(id, drag) => {
                 const was = highlights.find((h) => h.id === id);
                 const shape = was?.shape && fromDrag(was.shape.kind, drag.from, drag.to, { width: layout.widths[i], height: layout.heights[i] });
-                if (was && shape) p.onUpdateHighlight?.({ ...was, shape });
+                if (was && shape) p.onUpdateHighlight?.({ ...was, shape: { ...was.shape, ...shape } });
               }}
               onDraw={(drag) => {
                 const shape = fromDrag(p.tool!, drag.from, drag.to, { width: layout.widths[i], height: layout.heights[i] });
@@ -401,7 +403,7 @@ export function PdfView(p: Props) {
             />
           </div>
         ))}
-{popup && <HighlightPopup selectionText={popup.shape ? undefined : popup.anchor?.text} x={popup.x} y={popup.y} flip={popup.flip} onCommit={commit} onCancel={() => setPopup(null)} />}
+{popup && <HighlightPopup selectionText={popup.shape ? undefined : popup.anchor?.text} drawing={popup.shape ? p.drawColor ?? "yellow" : undefined} palette={PALETTE} x={popup.x} y={popup.y} flip={popup.flip} onCommit={commit} onCancel={() => setPopup(null)} />}
       </div>
       {!p.presenting && !p.slideshow && count > 0 && (
         <div className="pdf-zoom">

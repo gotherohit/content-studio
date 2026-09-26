@@ -880,6 +880,8 @@ export default function App() {
             onToggleScripts={() => paneSource && updateSource(paneSource.id, (s) => ({ ...s, scripts: s.scripts === false }))}
             onAddHighlight={(h) => paneSource && addHighlight(paneSource.id, h)}
             onUpdateHighlight={(h) => paneSource && updateHighlight(paneSource.id, h)}
+            drawStyles={project.settings.drawStyles}
+            onDrawStyles={(drawStyles) => mutate((p) => ({ ...p, settings: { ...p.settings, drawStyles } }))}
             onDeleteHighlight={(id) => paneSource && deleteHighlight(paneSource.id, id)}
             onSelectHighlight={(id) => { setNavigationPane(i); if (paneSource) selectFromPage(paneSource.id, id); }}
             onOpenLink={(link, newTab) => openLink(link, newTab, paneSource?.id)}

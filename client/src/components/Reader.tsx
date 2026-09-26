@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import DOMPurify from "dompurify";
-import type { Highlight, HighlightColor, Shape, ShapeKind, Source } from "../types";
+import type { Highlight, HighlightColor, Shape, ShapeKind, Source, ShapeStyle } from "../types";
 import { applyHighlights, captureSelection } from "../highlighter";
 import { HighlightPopup } from "./HighlightPopup";
 import { ShapeLayer, type LayerItem } from "./ShapeLayer";
-import { fromDrag, textHighlights } from "../shapes";
+import { fromDrag, textHighlights, PALETTE } from "../shapes";
 import { anchorForRect, boxWithin, hostFor } from "../../../server/public/shapes-dom.js";
 
 interface Props {
@@ -17,13 +17,14 @@ interface Props {
   fontScale: number;
   tool?: ShapeKind | null;
   drawColor?: HighlightColor;
+  drawStyle?: ShapeStyle;
   showNotes?: boolean;
   linkedIds?: string[];
   onNote?: (id: string, at: { x: number; y: number }) => void;
 }
 
 /** Clean, text-only rendering of the article. */
-export function Reader({ source, scrollToId, scrollNonce, onAddHighlight, onUpdateHighlight, onSelectHighlight, fontScale, tool, drawColor, showNotes, linkedIds, onNote }: Props) {
+export function Reader({ source, scrollToId, scrollNonce, onAddHighlight, onUpdateHighlight, onSelectHighlight, fontScale, tool, drawColor, drawStyle, showNotes, linkedIds, onNote }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   // The layer covers the stage, so every box it is given is measured against the stage too.
   const stageRef = useRef<HTMLDivElement>(null);
@@ -163,6 +164,7 @@ export function Reader({ source, scrollToId, scrollNonce, onAddHighlight, onUpda
           items={items}
           tool={tool ?? null}
           color={drawColor ?? "yellow"}
+          toolStyle={drawStyle}
           selectedId={scrollToId}
           showNotes={showNotes}
           onSelect={onSelectHighlight}
@@ -179,11 +181,11 @@ export function Reader({ source, scrollToId, scrollNonce, onAddHighlight, onUpda
             const made = was?.shape && shapeFrom(drag, was.shape.kind);
             if (!was || !made) return;
             // Dragged over a different paragraph, it belongs to that one now.
-            onUpdateHighlight?.({ ...was, ...made.anchor, shape: made.shape, onImage: made.onImage });
+            onUpdateHighlight?.({ ...was, ...made.anchor, shape: { ...was.shape, ...made.shape }, onImage: made.onImage });
           }}
         />
       </div>
-{popup && <HighlightPopup selectionText={popup.shape ? undefined : popup.anchor?.text} x={popup.x} y={popup.y} flip={popup.flip} onCommit={commit} onCancel={() => setPopup(null)} />}
+{popup && <HighlightPopup selectionText={popup.shape ? undefined : popup.anchor?.text} drawing={popup.shape ? drawColor ?? "yellow" : undefined} palette={PALETTE} x={popup.x} y={popup.y} flip={popup.flip} onCommit={commit} onCancel={() => setPopup(null)} />}
     </div>
   );
 }

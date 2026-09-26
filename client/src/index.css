@@ -27,6 +27,16 @@
   --hl-green-bar: #2fae51;
   --hl-pink-bar: #dd5f92;
   --hl-blue-bar: #3d84dd;
+  --hl-red: #ffd2d4;
+  --hl-orange: #ffdfb8;
+  --hl-purple: #e2d8ff;
+  --hl-black: #d5d8dd;
+  --hl-white: #f4f5f7;
+  --hl-red-bar: #e5484d;
+  --hl-orange-bar: #e8820c;
+  --hl-purple-bar: #8b5cf6;
+  --hl-black-bar: #1f2328;
+  --hl-white-bar: #ffffff;
 
   --code-bg: #12151c;
   --code-text: #dfe3ec;
@@ -65,6 +75,11 @@
   --hl-green: #1d5c2c;
   --hl-pink: #6b2b47;
   --hl-blue: #1e416f;
+  --hl-red: #6b2326;
+  --hl-orange: #6b4410;
+  --hl-purple: #3d2f6b;
+  --hl-black: #2a2e35;
+  --hl-white: #5a5f68;
 
   --code-bg: #0a0c11;
   --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
@@ -359,6 +374,11 @@ mark.hl:hover { filter: brightness(0.94); }
 .hl-green { background: var(--hl-green); --hl: var(--hl-green); }
 .hl-pink { background: var(--hl-pink); --hl: var(--hl-pink); }
 .hl-blue { background: var(--hl-blue); --hl: var(--hl-blue); }
+.hl-red { background: var(--hl-red); --hl: var(--hl-red); }
+.hl-orange { background: var(--hl-orange); --hl: var(--hl-orange); }
+.hl-purple { background: var(--hl-purple); --hl: var(--hl-purple); }
+.hl-black { background: var(--hl-black); --hl: var(--hl-black); }
+.hl-white { background: var(--hl-white); --hl: var(--hl-white); }
 
 /* ============================================================
    Highlight popup + cards
@@ -382,6 +402,11 @@ mark.hl:hover { filter: brightness(0.94); }
 .map-dot.hl-green { fill: var(--hl-green-bar); }
 .map-dot.hl-pink { fill: var(--hl-pink-bar); }
 .map-dot.hl-blue { fill: var(--hl-blue-bar); }
+.map-dot.hl-red { fill: var(--hl-red-bar); }
+.map-dot.hl-orange { fill: var(--hl-orange-bar); }
+.map-dot.hl-purple { fill: var(--hl-purple-bar); }
+.map-dot.hl-black { fill: var(--hl-black-bar); }
+.map-dot.hl-white { fill: var(--hl-white-bar); }
 
 /* Waiting for the other end of a link to be chosen in the source it points at. */
 .pick-bar {
@@ -406,6 +431,11 @@ mark.hl:hover { filter: brightness(0.94); }
 .note-pop.hl-green { border-left-color: var(--hl-green-bar); }
 .note-pop.hl-pink { border-left-color: var(--hl-pink-bar); }
 .note-pop.hl-blue { border-left-color: var(--hl-blue-bar); }
+.note-pop.hl-red { border-left-color: var(--hl-red-bar); }
+.note-pop.hl-orange { border-left-color: var(--hl-orange-bar); }
+.note-pop.hl-purple { border-left-color: var(--hl-purple-bar); }
+.note-pop.hl-black { border-left-color: var(--hl-black-bar); }
+.note-pop.hl-white { border-left-color: #b9bec6; }
 .note-pop-head { display: flex; align-items: center; gap: 6px; }
 .note-pop-head .ellipsis { flex: 1; min-width: 0; }
 .note-pop-comment { margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--text); white-space: pre-wrap; overflow-wrap: anywhere; }
@@ -418,6 +448,8 @@ mark.hl:hover { filter: brightness(0.94); }
 .note-pop-link .link-rel { color: var(--rel, var(--muted)); font-weight: 600; flex: none; }
 
 .hl-colors { display: flex; gap: 7px; align-items: center; }
+/* A drawing's card offers the whole palette; it wraps rather than pushing its buttons away. */
+.hl-card .hl-colors { flex-wrap: wrap; gap: 5px; min-width: 0; flex: 1; }
 .swatch {
   width: 22px; height: 22px; border-radius: 50%; padding: 0; flex: none;
   border: 2px solid transparent; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
@@ -425,6 +457,18 @@ mark.hl:hover { filter: brightness(0.94); }
 }
 .swatch:hover { transform: scale(1.12); }
 .swatch.active { border-color: var(--text); }
+/* A drawing is painted in the strong shade, so its swatch shows that shade. */
+.swatch.strong.hl-yellow { background: var(--hl-yellow-bar); }
+.swatch.strong.hl-green { background: var(--hl-green-bar); }
+.swatch.strong.hl-pink { background: var(--hl-pink-bar); }
+.swatch.strong.hl-blue { background: var(--hl-blue-bar); }
+.swatch.strong.hl-red { background: var(--hl-red-bar); }
+.swatch.strong.hl-orange { background: var(--hl-orange-bar); }
+.swatch.strong.hl-purple { background: var(--hl-purple-bar); }
+.swatch.strong.hl-black { background: var(--hl-black-bar); }
+.swatch.strong.hl-white { background: var(--hl-white-bar); }
+/* Black on a dark panel and white on a light one would vanish without a rim. */
+.swatch.strong.hl-black, .swatch.strong.hl-white { box-shadow: inset 0 0 0 1px rgba(127, 127, 127, 0.55); }
 
 .hl-card {
   border: 1px solid var(--border); border-left: 3px solid var(--border-strong);
@@ -437,6 +481,11 @@ mark.hl:hover { filter: brightness(0.94); }
 .hl-card.hl-green { border-left-color: var(--hl-green-bar); background: var(--panel); }
 .hl-card.hl-pink { border-left-color: var(--hl-pink-bar); background: var(--panel); }
 .hl-card.hl-blue { border-left-color: var(--hl-blue-bar); background: var(--panel); }
+.hl-card.hl-red { border-left-color: var(--hl-red-bar); background: var(--panel); }
+.hl-card.hl-orange { border-left-color: var(--hl-orange-bar); background: var(--panel); }
+.hl-card.hl-purple { border-left-color: var(--hl-purple-bar); background: var(--panel); }
+.hl-card.hl-black { border-left-color: var(--hl-black-bar); background: var(--panel); }
+.hl-card.hl-white { border-left-color: #b9bec6; background: var(--panel); }
 .hl-card.selected { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent); }
 .hl-card-head { display: flex; gap: 9px; align-items: flex-start; }
 .hl-index {
@@ -585,20 +634,34 @@ mark.hl:hover { filter: brightness(0.94); }
 .shape-layer { position: absolute; inset: 0; pointer-events: none; z-index: 3; }
 .shape-layer.drawing { pointer-events: auto; cursor: crosshair; }
 .shape-svg { position: absolute; left: 0; top: 0; overflow: visible; }
-.shape { fill: none; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; pointer-events: stroke; cursor: pointer; }
-.shape.drawing { stroke-dasharray: 5 4; opacity: 0.85; pointer-events: none; }
-.shape.selected { stroke-width: 4.5; }
+/* Paint comes from each drawing's own attributes, shared with the injected script. A drawing
+   is grabbed by a wide invisible stroke along its edge, and by its inside only when painted. */
+.shape { cursor: pointer; }
+.shape path { stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
+.shape .shape-body.filled { pointer-events: visiblePainted; }
+.shape .shape-hit { fill: none; stroke: transparent; pointer-events: stroke; }
+.shape .shape-selection { fill: none; stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: 4 3; }
+.shape.drawing { opacity: 0.8; }
+.shape.drawing path { pointer-events: none; }
+/* A callout says its note on the source; the text never takes the pointer from the shape. */
+.callout-text {
+  position: absolute; box-sizing: border-box; padding: 6px 9px; overflow: hidden; pointer-events: none;
+  font: 500 13px/1.35 system-ui, -apple-system, "Segoe UI", sans-serif; white-space: pre-wrap; overflow-wrap: anywhere;
+  display: flex; align-items: center; justify-content: center; text-align: center;
+}
+.callout-text.on-page { color: #1f2328; text-shadow: 0 0 3px #fff, 0 0 3px #fff; }
 /* The grips on a chosen drawing: its corners, or the two ends of an arrow. */
 .shape-handle { fill: var(--panel); stroke: currentColor; stroke-width: 2; pointer-events: all; }
 .shape-handle.hl-yellow { color: var(--hl-yellow-bar); }
 .shape-handle.hl-green { color: var(--hl-green-bar); }
 .shape-handle.hl-pink { color: var(--hl-pink-bar); }
 .shape-handle.hl-blue { color: var(--hl-blue-bar); }
+.shape-handle.hl-red { color: var(--hl-red-bar); }
+.shape-handle.hl-orange { color: var(--hl-orange-bar); }
+.shape-handle.hl-purple { color: var(--hl-purple-bar); }
+.shape-handle.hl-black { color: var(--hl-black-bar); }
+.shape-handle.hl-white { color: var(--hl-white-bar); }
 .shape-handle:hover { fill: var(--panel-2); }
-.shape.hl-yellow { stroke: var(--hl-yellow-bar); }
-.shape.hl-green { stroke: var(--hl-green-bar); }
-.shape.hl-pink { stroke: var(--hl-pink-bar); }
-.shape.hl-blue { stroke: var(--hl-blue-bar); }
 .shape-note {
   position: absolute; transform: translate(-40%, -55%); pointer-events: auto; touch-action: none;
   display: grid; place-items: center; width: 22px; height: 22px; padding: 0;
@@ -611,6 +674,11 @@ mark.hl:hover { filter: brightness(0.94); }
 .shape-note.hl-green { border-color: var(--hl-green-bar); }
 .shape-note.hl-pink { border-color: var(--hl-pink-bar); }
 .shape-note.hl-blue { border-color: var(--hl-blue-bar); }
+.shape-note.hl-red { border-color: var(--hl-red-bar); }
+.shape-note.hl-orange { border-color: var(--hl-orange-bar); }
+.shape-note.hl-purple { border-color: var(--hl-purple-bar); }
+.shape-note.hl-black { border-color: var(--hl-black-bar); }
+.shape-note.hl-white { border-color: var(--hl-white-bar); }
 
 .pdf-zoom {
   position: absolute; right: 14px; bottom: 14px; display: flex; align-items: center; gap: 2px;
@@ -1047,6 +1115,20 @@ mark.hl:hover { filter: brightness(0.94); }
   border: 1px solid var(--border); border-radius: var(--r-md); box-shadow: var(--shadow-2);
 }
 .draw-row { display: flex; align-items: center; gap: 4px; }
+.draw-grid { display: grid; grid-template-columns: repeat(6, 28px); gap: 3px; }
+.draw-style { display: flex; flex-direction: column; gap: 5px; padding: 6px 2px 2px; border-top: 1px solid var(--border); width: 292px; }
+.draw-style-head { padding: 0 2px 2px; }
+.draw-style-row { display: grid; grid-template-columns: 52px 1fr; align-items: center; gap: 6px; }
+.draw-style-label { font-size: 11.5px; color: var(--muted); }
+.draw-style-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 3px; }
+.draw-style-controls input[type="range"] { flex: 1; min-width: 90px; accent-color: var(--accent); }
+.draw-value { font-size: 11px; color: var(--muted); width: 34px; text-align: right; font-variant-numeric: tabular-nums; }
+.draw-dash { padding: 2px 4px; color: var(--muted); }
+.draw-dash.on { color: var(--text); background: var(--panel-2); }
+.swatch.small { width: 16px; height: 16px; border-width: 1.5px; }
+/* No paint: a white disc struck through, as every drawing program shows it. */
+.swatch-none { background: linear-gradient(to top right, transparent 45%, var(--danger) 45% 55%, transparent 55%), var(--panel); }
+.swatch-match { box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12), 0 0 0 1px var(--panel), 0 0 0 2px var(--border-strong); }
 .draw-notes {
   display: flex; align-items: center; gap: 7px; padding: 6px 8px; white-space: nowrap;
   background: transparent; border: 0; border-radius: var(--r-sm); color: var(--text);

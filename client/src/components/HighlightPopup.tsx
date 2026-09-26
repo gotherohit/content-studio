@@ -2,13 +2,21 @@ import { useLayoutEffect, useRef, useState } from "react";
 import { Copy, X } from "lucide-react";
 import type { HighlightColor } from "../types";
 
-const COLORS: HighlightColor[] = ["yellow", "green", "pink", "blue"];
+/** The passage colours. Kept here, not imported: this card is also rendered on its own. */
+const TEXT_COLORS: HighlightColor[] = ["yellow", "green", "pink", "blue"];
 
 interface Props {
   x: number;
   y: number;
   flip: boolean;
   selectionText?: string;
+  /**
+   * The colour a new drawing was drawn in. A drawing is offered the whole palette and Enter
+   * keeps the colour it was drawn with; a passage of text is offered the four soft ones.
+   */
+  drawing?: HighlightColor;
+  /** The colours a drawing is offered; the passage colours when absent. */
+  palette?: HighlightColor[];
   onCommit: (color: HighlightColor, comment: string) => void;
   onCancel: () => void;
   /** Something has been typed, so the surface underneath must stop closing this card. */
@@ -16,7 +24,9 @@ interface Props {
 }
 
 /** Floating "add highlight" card shown over a text selection. */
-export function HighlightPopup({ x, y, flip, selectionText, onCommit, onCancel, onType }: Props) {
+export function HighlightPopup({ x, y, flip, selectionText, drawing, palette, onCommit, onCancel, onType }: Props) {
+  const colors = drawing && palette ? palette : TEXT_COLORS;
+  const first = drawing ?? "yellow";
   const [comment, setComment] = useState("");
   const [copyStatus, setCopyStatus] = useState("");
   const box = useRef<HTMLInputElement>(null);
@@ -39,18 +49,20 @@ export function HighlightPopup({ x, y, flip, selectionText, onCommit, onCancel, 
     <div className={`hl-popup ${flip ? "below" : ""}`} style={{ left: x, top: y }} onMouseDown={(e) => e.stopPropagation()}>
       <input
         ref={box}
-        placeholder="Add a note… (Enter = yellow)"
+        placeholder={`Add a note… (Enter = ${first})`}
         value={comment}
         onChange={(e) => { setComment(e.target.value); onType?.(); }}
         onKeyDown={(e) => {
           if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === "c" && !comment && selectionText) {
             e.preventDefault(); e.stopPropagation(); void copySelection();
           }
-          if (e.key === "Enter") onCommit("yellow", comment.trim()); if (e.key === "Escape") onCancel();
+          if (e.key === "Enter") onCommit(first, comment.trim()); if (e.key === "Escape") onCancel();
         }}
       />
       <div className="hl-colors">
-        {COLORS.map((c) => <button key={c} className={`swatch hl-${c}`} title={`Highlight ${c}`} onClick={() => onCommit(c, comment.trim())} />)}
+        {colors.map((c) => (
+          <button key={c} className={`swatch hl-${c} ${drawing ? "strong" : ""} ${drawing === c ? "active" : ""}`} title={drawing ? c : `Highlight ${c}`} onClick={() => onCommit(c, comment.trim())} />
+        ))}
         <span className="grow" />
         {selectionText && <button className="icon-btn" onClick={() => void copySelection()} title="Copy selected text"><Copy size={14} /></button>}
         <button className="icon-btn" onClick={onCancel} title="Cancel"><X size={14} /></button>

@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, BookmarkPlus, Check, ChevronLeft, ChevronRight, CornerUpLeft, ExternalLink, Maximize, MoreHorizontal, NotebookText, Play, RefreshCw, ZapOff } from "lucide-react";
-import type { CodeView, Highlight, HighlightColor, PaneView, ReadingPosition, ShapeKind, Source } from "../types";
+import type { CodeView, Highlight, HighlightColor, PaneView, ReadingPosition, ShapeKind, ShapeStyle, Source } from "../types";
 import { trackReadingPosition } from "../../../server/public/reading-position.js";
 import type { AppConfig } from "../api";
 import { Reader } from "./Reader";
@@ -26,6 +26,9 @@ interface Props {
   onAddHighlight: (h: Highlight) => void;
   /** A drawing that has been moved or resized, or a highlight recoloured. */
   onUpdateHighlight: (h: Highlight) => void;
+  /** How each kind of drawing is painted when it is drawn next; kept with the project. */
+  drawStyles?: Partial<Record<ShapeKind, ShapeStyle>>;
+  onDrawStyles?: (styles: Partial<Record<ShapeKind, ShapeStyle>>) => void;
   onDeleteHighlight: (id: string) => void;
   onSelectHighlight: (id: string) => void;
   onOpenLink: (url: string, newTab: boolean) => void;
@@ -181,10 +184,33 @@ export function SourcePane(p: Props) {
     );
   }
 
+  // The drawing chosen on this source, which the drawing menu restyles.
+  const chosen = source.highlights.find((h) => h.id === p.scrollToId && h.shape) ?? null;
+  /**
+   * A new drawing is painted the way its kind was last set up. Applied here, where every
+   * surface's drawing arrives, so a PDF, a picture, Reader and the live page all agree.
+   */
+  const addHighlight = (h: Highlight) =>
+    p.onAddHighlight(h.shape ? { ...h, shape: { ...p.drawStyles?.[h.shape.kind], ...h.shape } } : h);
+
   // Drawing needs something to draw on: a page, a picture, or prose the app itself lays out.
   const canDraw = !isCode && (!isFile || viewer === "pdf" || viewer === "image");
   const drawMenu = !p.presenting && canDraw && (
-    <DrawMenu tool={tool} onTool={setTool} color={drawColor} onColor={setDrawColor} notes={notes} onNotes={setNotes} />
+    <DrawMenu
+      tool={tool}
+      onTool={setTool}
+      color={drawColor}
+      onColor={setDrawColor}
+      styles={p.drawStyles ?? {}}
+      onStyle={(kind, style) => p.onDrawStyles?.({ ...(p.drawStyles ?? {}), [kind]: style })}
+      selected={chosen?.shape ? { shape: chosen.shape, color: chosen.color } : null}
+      onRestyle={({ color, ...change }) => {
+        if (!chosen?.shape) return;
+        p.onUpdateHighlight({ ...chosen, color: color ?? chosen.color, shape: { ...chosen.shape, ...change } });
+      }}
+      notes={notes}
+      onNotes={setNotes}
+    />
   );
   // A tool left out cannot stay armed into a take: the overlay would swallow every click.
   const linkedIds = p.links.flatMap((l) => [
@@ -214,6 +240,7 @@ export function SourcePane(p: Props) {
     onDeleteHighlight: p.onDeleteHighlight,
     tool: p.presenting || !canDraw ? null : tool,
     drawColor,
+    drawStyle: tool ? p.drawStyles?.[tool] : undefined,
     showNotes: notes && !p.presenting,
     linkedIds,
     onNote: openNote,
@@ -341,7 +368,7 @@ export function SourcePane(p: Props) {
             config={p.config}
             scrollToId={p.scrollToId}
             scrollNonce={p.scrollNonce}
-            onAddHighlight={p.onAddHighlight}
+            onAddHighlight={addHighlight}
             onSelectHighlight={p.onSelectHighlight}
             presenting={p.presenting}
             {...draw}
@@ -352,7 +379,7 @@ export function SourcePane(p: Props) {
             source={source}
             apiPort={p.apiPort}
             scripts={scripts}
-            onAddHighlight={p.onAddHighlight}
+            onAddHighlight={addHighlight}
             onSelectHighlight={p.onSelectHighlight}
             onOpenLink={p.onOpenLink}
             page={page}
@@ -371,7 +398,7 @@ export function SourcePane(p: Props) {
             source={source}
             scrollToId={p.scrollToId}
             scrollNonce={p.scrollNonce}
-            onAddHighlight={p.onAddHighlight}
+            onAddHighlight={addHighlight}
             onSelectHighlight={p.onSelectHighlight}
             fontScale={p.fontScale}
             {...draw}

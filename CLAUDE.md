@@ -285,6 +285,26 @@ wait. The AI request aborts when the pane closes. Assume a recording is in progr
   the chosen pane's view and scope the highlight jump to it; otherwise old browsed pages and
   beat positions win over the navigation, or duplicate panes all jump. Cancel must not mutate
   project or selection state. With no Source pane the first pane is used.
+- **Every outline, arrow head and default style lives in `server/public/shapes-geom.js`.** The
+  app (`ShapeLayer`) and the live page (`inject.js`) both draw from `shapePath`, `shapeHeads`,
+  `resolveStyle` and `paint`, so a drawing looks the same in Reader and Original; never draw a
+  kind in one renderer only. The palette is hex in that file, not CSS variables: the strong
+  shades are the same in both themes, and the framed page has no access to the app's CSS.
+- **Style fields on a shape are optional, and their absence is the old look.** `resolveStyle`
+  must keep returning an outline in the drawing's own colour, 2.5 px, no fill, for a shape
+  without them — every drawing saved before 0.29.0 depends on it, and a test pins it.
+- **A drawing is rebuilt from geometry when it is moved, and that loses its paint.** `fromDrag`
+  returns only the kind and the box. Every edit path merges it over the old shape
+  (`{ ...was.shape, ...shape }`) — Reader, PDF, image, the live page's `shapeEdited`, and the
+  live drag preview. A new route that rewrites a shape must do the same.
+- **New drawings take their kind's remembered style in one place:** `addHighlight` in
+  `SourcePane`, where every surface's drawings arrive. `settings.drawStyles` holds only the
+  fields the creator changed, per kind, so the kind's own defaults still apply to the rest.
+- **`HighlightPopup` is rendered on its own by a test**, transpiled in isolation, so it must not
+  import values from sibling modules. Callers hand it the palette.
+- **A menu over the source must close on `pointerdown`, not `mousedown`.** Starting a drawing
+  calls `preventDefault` on the press so the page underneath does not select text, and a
+  cancelled press sends no `mousedown` at all.
 - **The element being dragged must keep its identity.** Moving a drawing is a pointer capture
   on the shape; rendering the drag as a *different* element (a preview with another key) takes
   the captured node out of the document and the drag dies on the first move. The same element
