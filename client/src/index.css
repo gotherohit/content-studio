@@ -1043,13 +1043,16 @@ mark.hl:hover { filter: brightness(0.94); }
 .vajra-attachments { display: flex; flex-wrap: wrap; gap: 5px; padding: 3px 4px; }
 .vajra-url-context { display: flex; align-items: center; gap: 6px; padding: 3px 7px; border-radius: 8px; background: var(--panel-2); color: var(--accent); }
 .vajra-url-context input { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--text); font-size: 12px; }
-.inline-vajra { --accent: #08798c; --accent-soft: #e8f8fa; position: absolute; z-index: 35; top: 10px; right: 10px; width: min(450px, calc(100% - 20px)); max-height: calc(100% - 20px); display: flex; flex-direction: column; gap: 9px; padding: 12px; border: 1px solid color-mix(in srgb, var(--accent) 55%, var(--border)); border-radius: 13px; background: var(--panel); color: var(--text); box-shadow: var(--shadow-3); }
+.inline-vajra { --accent: #08798c; --accent-soft: #e8f8fa; position: absolute; z-index: 35; top: 10px; right: 10px; width: min(450px, calc(100% - 20px)); max-height: calc(100% - 20px); display: flex; flex-direction: column; gap: 9px; padding: 12px 12px 25px; border: 1px solid color-mix(in srgb, var(--accent) 55%, var(--border)); border-radius: 13px; background: var(--panel); color: var(--text); box-shadow: var(--shadow-3); }
 :root[data-theme="dark"] .inline-vajra { --accent: #58d3e4; --accent-soft: #12313b; }
+.inline-vajra.sized { overflow: auto; }
 .inline-vajra-head, .inline-vajra-history, .inline-vajra-actions { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.inline-vajra-head, .inline-vajra-history, .inline-vajra-composer, .inline-vajra-actions { flex-shrink: 0; }
 .inline-vajra-head strong { color: var(--accent); font-size: 14px; }
 .inline-vajra-quote { margin: 0; padding: 6px 9px; border-left: 3px solid var(--accent); background: var(--accent-soft); font-size: 12px; line-height: 1.45; max-height: 80px; overflow: auto; white-space: pre-wrap; }
 .inline-vajra-history select { flex: 1; min-width: 0; font-size: 11px; }
 .inline-vajra-thread { min-height: 70px; max-height: 40vh; overflow: auto; display: flex; flex-direction: column; gap: 8px; }
+.inline-vajra.sized .inline-vajra-thread { flex: 1 1 auto; min-height: 50px; max-height: none; }
 .inline-vajra-message { padding: 8px 10px; border-radius: 8px; background: var(--panel-2); font-size: 12.5px; overflow-wrap: anywhere; }
 .inline-vajra-message.assistant { background: var(--accent-soft); }
 .inline-vajra-message > span { display: block; color: var(--accent); font-weight: 650; font-size: 11px; margin-bottom: 4px; }
@@ -1062,6 +1065,8 @@ mark.hl:hover { filter: brightness(0.94); }
 .inline-vajra-composer .row select { flex: 1; min-width: 0; max-width: 75%; font-size: 11px; }
 .inline-vajra-actions { border-top: 1px solid var(--border); padding-top: 8px; flex-wrap: wrap; }
 .inline-vajra-actions button { gap: 4px; font-size: 11px; }
+.inline-vajra-resize { position: absolute; left: 3px; bottom: 3px; display: grid; place-items: center; width: 21px; height: 21px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--muted); cursor: nesw-resize; touch-action: none; }
+.inline-vajra-resize:hover, .inline-vajra-resize:focus-visible { background: var(--accent-soft); color: var(--accent); }
 .vajra-attachment, .vajra-message-file { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; padding: 4px 7px; border-radius: 7px; border: 1px solid var(--border); background: var(--panel-2); color: var(--text-2); font-size: 11px; }
 .vajra-attachment span { max-width: 175px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .vajra-attachment button { width: 18px; height: 18px; padding: 0; display: grid; place-items: center; border: 0; background: transparent; color: var(--muted); }

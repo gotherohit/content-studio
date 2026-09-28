@@ -157,6 +157,12 @@ questions** from its article marker, reopens saved conversations. **Open in Vajr
 conversation to a full Vajra pane for deeper work. Inline questions have read-only tools;
 the full pane offers the usual reviewed tools.
 
+Drag the small grip at the lower-left corner of the inline Vajra window left or down to make
+the conversation wider or taller. Its size is remembered across highlights. The expand button
+beside Close fills the current Source pane; press Restore to return to your chosen size. The
+window fits inside a smaller pane without changing that saved size. The grip also accepts arrow
+keys in 32-pixel steps; Home or a double-click resets the size.
+
 After Vajra answers, **Markdown** or **PDF** saves the conversation as a new source in the
 project and automatically links it to the highlighted passage with an **explains** relation.
 The saved source includes the passage, source URL, questions and answers. PDF saving needs the

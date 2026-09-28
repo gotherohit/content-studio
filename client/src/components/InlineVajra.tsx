@@ -1,12 +1,24 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
-import { ArrowUp, ExternalLink, FileDown, Square, X } from "lucide-react";
+import { ArrowUp, ExternalLink, FileDown, Grip, Maximize2, Minimize2, Square, X } from "lucide-react";
 import type { Highlight, Source } from "../types";
 import type { AiStatus } from "../api";
 import { api } from "../api";
 import { research, type ResearchSession } from "../research";
+import { inlineVajraLayout, resizeInlineVajra, type VajraBounds, type VajraSize } from "../inline-vajra-size";
 import { VajraMark } from "./VajraMark";
+
+const SIZE_KEY = "inlineVajraSize";
+const savedSize = (): VajraSize | null => {
+  try {
+    const value = JSON.parse(localStorage.getItem(SIZE_KEY) || "null");
+    return Number.isFinite(value?.width) && Number.isFinite(value?.height) ? value : null;
+  } catch { return null; }
+};
+const rememberSize = (value: VajraSize | null) => {
+  try { if (value) localStorage.setItem(SIZE_KEY, JSON.stringify(value)); else localStorage.removeItem(SIZE_KEY); } catch { /* private window */ }
+};
 
 interface Props {
   projectId: string;
@@ -32,10 +44,24 @@ export function InlineVajra({ projectId, source, highlight, onAttach, onSave, on
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [preferred, setPreferred] = useState<VajraSize | null>(savedSize);
+  const [expanded, setExpanded] = useState(false);
+  const [bounds, setBounds] = useState<VajraBounds | null>(null);
   const abort = useRef<AbortController | null>(null);
+  const card = useRef<HTMLElement>(null);
+  const drag = useRef<{ x: number; y: number; start: VajraSize; current: VajraSize; previous: VajraSize | null } | null>(null);
   const scroll = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLTextAreaElement>(null);
   const generation = useRef(0);
+
+  useLayoutEffect(() => {
+    const parent = card.current?.parentElement;
+    if (!parent) return;
+    const measure = () => setBounds((old) => old?.width === parent.clientWidth && old.height === parent.clientHeight ? old : { width: parent.clientWidth, height: parent.clientHeight });
+    measure();
+    const observer = new ResizeObserver(measure); observer.observe(parent);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     api.aiStatus().then((s) => { setStatus(s); setModel(s.model && s.models.some((m) => m.ref === s.model) ? s.model : s.models[0]?.ref || ""); }).catch((e) => setError(e.message));
@@ -92,9 +118,20 @@ export function InlineVajra({ projectId, source, highlight, onAttach, onSave, on
   }
   const running = busy || session?.status === "running";
   const answered = session?.messages.some((m) => m.role === "assistant" && m.content.trim() && !m.interrupted);
+  const layout = bounds ? inlineVajraLayout(preferred, bounds, expanded) : null;
+  const resetSize = () => { setPreferred(null); setExpanded(false); rememberSize(null); };
+  const resizeKey = (key: string) => {
+    if (key === "Home") { resetSize(); return; }
+    const element = card.current, parent = element?.parentElement;
+    if (!element || !parent) return;
+    const start = { width: element.offsetWidth, height: element.offsetHeight };
+    const next = resizeInlineVajra(start, key === "ArrowLeft" ? -32 : key === "ArrowRight" ? 32 : 0,
+      key === "ArrowDown" ? 32 : key === "ArrowUp" ? -32 : 0, { width: parent.clientWidth, height: parent.clientHeight });
+    setPreferred(next); rememberSize(next);
+  };
 
-  return <aside className="inline-vajra" aria-label="Ask Vajra about this passage" onMouseDown={(e) => e.stopPropagation()}>
-    <div className="inline-vajra-head"><span className="vajra-heading-mark"><VajraMark size={20} /></span><strong>Ask Vajra</strong><span className="grow" /><button className="icon-btn" title="Close" onClick={onClose}><X size={15} /></button></div>
+  return <aside ref={card} className={`inline-vajra${layout?.height != null ? " sized" : ""}`} aria-label="Ask Vajra about this passage" style={layout ? { width: layout.width, height: layout.height ?? undefined, maxHeight: layout.maxHeight, top: layout.top, right: layout.right } : undefined} onMouseDown={(e) => e.stopPropagation()}>
+    <div className="inline-vajra-head"><span className="vajra-heading-mark"><VajraMark size={20} /></span><strong>Ask Vajra</strong><span className="grow" /><button className="icon-btn" title={expanded ? "Restore Vajra window" : "Expand Vajra window"} onClick={() => setExpanded((value) => !value)}>{expanded ? <Minimize2 size={15} /> : <Maximize2 size={15} />}</button><button className="icon-btn" title="Close" onClick={onClose}><X size={15} /></button></div>
     <blockquote className="inline-vajra-quote">{highlight.text}</blockquote>
     {ids.length > 0 && <div className="inline-vajra-history"><select aria-label="Questions about this highlight" value={selected} disabled={running} onChange={(e) => { setSelected(e.target.value); setError(""); }}>
       {!selected && <option value="">New question</option>}
@@ -124,5 +161,12 @@ export function InlineVajra({ projectId, source, highlight, onAttach, onSave, on
       <button className="ghost small" disabled={!answered || running || saving} onClick={() => void save("md")} title="Save conversation as a linked Markdown source"><FileDown size={13} /> Markdown</button>
       <button className="ghost small" disabled={!answered || running || saving} onClick={() => void save("pdf")} title="Save conversation as a linked PDF source"><FileDown size={13} /> PDF</button>
     </div>}
+    {!expanded && <button type="button" className="inline-vajra-resize" aria-label="Resize Vajra window" title="Drag left and down to resize. Arrow keys resize; Home or double-click resets."
+      onPointerDown={(e) => { const element = card.current; if (!element) return; e.preventDefault(); e.stopPropagation(); e.currentTarget.setPointerCapture(e.pointerId); const start = { width: element.offsetWidth, height: element.offsetHeight }; drag.current = { x: e.clientX, y: e.clientY, start, current: start, previous: preferred }; }}
+      onPointerMove={(e) => { const move = drag.current, parent = card.current?.parentElement; if (!move || !parent) return; const next = resizeInlineVajra(move.start, e.clientX - move.x, e.clientY - move.y, { width: parent.clientWidth, height: parent.clientHeight }); move.current = next; setPreferred(next); }}
+      onPointerUp={(e) => { const move = drag.current; if (!move) return; drag.current = null; if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId); rememberSize(move.current); }}
+      onPointerCancel={() => { const move = drag.current; drag.current = null; if (move) setPreferred(move.previous); }}
+      onKeyDown={(e) => { if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home"].includes(e.key)) return; e.preventDefault(); e.stopPropagation(); resizeKey(e.key); }}
+      onDoubleClick={resetSize}><Grip size={14} /></button>}
   </aside>;
 }

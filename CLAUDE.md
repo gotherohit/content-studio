@@ -26,6 +26,9 @@ in the server-owned `.ai/conversations/` folder. The server persists the selecte
 the conversation anchor so follow-ups in the full Vajra pane retain it. Inline runs expose
 read-only source and web tools; do not let an unavailable write tool be called by name.
 Additional URL context must use `readPublicUrl` and its SSRF/redirect guard.
+The inline Vajra window remembers a preferred width and height in local UI storage. Clamp only
+the displayed size to its Source pane, so temporarily splitting the layout does not overwrite
+that preference. Resizing the window must not remount or stop its running conversation.
 Highlight `noteWidth` stores a preferred comment-card width, not its height or position.
 Clamp the displayed card to its current Source pane without overwriting the saved preference
 on layout resize. Vajra's sidebar must never remount its chat or abort a run when toggled.

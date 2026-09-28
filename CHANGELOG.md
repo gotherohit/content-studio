@@ -2,6 +2,13 @@
 
 What changed in each release, newest first. Versions are the ones the app updates itself to.
 
+## 0.32.0
+
+- **Resizable inline Vajra.** Drag its lower-left grip to widen the answer or make it taller,
+  or use Expand to fill the Source pane. The chosen size survives reopening and fits smaller
+  pane layouts without losing the preference. Arrow keys resize the grip; Home or double-click
+  resets it.
+
 ## 0.31.1
 
 - **Sharp text on a zoomed live page.** Above the starting size the live page's text looked
