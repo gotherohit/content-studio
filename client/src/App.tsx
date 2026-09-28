@@ -28,6 +28,7 @@ import { BrowserPane } from "./components/BrowserPane";
 import { TerminalPane } from "./components/TerminalPane";
 import { JupyterPane } from "./components/JupyterPane";
 import { rootFor } from "./jupyter";
+import { DEFAULT_TEXT_SCALE, stepTextScale } from "./textScale";
 import { adoptFiles } from "./sources";
 import { SlidesPane } from "./components/SlidesPane";
 import { WindowPane } from "./components/WindowPane";
@@ -149,7 +150,7 @@ export default function App() {
   /** A short confirmation that a capture happened, or a warning about what it could not record. */
   const [notice, setNotice] = useState<{ text: string; kind: "ok" | "warn" | "fail" } | null>(null);
   const [dark, setDark] = useState(lsGet("dark", "1") === "1");
-  const [fontScale, setFontScale] = useState(Number(lsGet("font", "1.05")));
+  const [fontScale, setFontScale] = useState(Number(lsGet("font", String(DEFAULT_TEXT_SCALE))));
   const [saveState, setSaveState] = useState<"saved" | "saving" | "dirty">("saved");
   const [dragging, setDragging] = useState<null | "col" | "row">(null);
   const [dropping, setDropping] = useState(false);
@@ -1158,9 +1159,9 @@ export default function App() {
               ))}
             </div>
             <div className="toolbar-group">
-              <button className="icon-btn" title="Smaller reader text" onClick={() => setFontScale((f) => Math.max(0.8, +(f - 0.1).toFixed(2)))}><Minus size={14} /></button>
+              <button className="icon-btn" title="Smaller text — Reader, and the live page zoomed out like a browser" onClick={() => setFontScale((f) => stepTextScale(f, -1))}><Minus size={14} /></button>
               <span className="muted small" style={{ width: 28, textAlign: "center" }}>{Math.round(fontScale * 100)}</span>
-              <button className="icon-btn" title="Larger reader text" onClick={() => setFontScale((f) => Math.min(1.8, +(f + 0.1).toFixed(2)))}><Plus size={14} /></button>
+              <button className="icon-btn" title="Larger text — Reader, and the live page zoomed in like a browser" onClick={() => setFontScale((f) => stepTextScale(f, 1))}><Plus size={14} /></button>
             </div>
             <span className={`save-pill ${saveState}`}>{saveState}</span>
             <button className="icon-btn" onClick={() => setDark((d) => !d)} title="Toggle theme">{dark ? <Sun size={16} /> : <Moon size={16} />}</button>

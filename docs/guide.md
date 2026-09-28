@@ -569,6 +569,15 @@ Everything is a **pane**. Pick 1 to 4 panes from the layout buttons in the top b
 
 Pane types: **Source**, **Highlights**, **Source map**, **Files**, **Notes**, **Vajra**, **Code** (runnable snippets), **Terminal**, **Jupyter**, **Slides** (a scratch markdown deck), **Canvas** (Excalidraw), **Browser**, **Window**, **Embed**.
 
+**Text size.** The `−` and `+` in the top bar make text smaller or larger in **both** views of an
+article. Reader sets its own text size; Original view zooms the live page the way a browser's
+zoom does, so the page reflows as if the window were narrower — menus, columns and line breaks
+all follow, and your highlights, drawings and note markers stay on the words they belong to.
+At the starting size of 105 the live page is exactly as the site built it. The size is shared
+by every source and remembered on this computer. A site that is too wide for a narrow pane at a
+large size shows a sideways scrollbar, as it would in a browser zoomed that far; widen the pane
+or step the size down.
+
 Each Source pane's toolbar has, from left to right: which source it shows, Back and Forward for
 pages browsed inside it, Original or Reader, the **←** link to the source it came from, its
 address, **Save as source** when browsing, the summary button, and the **⋯** menu (page

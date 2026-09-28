@@ -2,6 +2,16 @@
 
 What changed in each release, newest first. Versions are the ones the app updates itself to.
 
+## 0.31.0
+
+- **Text size now works on the live page too.** The `−`/`+` in the top bar used to change only
+  Reader. In Original view it now zooms the page the way a browser's zoom does: text, pictures
+  and layout grow together and the page reflows as if the window were narrower, so its menus
+  and columns rearrange themselves rather than spilling off the side. Highlights, drawings,
+  note markers and the note card all stay on the words they belong to.
+- At the starting size (105) the live page looks exactly as it did before, so nothing already
+  set up for a recording changes size.
+
 ## 0.30.0
 
 - **Ask Vajra on a highlighted passage** in Original or Reader view. The inline conversation

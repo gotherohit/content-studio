@@ -310,6 +310,17 @@ wait. The AI request aborts when the pane closes. Assume a recording is in progr
 - **A menu over the source must close on `pointerdown`, not `mousedown`.** Starting a drawing
   calls `preventDefault` on the press so the page underneath does not select text, and a
   cancelled press sends no `mousedown` at all.
+- **The live page is zoomed by scaling its frame, never by zooming inside it.** The frame is
+  given a viewport narrower by the zoom (`width`/`height` of `100/zoom %`) and scaled up by
+  `transform: scale(zoom)`, so the site lays itself out for a smaller window — breakpoints, `vw`
+  units, wrapping — exactly as under a browser's zoom. CSS `zoom` on the page's body was tried
+  and rejected: media queries and viewport units still see the full width, so sites spilled off
+  the side, and every overlay placed from measured rectangles inside the zoomed body was
+  enlarged twice. Nothing inside the page knows about the zoom; only the rectangles and points
+  it reports to the app (`selection`, `shapeDrawn`, `noteClick`) are scaled, through `toPane`.
+  At the default text size (1.05) the zoom is exactly 1, so no existing page changes size.
+  Automation tools may refuse to click into a transformed frame; real input goes through it,
+  so verify with `Input.dispatchMouseEvent` over CDP rather than concluding it is broken.
 - **The element being dragged must keep its identity.** Moving a drawing is a pointer capture
   on the shape; rendering the drag as a *different* element (a preview with another key) takes
   the captured node out of the document and the drag dies on the first move. The same element

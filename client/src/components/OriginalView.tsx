@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Highlight, HighlightColor, ReadingPosition, Shape, ShapeKind, Source, ShapeStyle } from "../types";
 import { HighlightPopup } from "./HighlightPopup";
+import { toPane } from "../textScale";
 import { PALETTE } from "../shapes";
 import { samePage } from "../../../server/public/pages.js";
 
@@ -31,6 +32,14 @@ interface Props {
   tool?: ShapeKind | null;
   drawColor?: HighlightColor;
   drawStyle?: ShapeStyle;
+  /**
+   * How far to zoom the page, as a browser would; 1 shows it as the site made it. The frame is
+   * given a viewport narrower by this much and scaled up to fill the pane, so the site lays
+   * itself out for a smaller window — its breakpoints, its wrapping — exactly as under a
+   * browser's zoom. Nothing inside the page changes, so its drawings and positions stay in
+   * its own pixels; only what it reports to the app is scaled.
+   */
+  zoom?: number;
   showNotes?: boolean;
   /** Passages that are one end of a link, which earn a marker even without a note. */
   linkedIds?: string[];
@@ -46,7 +55,7 @@ export function proxiedUrl(url: string, apiPort: number, scripts: boolean): stri
 }
 
 /** The page exactly as the site serves it, running its own scripts, with highlights layered on top. */
-export function OriginalView({ source, apiPort, scripts, onAddHighlight, onAskHighlight, onUpdateHighlight, onDeleteHighlight, onSelectHighlight, onOpenLink, page, onPage, scrollToId, scrollNonce, position, restoreNonce, onPosition, presenting, onPresentationKey, tool, drawColor, drawStyle, showNotes, linkedIds, onNote }: Props) {
+export function OriginalView({ source, apiPort, scripts, onAddHighlight, onAskHighlight, onUpdateHighlight, onDeleteHighlight, onSelectHighlight, onOpenLink, page, onPage, scrollToId, scrollNonce, position, restoreNonce, onPosition, presenting, onPresentationKey, tool, drawColor, drawStyle, showNotes, linkedIds, onNote, zoom }: Props) {
   const frame = useRef<HTMLIFrameElement>(null);
   const [ready, setReady] = useState(false);
   const [restoredNonce, setRestoredNonce] = useState<number | null>(null);
@@ -56,8 +65,8 @@ export function OriginalView({ source, apiPort, scripts, onAddHighlight, onAskHi
   // page. Deriving it from `target` would reload a page the frame has just arrived at.
   const [frameUrl, setFrameUrl] = useState(target);
   const shown = useRef(target);
-  const latest = useRef({ position, restoreNonce, onPosition, presenting, onPresentationKey, target, onPage, tool, drawColor, drawStyle, showNotes, onNote, scrollToId, onDeleteHighlight });
-  latest.current = { position, restoreNonce, onPosition, presenting, onPresentationKey, target, onPage, tool, drawColor, drawStyle, showNotes, onNote, scrollToId, onDeleteHighlight };
+  const latest = useRef({ position, restoreNonce, onPosition, presenting, onPresentationKey, target, onPage, tool, drawColor, drawStyle, showNotes, onNote, scrollToId, onDeleteHighlight, zoom });
+  latest.current = { position, restoreNonce, onPosition, presenting, onPresentationKey, target, onPage, tool, drawColor, drawStyle, showNotes, onNote, scrollToId, onDeleteHighlight, zoom };
   const [popup, setPopup] = useState<{ x: number; y: number; flip: boolean; anchor: Anchor; shape?: Shape; onImage?: string } | null>(null);
   // Once something has been typed into the note, only the person may close the card: the page
   // carries on scrolling, loading and firing events underneath, and a comment thrown away
@@ -93,13 +102,13 @@ export function OriginalView({ source, apiPort, scripts, onAddHighlight, onAskHi
       if (m.type === "selection") {
         if (!m.anchor) { dismiss(); return; }
         const host = frame.current!.getBoundingClientRect();
-        const r = m.rect;
+        const r = toPane(m.rect, latest.current.zoom ?? 1);
         const flip = r.top < 120;
         show({ x: Math.min(Math.max(r.left + r.width / 2, 170), host.width - 170), y: flip ? r.bottom + 8 : r.top - 8, flip, anchor: m.anchor });
       }
       if (m.type === "shapeDrawn" && m.shape) {
         const host = frame.current!.getBoundingClientRect();
-        const r = m.rect;
+        const r = toPane(m.rect, latest.current.zoom ?? 1);
         show({
           x: Math.min(Math.max(r.left + r.width / 2, 170), host.width - 170),
           y: r.bottom + 10, flip: true, anchor: m.anchor ?? { text: "", prefix: "", suffix: "" },
@@ -116,7 +125,8 @@ export function OriginalView({ source, apiPort, scripts, onAddHighlight, onAskHi
       }
       if (m.type === "noteClick") {
         const host = frame.current!.getBoundingClientRect();
-        latest.current.onNote?.(m.id, { x: host.left + m.at.x, y: host.top + m.at.y });
+        const z = latest.current.zoom ?? 1;
+        latest.current.onNote?.(m.id, { x: host.left + m.at.x * z, y: host.top + m.at.y * z });
       }
       if (m.type === "link") {
         if (m.sameSite && !m.modifier) latest.current.onPage(m.url);
@@ -180,7 +190,10 @@ export function OriginalView({ source, apiPort, scripts, onAddHighlight, onAskHi
         ref={frame}
         key={`${source.id}-${scripts}`}
         className="original-frame"
-        style={{ visibility: position && restoredNonce !== restoreNonce ? "hidden" : "visible" }}
+        style={{
+          visibility: position && restoredNonce !== restoreNonce ? "hidden" : "visible",
+          ...(zoom && zoom !== 1 ? { width: `${100 / zoom}%`, height: `${100 / zoom}%`, transform: `scale(${zoom})`, transformOrigin: "0 0" } : {}),
+        }}
         src={src}
         title={source.title}
         sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals"

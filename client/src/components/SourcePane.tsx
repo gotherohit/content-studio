@@ -9,6 +9,7 @@ import { FileView } from "./FileView";
 import { SourceSummary } from "./SourceSummary";
 import { CodeSourceView } from "./FilesPane";
 import { DrawMenu } from "./DrawMenu";
+import { pageZoom } from "../textScale";
 import { NotePopover } from "./NotePopover";
 import { InlineVajra } from "./InlineVajra";
 import type { ResearchSession } from "../research";
@@ -403,6 +404,7 @@ export function SourcePane(p: Props) {
             presenting={p.presenting}
             onPresentationKey={p.onPresentationKey}
             onPosition={(position, url) => report.current(position, mode, samePage(url, source.url) ? undefined : url)}
+            zoom={pageZoom(p.fontScale)}
             {...draw}
           />
         ) : (
