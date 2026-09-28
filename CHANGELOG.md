@@ -2,6 +2,14 @@
 
 What changed in each release, newest first. Versions are the ones the app updates itself to.
 
+## 0.32.1
+
+- **Incomplete inline Vajra answers are identified.** Reopened passage conversations now show
+  the saved reason when a model hits its output limit or a provider/API failure stops it, and
+  partial text is labelled interrupted. Unexpected provider stop reasons are treated as
+  incomplete too. Long answer cards retain their height inside the scrolling transcript,
+  so the follow-up box does not cover them.
+
 ## 0.32.0
 
 - **Resizable inline Vajra.** Drag its lower-left grip to widen the answer or make it taller,

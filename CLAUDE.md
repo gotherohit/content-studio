@@ -29,6 +29,11 @@ Additional URL context must use `readPublicUrl` and its SSRF/redirect guard.
 The inline Vajra window remembers a preferred width and height in local UI storage. Clamp only
 the displayed size to its Source pane, so temporarily splitting the layout does not overwrite
 that preference. Resizing the window must not remount or stop its running conversation.
+Inline Vajra's server saves partial model text with `interrupted: true` and `lastError` when an
+output limit, provider error or disconnect stops a run. Show both after reopening; otherwise a
+mid-sentence answer looks finished. Keep message cards at natural height inside the scrolling
+transcript when the window has a fixed height. A provider stop reason other than a normal end
+or a valid tool call must also be treated as incomplete.
 Highlight `noteWidth` stores a preferred comment-card width, not its height or position.
 Clamp the displayed card to its current Source pane without overwriting the saved preference
 on layout resize. Vajra's sidebar must never remount its chat or abort a run when toggled.

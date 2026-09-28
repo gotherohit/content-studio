@@ -162,6 +162,11 @@ the conversation wider or taller. Its size is remembered across highlights. The 
 beside Close fills the current Source pane; press Restore to return to your chosen size. The
 window fits inside a smaller pane without changing that saved size. The grip also accepts arrow
 keys in 32-pixel steps; Home or a double-click resets the size.
+Long answers scroll inside the conversation while the follow-up box stays visible. If a model
+hits its output limit, the stream fails, or the provider reports a credit/API error, Vajra
+keeps any partial text and labels it **Interrupted response**. The reason remains visible when
+you reopen that question; ask a follow-up to continue. The full Vajra pane also shows the
+saved error and progress.
 
 After Vajra answers, **Markdown** or **PDF** saves the conversation as a new source in the
 project and automatically links it to the highlighted passage with an **explains** relation.

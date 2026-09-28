@@ -240,6 +240,9 @@ export function createResearchAgent({ config, credentials, search, readProject, 
         reply.model = picked.ref; reply.createdAt = new Date().toISOString();
         if (reply.toolCalls?.some((t) => !t.id || !t.name || typeof t.arguments !== "string") || reply.toolCalls?.length > 12) throw new Error("The model returned invalid or too many tool calls. Try another model or a narrower request.");
         if (["length", "max_tokens"].includes(reply.stopReason)) throw new Error("The model reached its output limit. Continue with a smaller step.");
+        if (["tool_calls", "tool_use"].includes(reply.stopReason) && !reply.toolCalls?.length) throw new Error("The model requested a tool but sent no usable tool call. Retry the turn.");
+        if (reply.stopReason && !["stop", "end_turn", "stop_sequence", "tool_calls", "tool_use"].includes(reply.stopReason))
+          throw new Error(`The model stopped before finishing (${String(reply.stopReason).slice(0, 80)}). Ask a follow-up or try another model.`);
         session.messages.push(reply); partial = "";
         await persist(loc, session); emit({ session: visible(session, loc) });
         if (!reply.toolCalls?.length) { session.status = "complete"; break; }

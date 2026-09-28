@@ -1053,11 +1053,13 @@ mark.hl:hover { filter: brightness(0.94); }
 .inline-vajra-history select { flex: 1; min-width: 0; font-size: 11px; }
 .inline-vajra-thread { min-height: 70px; max-height: 40vh; overflow: auto; display: flex; flex-direction: column; gap: 8px; }
 .inline-vajra.sized .inline-vajra-thread { flex: 1 1 auto; min-height: 50px; max-height: none; }
-.inline-vajra-message { padding: 8px 10px; border-radius: 8px; background: var(--panel-2); font-size: 12.5px; overflow-wrap: anywhere; }
+.inline-vajra-message { flex-shrink: 0; padding: 8px 10px; border-radius: 8px; background: var(--panel-2); font-size: 12.5px; overflow-wrap: anywhere; }
 .inline-vajra-message.assistant { background: var(--accent-soft); }
 .inline-vajra-message > span { display: block; color: var(--accent); font-weight: 650; font-size: 11px; margin-bottom: 4px; }
+.inline-vajra-message > .inline-vajra-interrupted { margin-top: 7px; color: var(--danger); font-weight: 600; }
 .inline-vajra-message p, .inline-vajra-message .md-preview :first-child { margin-top: 0; }
 .inline-vajra-message p:last-child, .inline-vajra-message .md-preview :last-child { margin-bottom: 0; }
+.inline-vajra > .error-bar, .inline-vajra > .note-bar { flex-shrink: 0; }
 .inline-vajra-composer { display: flex; flex-direction: column; gap: 6px; border: 1px solid var(--border-strong); border-radius: 10px; padding: 7px; }
 .inline-vajra-composer:focus-within { border-color: var(--accent); }
 .inline-vajra-composer textarea { width: 100%; min-height: 55px; max-height: 130px; resize: vertical; border: 0; background: transparent; font: inherit; font-size: 12.5px; }

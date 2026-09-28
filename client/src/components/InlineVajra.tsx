@@ -7,6 +7,7 @@ import type { AiStatus } from "../api";
 import { api } from "../api";
 import { research, type ResearchSession } from "../research";
 import { inlineVajraLayout, resizeInlineVajra, type VajraBounds, type VajraSize } from "../inline-vajra-size";
+import { inlineVajraFeedback } from "../inline-vajra-feedback";
 import { VajraMark } from "./VajraMark";
 
 const SIZE_KEY = "inlineVajraSize";
@@ -118,6 +119,7 @@ export function InlineVajra({ projectId, source, highlight, onAttach, onSave, on
   }
   const running = busy || session?.status === "running";
   const answered = session?.messages.some((m) => m.role === "assistant" && m.content.trim() && !m.interrupted);
+  const feedback = inlineVajraFeedback(session);
   const layout = bounds ? inlineVajraLayout(preferred, bounds, expanded) : null;
   const resetSize = () => { setPreferred(null); setExpanded(false); rememberSize(null); };
   const resizeKey = (key: string) => {
@@ -141,11 +143,12 @@ export function InlineVajra({ projectId, source, highlight, onAttach, onSave, on
       {session?.messages.map((message, i) => <div key={i} className={`inline-vajra-message ${message.role}`}>
         <span>{message.role === "user" ? "You" : "Vajra"}</span>
         {message.role === "user" ? <p>{message.content}</p> : <div className="md-preview" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(marked.parse(message.content) as string) }} />}
+        {message.interrupted && <span className="inline-vajra-interrupted">Interrupted response</span>}
       </div>)}
       {partial && <div className="inline-vajra-message assistant"><span>Vajra</span><div className="md-preview" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(marked.parse(partial) as string) }} /></div>}
       {running && <p className="muted small" role="status">{partial ? "Answering…" : "Reading the source…"}</p>}
     </div>
-    {error && <div className="error-bar" role="alert">{error}</div>}
+    {(error || feedback) && <div className={error || feedback?.kind === "error" ? "error-bar" : "note-bar"} role={error || feedback?.kind === "error" ? "alert" : "status"}>{error || feedback?.message}</div>}
     {notice && <div className="note-bar" role="status">{notice}</div>}
     <form className="inline-vajra-composer" onSubmit={(e) => { e.preventDefault(); void send(); }}>
       <textarea ref={input} aria-label="Question for Vajra" placeholder={session ? "Ask a follow-up…" : "Ask about this passage…"} rows={2} maxLength={16000} value={question} onChange={(e) => setQuestion(e.target.value)} onKeyDown={(e) => { e.stopPropagation(); if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); void send(); } }} />

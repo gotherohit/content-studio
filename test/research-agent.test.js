@@ -127,6 +127,19 @@ test('OpenAI tool argument fragments survive chunked SSE and tool results replay
   const converted=openaiMessages([reply,{role:'tool',toolCallId:'call1',content:'Result'}]);assert.equal(converted[1].tool_call_id,'call1');
 });
 
+test('model API credit failures surface their HTTP reason without exposing the key',async t=>{
+  const key='sk-private-fixture-key-123456';
+  const url=await listening(t,async(req,res)=>{
+    for await(const _ of req){}
+    res.statusCode=402;res.end(`insufficient credits for ${key}`);
+  });
+  await assert.rejects(agentStep({provider:{kind:'openai',baseUrl:url,label:'Fixture',apiKey:key},model:'test',system:'test',messages:[{role:'user',content:'Explain'}],tools:[],signal:signal(),onText:()=>{}}),error=>{
+    assert.match(error.message,/402: insufficient credits/);
+    assert.doesNotMatch(error.message,/private-fixture-key/);
+    return true;
+  });
+});
+
 test('Anthropic streams tool requests and preserves native signed content for replay',async t=>{
   const url=await listening(t,async(req,res)=>{
     for await(const _ of req){}res.setHeader('Content-Type','text/event-stream');
@@ -162,6 +175,33 @@ test('durable agent loop pauses for approval, saves output and isolates global s
   const stored=JSON.parse(await fs.readFile(path.join(projectDir,'.ai','conversations',session.id+'.json'),'utf8'));assert.equal(stored.messages[2].role,'tool');
   const globals=await fetch(url+'/api/research/sessions').then(r=>r.json());assert.equal(globals.sessions.length,0);
   const reopened=await fetch(url+`/api/research/sessions/${session.id}?projectId=scratch`).then(r=>r.json());assert.equal(reopened.messages.at(-1).content,'Saved brief.md.');
+});
+
+test('incomplete model stops and provider credit failures persist their reason and mark streamed text as interrupted',async t=>{
+  const home=await scratch(t);
+  const credentials={list:()=>({providers:[]}),find:()=>null,resolve:()=>({provider:{kind:'openai'},model:'fixture',ref:'fixture/model'})};
+  let failure='limit';
+  const agent=createResearchAgent({config:{appDir:()=>home,dirOf:()=>null},credentials,search:{},readProject:async()=>({}),
+    step:async({onText})=>{
+      if(failure==='limit'){onText('The answer stopped in the middle of a sentence');return {role:'assistant',content:'The answer stopped in the middle of a sentence',toolCalls:[],stopReason:'max_tokens'};}
+      if(failure==='filter'){onText('A partial answer');return {role:'assistant',content:'A partial answer',toolCalls:[],stopReason:'content_filter'};}
+      throw new Error('Provider returned 402: insufficient credits');
+    }});
+  const app=express();app.use(express.json());app.use('/api/research',agent.router);const url=await listening(t,app);
+  const post=(route,body)=>fetch(url+'/api/research'+route,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  for(const scenario of ['limit','filter','credit']){
+    failure=scenario;
+    const created=await post('/sessions',{}).then(r=>r.json());
+    const response=await post(`/sessions/${created.id}/run`,{message:'Explain this',model:'fixture/model',context:'none',mode:'explain'});
+    let finished;
+    for await(const data of sse(response.body))if(data){const event=JSON.parse(data);if(event.done)finished=event.session;}
+    assert.equal(finished.status,'error');
+    assert.match(finished.lastError,scenario==='limit'?/output limit/:scenario==='filter'?/content_filter/:/402: insufficient credits/);
+    assert.equal(finished.messages.at(-1).interrupted,scenario==='credit'?undefined:true);
+    const reopened=await fetch(url+`/api/research/sessions/${created.id}`).then(r=>r.json());
+    assert.equal(reopened.lastError,finished.lastError);
+    assert.equal(reopened.messages.at(-1).interrupted,finished.messages.at(-1).interrupted);
+  }
 });
 
 test('stopping during approval persists an interrupted tool result and releases the session lock',async t=>{
