@@ -31,3 +31,12 @@ test("what a zoomed page reports is scaled into the pane, so a note card opens b
   assert.deepEqual(toPane(selection, 1), selection);
   assert.deepEqual(toPane(selection, 1.5), { left: 150, top: 60, width: 300, height: 30, bottom: 90 });
 });
+
+test("the live page is zoomed with CSS zoom on its frame, so its text is drawn at the larger size", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const view = await readFile(new URL("../client/src/components/OriginalView.tsx", import.meta.url), "utf8");
+  // A transform stretched a page drawn at its normal size: the page reported a device pixel
+  // ratio of 1 under a 1.29 zoom, and on screen its text came out soft.
+  assert.doesNotMatch(view, /transform:\s*`scale\(/, "the frame must not be stretched with a transform");
+  assert.match(view, /\{ zoom \}/, "the frame is given CSS zoom, which the page receives as its own zoom");
+});

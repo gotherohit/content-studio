@@ -2,6 +2,13 @@
 
 What changed in each release, newest first. Versions are the ones the app updates itself to.
 
+## 0.31.1
+
+- **Sharp text on a zoomed live page.** Above the starting size the live page's text looked
+  slightly soft, because the page was drawn at its normal size and then stretched to fit. It is
+  now drawn at the larger size itself, the way a browser zooms, so text and pictures are as
+  crisp as at 100 per cent. The layout, and where highlights and drawings sit, are unchanged.
+
 ## 0.31.0
 
 - **Text size now works on the live page too.** The `−`/`+` in the top bar used to change only

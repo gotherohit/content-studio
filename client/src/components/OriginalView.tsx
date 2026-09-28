@@ -33,11 +33,12 @@ interface Props {
   drawColor?: HighlightColor;
   drawStyle?: ShapeStyle;
   /**
-   * How far to zoom the page, as a browser would; 1 shows it as the site made it. The frame is
-   * given a viewport narrower by this much and scaled up to fill the pane, so the site lays
-   * itself out for a smaller window — its breakpoints, its wrapping — exactly as under a
-   * browser's zoom. Nothing inside the page changes, so its drawings and positions stay in
-   * its own pixels; only what it reports to the app is scaled.
+   * How far to zoom the page, as a browser would; 1 shows it as the site made it. CSS zoom on
+   * the frame element reaches the page as a zoom of its own: it sees a viewport narrower by
+   * this much and a device pixel ratio larger by it, so it lays itself out for a smaller window
+   * and draws its text at the enlarged size — exactly a browser's zoom. Nothing inside the page
+   * changes, so its drawings and positions stay in its own pixels; only what it reports to the
+   * app is scaled.
    */
   zoom?: number;
   showNotes?: boolean;
@@ -192,7 +193,9 @@ export function OriginalView({ source, apiPort, scripts, onAddHighlight, onAskHi
         className="original-frame"
         style={{
           visibility: position && restoredNonce !== restoreNonce ? "hidden" : "visible",
-          ...(zoom && zoom !== 1 ? { width: `${100 / zoom}%`, height: `${100 / zoom}%`, transform: `scale(${zoom})`, transformOrigin: "0 0" } : {}),
+          // Not a transform: scaling the frame up stretched a page drawn at its normal size, and
+          // the text came out soft. CSS zoom makes the page draw itself at the larger size.
+          ...(zoom && zoom !== 1 ? { zoom } : {}),
         }}
         src={src}
         title={source.title}
