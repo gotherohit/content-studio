@@ -11,6 +11,7 @@ interface Props {
   apiPort: number;
   scripts: boolean;
   onAddHighlight: (h: Highlight) => void;
+  onAskHighlight?: (h: Highlight) => void;
   onUpdateHighlight?: (h: Highlight) => void;
   onDeleteHighlight?: (id: string) => void;
   onSelectHighlight: (id: string) => void;
@@ -45,7 +46,7 @@ export function proxiedUrl(url: string, apiPort: number, scripts: boolean): stri
 }
 
 /** The page exactly as the site serves it, running its own scripts, with highlights layered on top. */
-export function OriginalView({ source, apiPort, scripts, onAddHighlight, onUpdateHighlight, onDeleteHighlight, onSelectHighlight, onOpenLink, page, onPage, scrollToId, scrollNonce, position, restoreNonce, onPosition, presenting, onPresentationKey, tool, drawColor, drawStyle, showNotes, linkedIds, onNote }: Props) {
+export function OriginalView({ source, apiPort, scripts, onAddHighlight, onAskHighlight, onUpdateHighlight, onDeleteHighlight, onSelectHighlight, onOpenLink, page, onPage, scrollToId, scrollNonce, position, restoreNonce, onPosition, presenting, onPresentationKey, tool, drawColor, drawStyle, showNotes, linkedIds, onNote }: Props) {
   const frame = useRef<HTMLIFrameElement>(null);
   const [ready, setReady] = useState(false);
   const [restoredNonce, setRestoredNonce] = useState<number | null>(null);
@@ -160,12 +161,14 @@ export function OriginalView({ source, apiPort, scripts, onAddHighlight, onUpdat
     return () => window.clearTimeout(timer);
   }, [position, restoreNonce, restoredNonce]);
 
-  function commit(color: HighlightColor, comment: string) {
+  function commit(color: HighlightColor, comment: string, ask = false) {
     if (!popup) return;
-    onAddHighlight({
+    const highlight: Highlight = {
       id: `h${Date.now().toString(36)}`, ...popup.anchor, shape: popup.shape, onImage: popup.onImage,
       color, comment, createdAt: new Date().toISOString(),
-    });
+    };
+    onAddHighlight(highlight);
+    if (ask) onAskHighlight?.(highlight);
     post({ type: "clearSelection" });
     show(null);
   }
@@ -182,7 +185,7 @@ export function OriginalView({ source, apiPort, scripts, onAddHighlight, onUpdat
         title={source.title}
         sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals"
       />
-{popup && <HighlightPopup selectionText={popup.shape ? undefined : popup.anchor?.text} drawing={popup.shape ? drawColor ?? "yellow" : undefined} palette={PALETTE} x={popup.x} y={popup.y} flip={popup.flip} onCommit={commit} onCancel={() => show(null)} onType={() => (noteTyped.current = true)} />}
+{popup && <HighlightPopup selectionText={popup.shape ? undefined : popup.anchor?.text} drawing={popup.shape ? drawColor ?? "yellow" : undefined} palette={PALETTE} x={popup.x} y={popup.y} flip={popup.flip} onCommit={commit} onAsk={(color, comment) => commit(color, comment, true)} onCancel={() => show(null)} onType={() => (noteTyped.current = true)} />}
     </div>
   );
 }

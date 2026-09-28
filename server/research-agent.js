@@ -3,7 +3,7 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { Router } from "express";
 import { agentStep, redact } from "./agent-model.js";
-import { AGENT_TOOLS, executeTool } from "./agent-tools.js";
+import { AGENT_TOOLS, executeTool, readPublicUrl } from "./agent-tools.js";
 import { createVajraExtensions } from "./vajra-extensions.js";
 import { connectMcp } from "./vajra-mcp.js";
 
@@ -52,7 +52,7 @@ async function directory(parent, name) {
   return dir;
 }
 
-export function createResearchAgent({ config, credentials, search, readProject, step = agentStep }) {
+export function createResearchAgent({ config, credentials, search, readProject, step = agentStep, readUrl = readPublicUrl }) {
   const router = Router(), runs = new Map(), editing = new Set();
   const extensions = createVajraExtensions({ config });
   const clean = (text) => {
@@ -155,6 +155,9 @@ export function createResearchAgent({ config, credentials, search, readProject, 
     const incoming = req.body.attachments ?? [];
     if (!Array.isArray(incoming) || incoming.length > 3 || incoming.some((file) => !file || typeof file !== "object" || typeof file.name !== "string" || !file.name.trim() || file.name.length > 180 || !["text", "pdf"].includes(file.kind) || typeof file.content !== "string" || !file.content.trim() || file.content.length > 60000 || file.content.includes("\0") || typeof file.truncated !== "boolean") || incoming.reduce((sum, file) => sum + file.content.length, 0) > 90000) throw new Error("Attach up to three text or PDF excerpts, with at most 90,000 characters total.");
     if (!["current", "source", "all", "none", undefined].includes(req.body.context)) throw new Error("Choose a valid source context.");
+    if (req.body.contextUrl !== undefined && (typeof req.body.contextUrl !== "string" || req.body.contextUrl.length > 2048)) throw new Error("Enter a URL of up to 2,048 characters.");
+    if (req.body.highlightText !== undefined && (typeof req.body.highlightText !== "string" || req.body.highlightText.length > 12000)) throw new Error("The selected passage is too long.");
+    if (req.body.mode !== undefined && req.body.mode !== "explain") throw new Error("Choose a valid Vajra mode.");
     const picked = credentials.resolve(req.body.model);
     if (!picked) throw new Error("Choose a configured model in Settings → Models and keys.");
     // Reserve before any await, so two panes cannot race on the same transcript.
@@ -171,6 +174,10 @@ export function createResearchAgent({ config, credentials, search, readProject, 
       session.status = "running"; session.model = picked.ref; session.lastError = null;
       session.progress = { step: 0, maxSteps: 12, startedAt: new Date().toISOString() };
       session.messages.push({ role: "user", content: clean(req.body.message.trim()), ...(incoming.length ? { attachments: incoming.map((file) => ({ name: clean(file.name), kind: file.kind, content: clean(file.content), truncated: file.truncated })) } : {}), createdAt: new Date().toISOString() });
+      if (req.body.highlightText?.trim()) {
+        if (!projectId || !req.body.sourceId) throw new Error("A passage needs its project source as context.");
+        session.anchor = { sourceId: req.body.sourceId, highlightId: String(req.body.highlightId || "").slice(0, 100), text: clean(req.body.highlightText.trim()) };
+      }
       if (session.title === "New research") session.title = req.body.message.trim().slice(0, 72);
       await persist(loc, session);
       res.setHeader("Content-Type", "text/event-stream"); res.setHeader("Cache-Control", "no-cache"); res.flushHeaders();
@@ -180,7 +187,20 @@ export function createResearchAgent({ config, credentials, search, readProject, 
         const project = await readProject(projectId);
         const sources = req.body.context === "all" ? project.sources : project.sources.filter((s) => s.id === req.body.sourceId);
         if (["source", "current"].includes(req.body.context) && req.body.sourceId && !sources.length) throw new Error("The selected source is no longer in this project. Choose another source.");
-        context = sources.map((s) => `Source: ${s.title}\nURL: ${s.url}\n${String(s.textContent || "").slice(0, 30000)}\nHighlights: ${JSON.stringify(s.highlights || [])}`).join("\n\n").slice(0, 70000);
+        const anchored = session.anchor && project.sources.find((source) => source.id === session.anchor.sourceId);
+        if (anchored && !sources.some((source) => source.id === anchored.id)) sources.unshift(anchored);
+        context = sources.map((s) => {
+          const full = String(s.textContent || "");
+          const excerpt = full.slice(0, session.anchor?.sourceId === s.id ? 60000 : 30000);
+          return `Source ID: ${s.id}\nSource: ${s.title}\nURL: ${s.url}\nArticle text (${full.length} characters${excerpt.length < full.length ? "; use read_source with this ID for the remainder" : "; complete"}):\n${excerpt}\nHighlights: ${JSON.stringify(s.highlights || [])}`;
+        }).join("\n\n").slice(0, 70000);
+      }
+      if (session.anchor && req.body.context !== "none") {
+        context = `Selected passage for this conversation (source ID ${session.anchor.sourceId}):\n${session.anchor.text}\n\n${context}`;
+      }
+      if (req.body.contextUrl?.trim()) {
+        const page = await readUrl(req.body.contextUrl.trim(), run.abort.signal);
+        context += `\n\nAdditional URL supplied by the user: ${page.title || page.url}\nURL: ${page.url}\nPage text (up to 30,000 characters):\n${page.text}`;
       }
       const approve = async (proposal, activity) => {
         const id = randomUUID();
@@ -195,12 +215,13 @@ export function createResearchAgent({ config, credentials, search, readProject, 
           if (run.abort.signal.aborted) cancel();
         });
       };
-      const skillList = await extensions.listSkills(projectId);
+      const explaining = req.body.mode === "explain";
+      const skillList = explaining ? [] : await extensions.listSkills(projectId);
       const mcpErrors = [];
-      const configuredServers = await extensions.listServers(projectId);
+      const configuredServers = explaining ? [] : await extensions.listServers(projectId);
       const untrusted = configuredServers.filter((server) => server.enabled && !server.trusted);
       if (untrusted.length) emit({ notice: `MCP server changed outside Settings: ${untrusted.map((server) => server.label).join(", ")}. Open Skills & MCP and save it to allow connection.` });
-      mcp = await connectMcp(configuredServers.filter((server) => server.trusted), { workspace: loc.workspace, signal: run.abort.signal, onError: (message) => mcpErrors.push(message) });
+      if (!explaining) mcp = await connectMcp(configuredServers.filter((server) => server.trusted), { workspace: loc.workspace, signal: run.abort.signal, onError: (message) => mcpErrors.push(message) });
       if (mcpErrors.length) emit({ notice: `MCP: ${mcpErrors.join("; ").slice(0, 1000)}` });
       for (let round = 0; round < 12; round++) {
         run.abort.signal.throwIfAborted(); partial = "";
@@ -211,8 +232,9 @@ export function createResearchAgent({ config, credentials, search, readProject, 
           const base = m.model && m.model !== picked.ref ? { ...m, anthropicContent: undefined, reasoningDetails: undefined } : m;
           return m.role === "user" && m.attachments?.length ? { ...base, content: `${m.content}\n\n${m.attachments.map((file) => `<untrusted_attachment name=${JSON.stringify(file.name)} kind=${file.kind}>\n${file.content}\n</untrusted_attachment>`).join("\n\n")}` } : base;
         });
-        const reply = await step({ ...picked, tools: [...AGENT_TOOLS, ...mcp.definitions], messages,
-          system: `${SYSTEM}\nAvailable skills: ${JSON.stringify(skillList.map(({ id, scope, description }) => ({ id, scope, description })))}\nSaved task plan (progress data): ${JSON.stringify(session.plan || [])}\nPlatform: ${process.platform}. Workspace: ${loc.workspace}.${loc.projectDir ? " Project files can be read or patched with project/ paths." : " This is global research; no project files are included."}\n${history.omitted ? `${history.omitted} older messages were omitted; read_history can recover them.` : ""}\n<untrusted_source_material>\n${context}\n</untrusted_source_material>`,
+        const allowedTools = explaining ? AGENT_TOOLS.filter((tool) => ["list_sources", "read_source", "search_sources", "list_highlights", "web_search", "read_url", "read_history"].includes(tool.name)) : AGENT_TOOLS;
+        const reply = await step({ ...picked, tools: [...allowedTools, ...(mcp?.definitions || [])], messages,
+          system: `${SYSTEM}\n${explaining ? "This is an inline explanation of the highlighted passage. Answer the user's question directly with source-grounded reasoning and useful citations. This turn is read-only: do not write files, run commands, call MCP tools or update a plan. If the article excerpt is insufficient, use read_source with the source ID to read more before answering." : ""}\nAvailable skills: ${JSON.stringify(skillList.map(({ id, scope, description }) => ({ id, scope, description })))}\nSaved task plan (progress data): ${JSON.stringify(session.plan || [])}\nPlatform: ${process.platform}. Workspace: ${loc.workspace}.${loc.projectDir ? explaining ? " Project sources can be read with source tools." : " Project files can be read or patched with project/ paths." : " This is global research; no project files are included."}\n${history.omitted ? `${history.omitted} older messages were omitted; read_history can recover them.` : ""}\n<untrusted_source_material>\n${context}\n</untrusted_source_material>`,
           signal: AbortSignal.any([run.abort.signal, AbortSignal.timeout(120000)]), onText: (text) => { partial += text; emit({ text }); },
         });
         reply.model = picked.ref; reply.createdAt = new Date().toISOString();
@@ -228,7 +250,8 @@ export function createResearchAgent({ config, credentials, search, readProject, 
           let output, error = false;
           try {
             const argumentsObject = JSON.parse(call.arguments);
-            if (mcp.has(call.name)) {
+            if (explaining && !allowedTools.some((tool) => tool.name === call.name)) throw new Error("This inline explanation is read-only. Open the conversation in Vajra for other tools.");
+            if (mcp?.has(call.name)) {
               const info = mcp.describe(call.name);
               if (!(await approve({ kind: "mcp", ...info, arguments: argumentsObject }, activity))) throw new Error("The user declined this MCP call. Do not retry it without a new request.");
               run.abort.signal.throwIfAborted();

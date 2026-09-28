@@ -10,6 +10,8 @@ import { SourceSummary } from "./SourceSummary";
 import { CodeSourceView } from "./FilesPane";
 import { DrawMenu } from "./DrawMenu";
 import { NotePopover } from "./NotePopover";
+import { InlineVajra } from "./InlineVajra";
+import type { ResearchSession } from "../research";
 import { linksOf, type LinkEnd, type SourceLink } from "../links";
 import { samePage, stepPage, visitPage } from "../../../server/public/pages.js";
 
@@ -24,6 +26,11 @@ interface Props {
   onMode: (m: "original" | "reader") => void;
   onToggleScripts: () => void;
   onAddHighlight: (h: Highlight) => void;
+  onAttachVajra: (highlightId: string, sessionId: string) => void;
+  onSaveExplanation: (highlightId: string, session: ResearchSession, format: "md" | "pdf") => Promise<void>;
+  onOpenVajra: (sessionId: string) => void;
+  onVajraSettings: () => void;
+  askRequest?: { sourceId: string; highlightId: string; nonce: number } | null;
   /** A drawing that has been moved or resized, or a highlight recoloured. */
   onUpdateHighlight: (h: Highlight) => void;
   /** How each kind of drawing is painted when it is drawn next; kept with the project. */
@@ -90,7 +97,9 @@ export function SourcePane(p: Props) {
   const [drawColor, setDrawColor] = useState<HighlightColor>("yellow");
   const [notes, setNotes] = useState(true);
   const [notePop, setNotePop] = useState<{ id: string; x: number; y: number; flip: boolean } | null>(null);
-  useEffect(() => { setTool(null); setNotePop(null); }, [p.source?.id]);
+  const [askId, setAskId] = useState<string | null>(null);
+  useEffect(() => { setTool(null); setNotePop(null); setAskId(null); }, [p.source?.id]);
+  useEffect(() => { const request = p.askRequest; if (request && request.sourceId === p.source?.id) { setNotePop(null); setAskId(request.highlightId); } }, [p.askRequest?.nonce, p.source?.id]);
   const stageRef = useRef<HTMLDivElement>(null);
 
   const source = p.source;
@@ -217,6 +226,7 @@ export function SourcePane(p: Props) {
     l.from.sourceId === p.source?.id ? l.from.highlightId : undefined,
     l.to.sourceId === p.source?.id ? l.to.highlightId : undefined,
   ]).filter(Boolean) as string[];
+  for (const highlight of source.highlights) if (highlight.vajraSessions?.length) linkedIds.push(highlight.id);
   /**
    * A marker opens its note beside itself, in the stage's own coordinates — below it when
    * there is room, above it when there is not. A card that opens past the bottom of the pane
@@ -245,6 +255,7 @@ export function SourcePane(p: Props) {
     linkedIds,
     onNote: openNote,
   };
+  const askHighlight = (highlight: Highlight) => { setNotePop(null); setAskId(highlight.id); };
 
   const scripts = source.scripts !== false;
   const hasSummary = Boolean(source.summary?.trim());
@@ -380,6 +391,7 @@ export function SourcePane(p: Props) {
             apiPort={p.apiPort}
             scripts={scripts}
             onAddHighlight={addHighlight}
+            onAskHighlight={askHighlight}
             onSelectHighlight={p.onSelectHighlight}
             onOpenLink={p.onOpenLink}
             page={page}
@@ -399,6 +411,7 @@ export function SourcePane(p: Props) {
             scrollToId={p.scrollToId}
             scrollNonce={p.scrollNonce}
             onAddHighlight={addHighlight}
+            onAskHighlight={askHighlight}
             onSelectHighlight={p.onSelectHighlight}
             fontScale={p.fontScale}
             {...draw}
@@ -414,10 +427,15 @@ export function SourcePane(p: Props) {
             y={notePop.y}
             flip={notePop.flip}
             onWidth={(noteWidth) => { const h = source.highlights.find((h) => h.id === notePop.id); if (h) p.onUpdateHighlight({ ...h, noteWidth }); }}
+            onAsk={() => { setAskId(notePop.id); setNotePop(null); }}
             onGo={(end) => { setNotePop(null); p.onGoEnd(end); }}
             onClose={() => setNotePop(null)}
           />
         )}
+        {!p.presenting && askId && source.highlights.some((h) => h.id === askId) && <InlineVajra key={`${source.id}:${askId}`} projectId={p.projectId} source={source} highlight={source.highlights.find((h) => h.id === askId)!}
+          onAttach={(sessionId) => p.onAttachVajra(askId, sessionId)}
+          onSave={(session, format) => p.onSaveExplanation(askId, session, format)}
+          onOpenFull={(id) => { setAskId(null); p.onOpenVajra(id); }} onSettings={p.onVajraSettings} onClose={() => setAskId(null)} />}
       </div>
     </div>
   );

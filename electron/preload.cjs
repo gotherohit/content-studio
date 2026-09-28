@@ -16,6 +16,7 @@ contextBridge.exposeInMainWorld("studio", {
   info: () => ipcRenderer.invoke("studio:info"),
   pickFolder: (title) => ipcRenderer.invoke("studio:pickFolder", title),
   openExternal: (url) => ipcRenderer.invoke("studio:openExternal", url),
+  renderExplanationPdf: (markdown) => ipcRenderer.invoke("studio:explanationPdf", markdown),
   installUpdate: () => ipcRenderer.invoke("studio:installUpdate"),
   updateState: () => ipcRenderer.invoke("studio:updateState"),
   checkForUpdates: () => ipcRenderer.invoke("studio:checkForUpdates"),

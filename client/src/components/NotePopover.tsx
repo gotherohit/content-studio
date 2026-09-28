@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, GripVertical, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, GripVertical, Sparkles, X } from "lucide-react";
 import type { Highlight, Source } from "../types";
 import { otherEnd, relationOf, type LinkEnd, type SourceLink } from "../links";
 import { shapeLabel } from "../shapes";
@@ -14,6 +14,7 @@ interface Props {
   y: number;
   flip: boolean;
   onWidth: (width: number) => void;
+  onAsk: () => void;
   onGo: (end: LinkEnd) => void;
   onClose: () => void;
 }
@@ -83,6 +84,7 @@ export function NotePopover(p: Props) {
         <button className="icon-btn" onClick={p.onClose} title="Close"><X size={13} /></button>
       </div>
       {p.highlight.comment?.trim() && <p className="note-pop-comment">{p.highlight.comment}</p>}
+      {!p.highlight.shape && <button className="note-pop-link note-pop-vajra" onClick={p.onAsk}><Sparkles size={12} /><span>{p.highlight.vajraSessions?.length ? `View Vajra questions (${p.highlight.vajraSessions.length})` : "Ask Vajra about this passage"}</span></button>}
       {p.links.map((l) => {
         const { end, outgoing } = otherEnd(l, p.source.id, p.highlight.id);
         const rel = relationOf(l.relation);

@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState } from "react";
-import { Copy, X } from "lucide-react";
+import { Copy, Sparkles, X } from "lucide-react";
 import type { HighlightColor } from "../types";
 
 /** The passage colours. Kept here, not imported: this card is also rendered on its own. */
@@ -18,13 +18,14 @@ interface Props {
   /** The colours a drawing is offered; the passage colours when absent. */
   palette?: HighlightColor[];
   onCommit: (color: HighlightColor, comment: string) => void;
+  onAsk?: (color: HighlightColor, comment: string) => void;
   onCancel: () => void;
   /** Something has been typed, so the surface underneath must stop closing this card. */
   onType?: () => void;
 }
 
 /** Floating "add highlight" card shown over a text selection. */
-export function HighlightPopup({ x, y, flip, selectionText, drawing, palette, onCommit, onCancel, onType }: Props) {
+export function HighlightPopup({ x, y, flip, selectionText, drawing, palette, onCommit, onAsk, onCancel, onType }: Props) {
   const colors = drawing && palette ? palette : TEXT_COLORS;
   const first = drawing ?? "yellow";
   const [comment, setComment] = useState("");
@@ -64,6 +65,7 @@ export function HighlightPopup({ x, y, flip, selectionText, drawing, palette, on
           <button key={c} className={`swatch hl-${c} ${drawing ? "strong" : ""} ${drawing === c ? "active" : ""}`} title={drawing ? c : `Highlight ${c}`} onClick={() => onCommit(c, comment.trim())} />
         ))}
         <span className="grow" />
+        {selectionText && onAsk && <button className="hl-ask-btn" onClick={() => onAsk(first, comment.trim())} title="Highlight and ask Vajra about this passage"><Sparkles size={14} /> Ask Vajra</button>}
         {selectionText && <button className="icon-btn" onClick={() => void copySelection()} title="Copy selected text"><Copy size={14} /></button>}
         <button className="icon-btn" onClick={onCancel} title="Cancel"><X size={14} /></button>
       </div>

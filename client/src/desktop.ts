@@ -48,6 +48,7 @@ export interface StudioBridge {
   info(): Promise<{ port: number; version: string; partition: string; dev: boolean }>;
   pickFolder(title?: string): Promise<string | null>;
   openExternal(url: string): Promise<void>;
+  renderExplanationPdf(markdown: string): Promise<string>;
   installUpdate(): Promise<void>;
   updateState(): Promise<UpdateInfo>;
   checkForUpdates(): Promise<UpdateInfo>;

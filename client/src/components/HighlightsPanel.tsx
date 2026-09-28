@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowRight, ClipboardCopy, Link2, Trash2, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, ClipboardCopy, Link2, Sparkles, Trash2, X } from "lucide-react";
 import { PALETTE, shapeLabel } from "../shapes";
 import { TEXT_COLORS, type Highlight, type Source } from "../types";
 import { linksFor, relationOf, type LinkEnd, type SourceLink } from "../links";
@@ -14,6 +14,7 @@ interface Props {
   onCopyAll: () => void;
   /** Start a link from a passage, or from the whole source when no highlight is given. */
   onLink: (from: LinkEnd) => void;
+  onAsk: (sourceId: string, highlightId: string) => void;
   onRemoveLink: (id: string) => void;
   /** Open the other end of a link: its source, and its passage when there is one. */
   onGo: (end: LinkEnd) => void;
@@ -21,7 +22,7 @@ interface Props {
 
 const clip = (text: string, n = 70) => (text.length > n ? text.slice(0, n) + "…" : text);
 
-export function HighlightsPanel({ source, sources, links, selectedId, onSelect, onUpdate, onDelete, onCopyAll, onLink, onRemoveLink, onGo }: Props) {
+export function HighlightsPanel({ source, sources, links, selectedId, onSelect, onUpdate, onDelete, onCopyAll, onLink, onAsk, onRemoveLink, onGo }: Props) {
   if (!source) return <div className="panel-empty">Open a source to see its highlights.</div>;
   const list = source.highlights;
   const { outgoing, incoming } = linksFor(links, source.id);
@@ -118,6 +119,7 @@ export function HighlightsPanel({ source, sources, links, selectedId, onSelect, 
                 ))}
               </div>
               <div className="row">
+                {!h.shape && <button className="icon-btn" title={h.vajraSessions?.length ? "View Vajra questions about this passage" : "Ask Vajra about this passage"} onClick={() => onAsk(source.id, h.id)}><Sparkles size={14} />{h.vajraSessions?.length ? <span className="small">{h.vajraSessions.length}</span> : null}</button>}
                 <button className="icon-btn" title="Link this passage to another source" onClick={() => onLink({ sourceId: source.id, highlightId: h.id })}><Link2 size={14} /></button>
                 <button className="icon-btn danger" title="Delete highlight" onClick={() => onDelete(h.id)}><Trash2 size={14} /></button>
               </div>

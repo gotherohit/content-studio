@@ -12,6 +12,7 @@ interface Props {
   scrollToId: string | null;
   scrollNonce: number;
   onAddHighlight: (h: Highlight) => void;
+  onAskHighlight?: (h: Highlight) => void;
   onUpdateHighlight?: (h: Highlight) => void;
   onSelectHighlight: (id: string) => void;
   fontScale: number;
@@ -24,7 +25,7 @@ interface Props {
 }
 
 /** Clean, text-only rendering of the article. */
-export function Reader({ source, scrollToId, scrollNonce, onAddHighlight, onUpdateHighlight, onSelectHighlight, fontScale, tool, drawColor, drawStyle, showNotes, linkedIds, onNote }: Props) {
+export function Reader({ source, scrollToId, scrollNonce, onAddHighlight, onAskHighlight, onUpdateHighlight, onSelectHighlight, fontScale, tool, drawColor, drawStyle, showNotes, linkedIds, onNote }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   // The layer covers the stage, so every box it is given is measured against the stage too.
   const stageRef = useRef<HTMLDivElement>(null);
@@ -133,12 +134,14 @@ export function Reader({ source, scrollToId, scrollNonce, onAddHighlight, onUpda
     return shape ? { shape, anchor: found.anchor, onImage: found.onImage } : null;
   }
 
-  function commit(color: HighlightColor, comment: string) {
+  function commit(color: HighlightColor, comment: string, ask = false) {
     if (!popup) return;
-    onAddHighlight({
+    const highlight: Highlight = {
       id: `h${Date.now().toString(36)}`, ...popup.anchor, shape: popup.shape, onImage: popup.onImage,
       color, comment, createdAt: new Date().toISOString(),
-    });
+    };
+    onAddHighlight(highlight);
+    if (ask) onAskHighlight?.(highlight);
     window.getSelection()?.removeAllRanges();
     setPopup(null);
   }
@@ -185,7 +188,7 @@ export function Reader({ source, scrollToId, scrollNonce, onAddHighlight, onUpda
           }}
         />
       </div>
-{popup && <HighlightPopup selectionText={popup.shape ? undefined : popup.anchor?.text} drawing={popup.shape ? drawColor ?? "yellow" : undefined} palette={PALETTE} x={popup.x} y={popup.y} flip={popup.flip} onCommit={commit} onCancel={() => setPopup(null)} />}
+{popup && <HighlightPopup selectionText={popup.shape ? undefined : popup.anchor?.text} drawing={popup.shape ? drawColor ?? "yellow" : undefined} palette={PALETTE} x={popup.x} y={popup.y} flip={popup.flip} onCommit={commit} onAsk={(color, comment) => commit(color, comment, true)} onCancel={() => setPopup(null)} />}
     </div>
   );
 }

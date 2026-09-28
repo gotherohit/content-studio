@@ -21,6 +21,11 @@ on the server. A later `read_history` tool call can reveal a bounded attachment 
 visible activity output so an agent can recover context after a long conversation.
 The highlight popup deliberately focuses its note input. Pass its captured `selectionText` so
 Ctrl/Cmd+C can copy the passage when that note is empty; preserve native copy for typed notes.
+Inline Vajra questions store conversation IDs on their highlight, while the transcript stays
+in the server-owned `.ai/conversations/` folder. The server persists the selected passage as
+the conversation anchor so follow-ups in the full Vajra pane retain it. Inline runs expose
+read-only source and web tools; do not let an unavailable write tool be called by name.
+Additional URL context must use `readPublicUrl` and its SSRF/redirect guard.
 Highlight `noteWidth` stores a preferred comment-card width, not its height or position.
 Clamp the displayed card to its current Source pane without overwriting the saved preference
 on layout resize. Vajra's sidebar must never remount its chat or abort a run when toggled.

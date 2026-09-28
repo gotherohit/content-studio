@@ -20,6 +20,8 @@ import { navigateSourceLayout, sourcePaneLabel } from "./source-navigation";
 import { NotesPanel } from "./components/NotesPanel";
 import { CodePanel } from "./components/CodePanel";
 import { AiPanel } from "./components/AiPanel";
+import { explanationLink, explanationMarkdown, explanationName } from "./explanations";
+import type { ResearchSession } from "./research";
 import { CanvasPanel } from "./components/CanvasPanel";
 import { EmbedPane } from "./components/EmbedPane";
 import { BrowserPane } from "./components/BrowserPane";
@@ -97,6 +99,8 @@ export default function App() {
   const [project, setProject] = useState<Project | null>(null);
   const [activeSourceId, setActiveSourceId] = useState<string | null>(null);
   const [selectedHl, setSelectedHl] = useState<string | null>(null);
+  const [vajraRequest, setVajraRequest] = useState<{ sourceId: string; highlightId: string; nonce: number } | null>(null);
+  const [vajraOpen, setVajraOpen] = useState<{ sessionId: string; nonce: number } | null>(null);
   const [navigation, setNavigation] = useState<{ projectId: string; end: LinkEnd } | null>(null);
   const [navigationPane, setNavigationPane] = useState<number | null>(null);
   const [scrollNonce, setScrollNonce] = useState(0);
@@ -221,6 +225,8 @@ export default function App() {
     setActiveBeatId(null);
     setBeatUndo(null);
     setSelectedHl(null);
+    setVajraRequest(null);
+    setVajraOpen(null);
     lsSet("lastProject", id);
     adoptFolderFiles(p).catch(() => {});
   }
@@ -447,6 +453,49 @@ export default function App() {
   const updateHighlight = useCallback((sourceId: string, h: Highlight) => {
     updateSource(sourceId, (s) => ({ ...s, highlights: s.highlights.map((x) => (x.id === h.id ? h : x)) }));
   }, [updateSource]);
+
+  const attachVajra = (sourceId: string, highlightId: string, sessionId: string) => {
+    updateSource(sourceId, (s) => ({ ...s, highlights: s.highlights.map((h) => h.id === highlightId && !h.vajraSessions?.includes(sessionId)
+      ? { ...h, vajraSessions: [...(h.vajraSessions ?? []), sessionId] } : h) }));
+  };
+
+  async function saveExplanation(sourceId: string, highlightId: string, session: ResearchSession, format: "md" | "pdf") {
+    if (!project) throw new Error("Open the project before saving an explanation.");
+    const origin = project.sources.find((s) => s.id === sourceId);
+    const passage = origin?.highlights.find((h) => h.id === highlightId);
+    if (!origin || !passage) throw new Error("The highlighted passage has been removed.");
+    const markdown = explanationMarkdown(origin, passage, session);
+    const name = explanationName(origin, session, format);
+    let file: File;
+    if (format === "pdf") {
+      if (!desktop) throw new Error("PDF saving is available in the desktop app.");
+      const base64 = await desktop.renderExplanationPdf(markdown);
+      const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+      file = new File([bytes], name, { type: "application/pdf" });
+    } else file = new File([markdown], name, { type: "text/markdown" });
+    const info = await api.uploadFile(project.id, file);
+    const id = `src${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
+    const saved: Source = { id, kind: "file", file: info, url: api.fileUrl(project.id, info.name), title: info.name,
+      byline: null, siteName: null, excerpt: null, content: "", textContent: "", fetchedAt: new Date().toISOString(), highlights: [] };
+    mutate((p) => p.id !== project.id ? p : ({ ...p, sources: [...p.sources, saved], links: [...(p.links ?? []), explanationLink(sourceId, highlightId, id)] }));
+  }
+
+  function openVajraSession(sessionId: string) {
+    setVajraOpen({ sessionId, nonce: Date.now() });
+    setLayout((layout) => {
+      if (layout.panes.some((pane) => pane.kind === "ai")) return layout;
+      if (layout.panes.length === 1) return { ...layout, preset: "2", panes: [...layout.panes, { kind: "ai" }] };
+      const target = layout.panes.findIndex((pane) => pane.kind !== "source");
+      const index = target >= 0 ? target : layout.panes.length - 1;
+      return { ...layout, panes: layout.panes.map((pane, i) => i === index ? { kind: "ai" } : pane) };
+    });
+  }
+
+  function askFromHighlights(sourceId: string, highlightId: string) {
+    setVajraRequest({ sourceId, highlightId, nonce: Date.now() });
+    if (!layout.panes.some((pane) => pane.kind === "source")) setLayout((l) => ({ ...l, panes: l.panes.map((pane, i) => i === 0 ? { kind: "source" } : pane) }));
+    setNavigation({ projectId: project!.id, end: { sourceId, highlightId } });
+  }
 
   /** Called from a page or file view: show the matching card. */
   const selectFromPage = useCallback((sourceId: string, id: string) => {
@@ -879,6 +928,11 @@ export default function App() {
             onMode={(mode) => setLayout((l) => ({ ...l, panes: l.panes.map((x, j) => j === i ? { ...x, mode } : x) }))}
             onToggleScripts={() => paneSource && updateSource(paneSource.id, (s) => ({ ...s, scripts: s.scripts === false }))}
             onAddHighlight={(h) => paneSource && addHighlight(paneSource.id, h)}
+            onAttachVajra={(highlightId, sessionId) => paneSource && attachVajra(paneSource.id, highlightId, sessionId)}
+            onSaveExplanation={(highlightId, session, format) => paneSource ? saveExplanation(paneSource.id, highlightId, session, format) : Promise.reject(new Error("Source closed"))}
+            onOpenVajra={openVajraSession}
+            onVajraSettings={() => { setSettingsTab("models"); setShowSettings(true); }}
+            askRequest={vajraRequest}
             onUpdateHighlight={(h) => paneSource && updateHighlight(paneSource.id, h)}
             drawStyles={project.settings.drawStyles}
             onDrawStyles={(drawStyles) => mutate((p) => ({ ...p, settings: { ...p.settings, drawStyles } }))}
@@ -921,6 +975,7 @@ export default function App() {
             onDelete={(id) => shownSource && deleteHighlight(shownSource.id, id)}
             onCopyAll={() => copyHighlights(shownSource)}
             onLink={setLinkFrom}
+            onAsk={askFromHighlights}
             onRemoveLink={removeLink}
             onGo={goToEnd}
           />
@@ -975,7 +1030,7 @@ export default function App() {
           />
         );
       case "notes": return <NotesPanel value={project.notes} onChange={(notes) => mutate((p) => ({ ...p, notes }))} />;
-      case "ai": return <AiPanel key={project.id} projectId={project.id} projectTitle={project.title} hasLegacyChat={project.chat.length > 0} source={source} sources={project.sources} onOpenSettings={(tab) => { setSettingsTab(tab || "models"); setShowSettings(true); }} />;
+      case "ai": return <AiPanel key={project.id} projectId={project.id} projectTitle={project.title} hasLegacyChat={project.chat.length > 0} source={source} sources={project.sources} openSession={vajraOpen} onOpenSettings={(tab) => { setSettingsTab(tab || "models"); setShowSettings(true); }} />;
       case "code": return <CodePanel projectId={project.id} snippets={project.snippets} onChange={(snippets) => mutate((p) => ({ ...p, snippets }))} />;
       case "canvas": return (
         <CanvasPanel

@@ -2,6 +2,18 @@
 
 What changed in each release, newest first. Versions are the ones the app updates itself to.
 
+## 0.30.0
+
+- **Ask Vajra on a highlighted passage** in Original or Reader view. The inline conversation
+  receives the selected words and their source, supports follow-ups and optional public URL
+  context, and can be reopened from the highlight's icon or card. Open the same conversation
+  in a full Vajra pane for more research.
+- **Save an explanation as a source.** Markdown and desktop PDF exports include the passage
+  and question/answer thread. Studio adds the file to Sources and links it back to the exact
+  highlight with an **explains** connection.
+- Vajra's full prompt box can also include a public URL. Inline explanations use read-only
+  tools; source text and the selected passage stay attached to the conversation on follow-up.
+
 ## 0.29.0
 
 - **Many more shapes.** Besides the rectangle, oval and arrow, the pencil now draws a

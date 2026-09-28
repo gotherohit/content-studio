@@ -232,6 +232,41 @@ test('attached text reaches the model and persists, while visible transcript hid
   assert.equal(stored.messages[0].attachments[0].content, 'PRIVATE ATTACHMENT TEXT');
 });
 
+test('inline explanations ground the selected passage, source and extra URL while excluding write tools', async t => {
+  const root = await scratch(t), projectDir = path.join(root, 'project'), home = path.join(root, 'home');
+  await fs.mkdir(projectDir); await fs.mkdir(home); await fs.writeFile(path.join(projectDir, 'project.json'), '{}');
+  const credentials = { list: () => ({ providers: [] }), find: () => null, resolve: () => ({ provider: { kind: 'openai' }, model: 'fixture', ref: 'fixture/model' }) };
+  const source = { id: 'article', title: 'Distillation article', url: 'https://example.org/distillation', textContent: 'Opening. ' + 'A'.repeat(40000) + ' Relevant passage at the end.', highlights: [] };
+  let calls = 0, urlReads = 0;
+  const agent = createResearchAgent({ config: { appDir: () => home, dirOf: () => projectDir }, credentials, search: {}, readProject: async () => ({ sources: [source] }),
+    readUrl: async (url) => { urlReads++; assert.equal(url, 'https://example.org/extra'); return { url, title: 'Extra evidence', text: 'EXTRA PAGE TEXT' }; },
+    step: async ({ system, tools, messages }) => {
+      calls++;
+      assert.match(system, /SELECTED QUOTE/); assert.match(system, /Relevant passage at the end/);
+      assert.match(system, /https:\/\/example.org\/distillation/);
+      if (calls <= 2) assert.match(system, /EXTRA PAGE TEXT/);
+      assert.equal(messages[0].content, 'Why does this matter?');
+      assert.ok(tools.some((tool) => tool.name === 'read_source'));
+      if (calls <= 2) assert.ok(!tools.some((tool) => ['write_file', 'run_shell', 'apply_patch'].includes(tool.name)));
+      else assert.ok(tools.some((tool) => tool.name === 'write_file'));
+      return calls === 1 ? { role: 'assistant', content: '', toolCalls: [{ id: 'bad', name: 'write_file', arguments: JSON.stringify({ path: 'bad.md', content: 'bad' }) }] }
+        : { role: 'assistant', content: 'It changes the outcome.', toolCalls: [] };
+    } });
+  const app = express(); app.use(express.json()); app.use('/api/research', agent.router); const url = await listening(t, app);
+  const post = (route, body) => fetch(url + '/api/research' + route, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const session = await post('/sessions', { projectId: 'scratch' }).then((response) => response.json());
+  const response = await post(`/sessions/${session.id}/run`, { projectId: 'scratch', message: 'Why does this matter?', model: 'fixture/model', mode: 'explain', context: 'source', sourceId: 'article', highlightId: 'h1', highlightText: 'SELECTED QUOTE', contextUrl: 'https://example.org/extra' });
+  let saved;
+  for await (const data of sse(response.body)) if (data) { const event = JSON.parse(data); if (event.done) saved = event.session; }
+  assert.equal(saved.status, 'complete'); assert.equal(urlReads, 1); assert.equal(calls, 2);
+  assert.deepEqual(saved.anchor, { sourceId: 'article', highlightId: 'h1', text: 'SELECTED QUOTE' });
+  assert.match(saved.activity[0].output, /read-only/);
+  await assert.rejects(fs.access(path.join(projectDir, 'research', 'bad.md')));
+  const followup = await post(`/sessions/${session.id}/run`, { projectId: 'scratch', message: 'Continue in full Vajra', model: 'fixture/model', context: 'source', sourceId: 'article' });
+  for await (const data of sse(followup.body)) if (data) { const event = JSON.parse(data); if (event.done) saved = event.session; }
+  assert.equal(saved.status, 'complete'); assert.equal(calls, 3); assert.equal(urlReads, 1);
+});
+
 test('Vajra persists plans and step progress, resumes limited runs, and serializes renames', async t => {
   const home = await scratch(t);
   const credentials = { list: () => ({ providers: [] }), find: () => null, resolve: () => ({ provider: { kind: 'openai' }, model: 'fixture', ref: 'fixture/model' }) };

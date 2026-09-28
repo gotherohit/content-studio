@@ -13,6 +13,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import electronUpdater from "electron-updater";
 import { wireHandoff } from "./handoff.js";
+import { explanationPdfHtml } from "./explanation-pdf.js";
 
 const { autoUpdater } = electronUpdater;
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -500,6 +501,15 @@ ipcMain.handle("studio:updateState", () => update);
 ipcMain.handle("studio:checkForUpdates", () => check());
 ipcMain.handle("studio:installUpdate", () => installUpdate());
 ipcMain.handle("studio:openExternal", (_e, url) => shell.openExternal(url));
+ipcMain.handle("studio:explanationPdf", async (event, markdown) => {
+  if (event.sender !== win?.webContents || typeof markdown !== "string" || markdown.length > 300000) throw new Error("Invalid explanation document.");
+  const page = new BrowserWindow({ show: false, width: 820, height: 1100, webPreferences: { sandbox: true, nodeIntegration: false, contextIsolation: true } });
+  try {
+    await page.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(explanationPdfHtml(markdown))}`);
+    const pdf = await page.webContents.printToPDF({ printBackground: true, pageSize: "A4" });
+    return pdf.toString("base64");
+  } finally { page.destroy(); }
+});
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();

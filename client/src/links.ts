@@ -1,7 +1,7 @@
 import type { Source } from "./types";
 
 /** How one passage bears on another. Read from the linking side: "this supports that". */
-export type Relation = "supports" | "contradicts" | "cites" | "same" | "related";
+export type Relation = "supports" | "contradicts" | "cites" | "same" | "related" | "explains";
 
 export const RELATIONS: { id: Relation; label: string; backlink: string }[] = [
   { id: "supports", label: "supports", backlink: "supported by" },
@@ -9,6 +9,7 @@ export const RELATIONS: { id: Relation; label: string; backlink: string }[] = [
   { id: "cites", label: "cites", backlink: "cited by" },
   { id: "same", label: "same claim as", backlink: "same claim as" },
   { id: "related", label: "related to", backlink: "related to" },
+  { id: "explains", label: "explains", backlink: "explained by" },
 ];
 export const relationOf = (id: Relation) => RELATIONS.find((r) => r.id === id) ?? RELATIONS[4];
 

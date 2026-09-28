@@ -5,6 +5,7 @@ export interface ToolActivity {
 }
 export interface ResearchSession {
   id: string; title: string; status: string; model: string | null; workspace: string;
+  anchor?: { sourceId: string; highlightId?: string; text: string };
   messages: ResearchMessage[]; activity: ToolActivity[]; updatedAt: string; lastError?: string;
   plan?: { text: string; status: "pending" | "in_progress" | "complete" }[];
   progress?: { step: number; maxSteps: number; startedAt: string; finishedAt?: string };

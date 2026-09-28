@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
-import { ArrowUp, FileText, Paperclip, PanelLeft, Square, X } from "lucide-react";
+import { ArrowUp, FileText, Link2, Paperclip, PanelLeft, Square, X } from "lucide-react";
 import { VajraSidebar } from "./VajraSidebar";
 import { VajraMark } from "./VajraMark";
 import type { Source } from "../types";
@@ -15,11 +15,12 @@ interface Props {
   source: Source | null;
   sources?: Source[];
   hasLegacyChat?: boolean;
+  openSession?: { sessionId: string; nonce: number } | null;
   onOpenSettings: (tab?: "models" | "extensions") => void;
 }
 const renderMarkdown = (text: string) => DOMPurify.sanitize(marked.parse(text) as string);
 
-export function AiPanel({ projectId, projectTitle, source, sources = [], hasLegacyChat, onOpenSettings }: Props) {
+export function AiPanel({ projectId, projectTitle, source, sources = [], hasLegacyChat, openSession, onOpenSettings }: Props) {
   const host = useRef<HTMLDivElement>(null);
   const sidebarId = useId();
   const toggle = useRef<HTMLButtonElement>(null);
@@ -45,8 +46,11 @@ export function AiPanel({ projectId, projectTitle, source, sources = [], hasLega
   const [status, setStatus] = useState<AiStatus | null>(null);
   const [model, setModel] = useState("");
   const [context, setContext] = useState("current");
+  const [contextUrl, setContextUrl] = useState("");
+  const [showUrl, setShowUrl] = useState(false);
   const controller = useRef<AbortController | null>(null);
   const generation = useRef(0);
+  const openedRequest = useRef<number | null>(null);
   const chat = useRef<HTMLDivElement>(null);
   const follow = useRef(true);
   const refreshModels = () => api.aiStatus().then((s) => { setStatus(s); setModel((m) => s.models.some((item) => item.ref === m) ? m : s.models.some((item) => item.ref === s.model) ? s.model || "" : s.models[0]?.ref || ""); }).catch((e) => setError(e.message));
@@ -72,11 +76,17 @@ export function AiPanel({ projectId, projectTitle, source, sources = [], hasLega
       setRows(result.sessions);
       if (result.sessions.length) {
         const loaded = await research.load(project, result.sessions[0].id);
-        if (version === generation.current) { setSession(loaded); if (loaded.model) setModel(loaded.model); }
+        if (version === generation.current) { setSession(loaded); if (loaded.model) setModel(loaded.model); if (loaded.anchor && sources.some((source) => source.id === loaded.anchor?.sourceId)) setContext(`source:${loaded.anchor.sourceId}`); }
       }
     }).catch((e) => { if (version === generation.current) setError(e.message); })
       .finally(() => { if (version === generation.current) setLoading(false); });
   }, [project]);
+  useEffect(() => {
+    if (!openSession || !projectId || openedRequest.current === openSession.nonce) return;
+    if (scope !== "project") { setScope("project"); return; }
+    openedRequest.current = openSession.nonce;
+    void choose(openSession.sessionId);
+  }, [openSession?.nonce, scope, projectId]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (follow.current && chat.current) chat.current.scrollTop = chat.current.scrollHeight; }, [session, partial]);
   useEffect(() => { if (textarea.current) { textarea.current.style.height = "auto"; textarea.current.style.height = `${Math.min(180, Math.max(76, textarea.current.scrollHeight))}px`; } }, [input]);
   // A second pane can observe/approve a running session without owning its stream.
@@ -93,7 +103,9 @@ export function AiPanel({ projectId, projectTitle, source, sources = [], hasLega
     if (compact) closeSidebar();
     setRenameTitle(null); setNotice("");
     const version = ++generation.current; setLoading(true); setError("");
-    try { const s = await research.load(project, id); if (version === generation.current) { setSession(s); if (s.model) setModel(s.model); setPartial(""); follow.current = true; } }
+    try { const s = await research.load(project, id); if (version === generation.current) { setSession(s); if (s.model) setModel(s.model); if (s.anchor && sources.some((source) => source.id === s.anchor?.sourceId)) setContext(`source:${s.anchor.sourceId}`); setPartial(""); follow.current = true;
+      const listing = await research.list(project); if (version === generation.current) setRows(listing.sessions);
+    } }
     catch (e) { setError((e as Error).message); }
     finally { if (version === generation.current) setLoading(false); }
   }
@@ -122,7 +134,8 @@ export function AiPanel({ projectId, projectTitle, source, sources = [], hasLega
       const selectedAttachments = attachments;
       const selectedSourceId = context.startsWith("source:") ? context.slice(7) : source?.id;
       const selectedContext = project ? context.startsWith("source:") ? "source" : context : "none";
-      await research.run(selected.id, { projectId: project, message, model: selectedModel, context: selectedContext, sourceId: selectedSourceId, attachments: selectedAttachments }, abort.signal, (event) => {
+      await research.run(selected.id, { projectId: project, message, model: selectedModel, context: selectedContext, sourceId: selectedSourceId, attachments: selectedAttachments,
+        ...(contextUrl.trim() ? { contextUrl: contextUrl.trim() } : {}) }, abort.signal, (event) => {
         if (version !== generation.current) return;
         if (event.session) {
           const saved = event.session;
@@ -221,6 +234,7 @@ export function AiPanel({ projectId, projectTitle, source, sources = [], hasLega
     {!running && session && ["limited", "stopped", "interrupted", "error"].includes(session.status) && <div className="row between note-bar"><span>Saved progress is available.</span><button className="small" disabled={loading || !selectedModel} onClick={() => send("Continue the previous task from saved progress. Check the plan and previous tool results before repeating actions; finish outstanding work and report any blockers.")}>Continue</button></div>}
     {!!session?.plan?.length && <details className="vajra-plan" open><summary>Task plan · {session.plan.filter((s) => s.status === "complete").length}/{session.plan.length} complete</summary><ol>{session.plan.map((s, i) => <li key={i} data-status={s.status}><span aria-hidden="true">{s.status === "complete" ? "✓" : s.status === "in_progress" ? "→" : "○"}</span> {s.text}<span className="sr-only"> — {s.status.replaceAll("_", " ")}</span></li>)}</ol></details>}
     <div className="chat" ref={chat} onScroll={() => { const el = chat.current; if (el) follow.current = el.scrollHeight - el.scrollTop - el.clientHeight < 100; }}>
+      {session?.anchor && <div className="vajra-anchor"><span>Highlighted passage</span><blockquote>{session.anchor.text}</blockquote></div>}
       {!session?.messages.length && <div className="research-intro">
         <div className="vajra-intro-mark"><VajraMark size={56} /></div>
         <h3>Vajra</h3>
@@ -237,11 +251,13 @@ export function AiPanel({ projectId, projectTitle, source, sources = [], hasLega
     </div>
     <form className="vajra-composer" onSubmit={(e) => { e.preventDefault(); void send(input); }}>
       <input ref={filePicker} className="sr-only" type="file" multiple accept=".txt,.md,.markdown,.csv,.tsv,.json,.jsonl,.yaml,.yml,.xml,.html,.css,.js,.jsx,.ts,.tsx,.py,.sh,.ps1,.sql,.svg,.mermaid,.mmd,.log,.pdf,text/*,application/pdf" aria-label="Choose files for Vajra" onChange={(e) => { if (e.target.files) void addFiles(e.target.files); }} />
+      {showUrl && <div className="vajra-url-context"><Link2 size={14} /><input type="url" aria-label="URL context for Vajra" placeholder="Public article URL to read with this question" value={contextUrl} disabled={running} maxLength={2048} onChange={(e) => setContextUrl(e.target.value)} /><button type="button" className="icon-btn" title="Remove URL context" onClick={() => { setContextUrl(""); setShowUrl(false); }}><X size={13} /></button></div>}
       {!!attachments.length && <div className="vajra-attachments">{attachments.map((file, index) => <span className="vajra-attachment" key={`${file.name}-${index}`} title={file.truncated ? "Only an excerpt will be sent" : file.name}><FileText size={14} /><span>{file.name}{file.truncated ? " · excerpt" : ""}</span><button type="button" aria-label={`Remove ${file.name}`} disabled={running} onClick={() => setAttachments((items) => items.filter((_, i) => i !== index))}><X size={13} /></button></span>)}</div>}
       <textarea ref={textarea} className="chat-input" placeholder="Ask Vajra anything…" value={input} rows={2} maxLength={16000} onChange={(e) => setInput(e.target.value)}
         onKeyDown={(e) => { e.stopPropagation(); if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); if (!running) send(input); } }} />
       <div className="vajra-composer-toolbar">
         <button type="button" className="vajra-attach-btn" title="Attach text or PDF" aria-label="Attach file" disabled={running || attaching} onClick={() => filePicker.current?.click()}><Paperclip size={17} /></button>
+        <button type="button" className="vajra-attach-btn" title="Add a public URL as context" aria-label="Add URL context" disabled={running} onClick={() => setShowUrl((value) => !value)}><Link2 size={16} /></button>
         <select aria-label="Research model" value={model} disabled={running} onFocus={refreshModels} onChange={(e) => setModel(e.target.value)}>
           <option value="">Choose model</option>{status?.models.map((m) => <option key={m.ref} value={m.ref}>{m.provider} — {m.model}</option>)}
         </select>

@@ -17,6 +17,8 @@ export interface Highlight {
   comment: string;
   /** Preferred comment-card width; height follows the text and the current pane bounds. */
   noteWidth?: number;
+  /** Server-owned Vajra conversations attached to this passage, in creation order. */
+  vajraSessions?: string[];
   createdAt: string;
   /** For code: the first and last line, 1-based. `text` holds those lines, to find them again after edits. */
   lines?: [number, number];

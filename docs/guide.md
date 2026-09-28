@@ -146,6 +146,23 @@ as a card in the **Highlights** pane — click a card to scroll the article to i
 highlight in the article to find its card. A comment can also be written or changed later in
 the card's own box.
 
+**Ask Vajra about a passage.** In Original or Reader view, select text and press **Ask
+Vajra** on the highlight bar. This saves a yellow highlight and opens a small conversation
+beside the article. Choose a configured model and ask a question; Vajra receives the selected
+passage and that source's saved article text. Very long articles are sent as an excerpt first,
+and Vajra can read the rest with its source tool. Add an optional public URL if another page
+would help. Ask follow-ups in the same conversation, or press **New question** for a separate
+thread on that passage. The sparkle icon on an existing highlight's card, or **View Vajra
+questions** from its article marker, reopens saved conversations. **Open in Vajra** moves the
+conversation to a full Vajra pane for deeper work. Inline questions have read-only tools;
+the full pane offers the usual reviewed tools.
+
+After Vajra answers, **Markdown** or **PDF** saves the conversation as a new source in the
+project and automatically links it to the highlighted passage with an **explains** relation.
+The saved source includes the passage, source URL, questions and answers. PDF saving needs the
+desktop app. Deleting the highlight removes its direct conversation shortcut, but the
+project's Vajra conversation remains available in Vajra's sidebar.
+
 **Links in a web page.** A link to another page of the *same site* — a docs sidebar, a
 "next page" link — opens in the same pane, like a browser, without creating a source. The
 toolbar shows the page's address with **Back** and **Forward** for this pane. Beats remember
@@ -627,6 +644,11 @@ For substantial work, Vajra can maintain a **Task plan** above the conversation.
 Vajra's **left sidebar** lists the conversations in the selected workspace, with a search box for their titles and a **New conversation** button. **Workspace** switches between the current Studio project (shown by name) and **Global research**; it does not change the project open in Studio. **Research files**, **Skills & MCP** and **Settings** sit at the bottom. The sidebar button beside the conversation title collapses or opens it. Wide panes show it by default; narrow panes open it over the conversation. Pick a conversation, click outside, or press Escape to dismiss the overlay. Workspace/conversation changes are disabled during a run, but opening and closing the sidebar leaves the run untouched.
 
 In the prompt box, choose **Current source**, **All project sources**, an individual source, or **No source** to control which saved article text and highlights are sent with the request. The paperclip attaches up to three local text or PDF files to that message. Text files may be up to 2 MB; PDFs may be up to 10 MB and need selectable text. Vajra reads the first 20 PDF pages, at most 60,000 characters per file and 90,000 characters across the message. An **excerpt** label means the extracted text was shortened. Attachments are saved in the local conversation and sent to the selected model provider with the prompt; user messages and Markdown export show filenames, not their full contents. The history tool can show a short attachment excerpt in the activity log if an older turn leaves the model's context. Images and scanned PDFs are not interpreted. Enter sends; Shift+Enter inserts a line break. Project files can also be read through `project/` paths. New files go in the project's `research/` folder; an existing project code/text file can be changed with a reviewed patch. App state, credentials and `.ai` data remain protected.
+
+The chain icon beside the paperclip adds a **public URL** to the current prompt. Vajra reads
+its page text through the same guarded URL reader as its `read_url` tool. A private network
+address, localhost URL or unsafe redirect is refused. The URL is included with each message
+while it remains in the field; remove it when it is no longer relevant.
 
 Vajra can **list, search and read project sources** by their saved IDs, including summaries and highlights. Article text and highlight comments are paged separately so longer material remains readable; Global research cannot access a project's sources. Vajra can also **search files** for a literal phrase and report matching paths, line numbers and snippets. File searches skip protected app data, symlinks and binary/large files; each search scans at most 200 files, 2,000 directory entries and 10 MB, returning at most 100 matches. Results say when work was skipped or truncated, so Vajra can narrow its search. **Targeted edits** replace one unique passage in an existing research file. Review the removed and replacement text, or expand the full proposed file. A missing/ambiguous match or a file changed during review is refused rather than overwritten.
 
