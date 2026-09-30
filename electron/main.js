@@ -14,11 +14,16 @@ import { fileURLToPath } from "node:url";
 import electronUpdater from "electron-updater";
 import { wireHandoff } from "./handoff.js";
 import { explanationPdfHtml } from "./explanation-pdf.js";
+import { wireExport } from "./export.js";
 
 const { autoUpdater } = electronUpdater;
 const here = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(here, "..");
 const DEV = !app.isPackaged && process.env.CS_DEV === "1";
+// A copy run from source can be given its own profile, and with it its own single-instance
+// lock, so it can be checked beside the installed app instead of refusing to start. It still
+// shares ~/.content-studio with it: test in a scratch project, as always.
+if (!app.isPackaged && process.env.CS_PROFILE) app.setPath("userData", path.resolve(process.env.CS_PROFILE));
 /** The pane's browsing session: one persistent profile, so a sign-in survives a restart. */
 const PARTITION = "persist:studio";
 
@@ -385,7 +390,7 @@ function smartAppControlOn() {
   if (process.platform !== "win32") return false;
   const key = String.raw`HKLM\SYSTEM\CurrentControlSet\Control\CI\Policy`;
   const r = spawnSync("reg", ["query", key, "/v", "VerifiedAndReputablePolicyState"], { encoding: "utf8" });
-  return /VerifiedAndReputablePolicyState\s+REG_DWORD\s+0x1/i.test(r.stdout || "");
+  return /VerifiedAndReputablePolicyState\s+REG_DWORD\s+0x1\b/i.test(r.stdout || "");
 }
 
 function startDetached(exe, args) {
@@ -524,6 +529,7 @@ if (!app.requestSingleInstanceLock()) {
 
   app.whenReady().then(async () => {
     configureWebviews();
+    wireExport(() => win);
     try {
       await startServer();
     } catch (e) {

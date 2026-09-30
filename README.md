@@ -51,6 +51,7 @@ The whole studio is one window, and panes inside it are real Chromium views rath
 | [Sources](docs/guide.md#sources) | Web pages as they really look, plus slides, notebooks, PDFs, documents. Highlight, draw on and comment on any of them. PDFs page with the arrow keys. |
 | [Beats](docs/guide.md#beats) | The running order. Capture an arrangement per point you make; one key walks them while recording. |
 | [The presenter window](docs/guide.md#the-presenter-window) | A second window for your other monitor, outside any screen capture, with the clock and a chapter log. |
+| [Exporting beats](docs/guide.md#exporting-beats-as-a-video-or-a-pdf) | The beats as a YouTube-ready MP4 — 16:9 or vertical 9:16, up to 4K, with transitions and videos that play — or as a PDF. |
 | [Layout](docs/guide.md#layout) | Up to four panes, each showing a different source or tool. |
 | [Research with AI](docs/guide.md#research-with-ai) | A tool-using research agent with reviewed file/shell actions, web search and persistent project or global conversations. |
 | [Models and keys](docs/guide.md#models-and-keys) | Anthropic- or OpenAI-compatible providers; research requires a tool-capable model. Keys encrypted at rest, never shown again. |
@@ -60,6 +61,10 @@ The whole studio is one window, and panes inside it are real Chromium views rath
 | [Files and code](docs/guide.md#files-and-code) | Browse a folder; create, edit, rename and delete files (deletes go to the Recycle Bin); highlight lines, link them to sources, and put exact lines in a beat. |
 
 Jupyter, a terminal, an Excalidraw canvas, code snippets and an AI chat are panes too.
+
+Video export uses [ffmpeg](https://ffmpeg.org), shipped inside the app through the
+`ffmpeg-static` package (a GPL build that includes x264). It adds about 80 MB to the installed
+app.
 
 New to it? **[A video, step by step](docs/guide.md#a-video-step-by-step)** walks through the whole workflow once. **[The full guide](docs/guide.md)** documents all of it. **[Changelog](CHANGELOG.md)** lists what changed in each release.
 

@@ -160,6 +160,8 @@ export interface PaneView {
   slideIndex?: number;
   /** A Jupyter pane: the folder its notebooks were open in when this was captured. */
   jupyterRoot?: string;
+  /** A video source: the second it was paused at, where a beat starts it and an export plays it from. */
+  videoTime?: number;
 }
 
 export interface CodeView {
@@ -227,6 +229,52 @@ export interface Beat {
   note?: string;
   stage: Stage;
   createdAt: string;
+  /** How this beat is exported. Every field is optional: the project's export settings fill the rest. */
+  export?: BeatExport;
+}
+
+/**
+ * The ways one beat can give way to the next in an exported video. The names are ffmpeg's
+ * `xfade` transitions, except `cut`, which is no transition at all.
+ */
+export type TransitionKind =
+  | "cut" | "fade" | "fadeblack" | "dissolve" | "slideleft" | "slideup" | "wipeleft"
+  | "smoothleft" | "circleopen" | "zoomin" | "pixelize";
+
+/** The part of the 16:9 screen a vertical export shows, in fractions of it. Its width follows from 9:16. */
+export interface VerticalFrame {
+  x: number;
+  y: number;
+  h: number;
+}
+
+export interface BeatExport {
+  /** How long the beat is on screen, in seconds. A beat showing a video defaults to the rest of the video. */
+  seconds?: number;
+  /** How this beat takes over from the one before it. */
+  transition?: TransitionKind;
+  /** The part of the screen this beat shows in a vertical export. */
+  frame?: VerticalFrame;
+}
+
+export type ExportShape = "landscape" | "vertical";
+
+/** The last export's choices, kept with the project so the next one starts from them. */
+export interface ExportSettings {
+  format: "video" | "pdf";
+  shape: ExportShape;
+  /** Output height of a landscape export, or width of a vertical one: 1080, 1440 or 2160. */
+  quality: 1080 | 1440 | 2160;
+  fps: 30 | 60;
+  /** How long a beat without a video is held. */
+  seconds: number;
+  transition: TransitionKind;
+  transitionSeconds: number;
+  /** How long each beat is given to load and settle before it is captured. */
+  settle: number;
+  /** The folder the file is written to; the project's exports folder when empty. */
+  folder: string;
+  name: string;
 }
 
 export interface Project {
@@ -256,6 +304,8 @@ export interface Project {
     jupyterRoot?: string;
     /** How each kind of drawing is painted when it is drawn next, as last set in the drawing menu. */
     drawStyles?: Partial<Record<ShapeKind, ShapeStyle>>;
+    /** The choices made in the last export of the beats. */
+    export?: Partial<ExportSettings>;
   };
 }
 
@@ -278,7 +328,7 @@ export function viewerForExt(ext: string): FileViewer {
   if (e === ".pdf") return "pdf";
   if ([".pptx", ".ppt", ".odp"].includes(e)) return "deck";
   if ([".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".avif"].includes(e)) return "image";
-  if ([".mp4", ".webm"].includes(e)) return "video";
+  if ([".mp4", ".webm", ".mov", ".m4v"].includes(e)) return "video";
   if ([".mp3", ".wav"].includes(e)) return "audio";
   if ([".html", ".htm"].includes(e)) return "html";
   if ([".csv", ".tsv"].includes(e)) return "table";

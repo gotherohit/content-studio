@@ -213,6 +213,20 @@ export function PdfView(p: Props) {
     draw();
   }, [scale, doc, p.slideshow]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // An export zooms the whole window to draw it at the output's resolution. Pages painted
+  // before that must be painted again at the new ratio, or they come out enlarged and soft.
+  useEffect(() => {
+    let query = matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`);
+    const redraw = () => {
+      query.removeEventListener("change", redraw);
+      query = matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`);
+      query.addEventListener("change", redraw);
+      draw();
+    };
+    query.addEventListener("change", redraw);
+    return () => query.removeEventListener("change", redraw);
+  }, [draw]);
+
   // The pane asked for a page: from the toolbar, or restoring a beat.
   useEffect(() => {
     if (p.slideshow || !count || page === reported.current) return;

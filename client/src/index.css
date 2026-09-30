@@ -1346,3 +1346,56 @@ mark.hl:hover { filter: brightness(0.94); }
 .cm-mark-bar.stale { opacity: 0.45; background-image: repeating-linear-gradient(0deg, transparent 0 3px, var(--panel) 3px 5px); }
 .hl-code { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .hl-code pre { margin: 0; padding: 6px 8px; max-height: 180px; overflow: auto; background: var(--code-bg); color: var(--code-text); border-radius: var(--r-sm); font-family: var(--mono); font-size: 11.5px; line-height: 1.5; }
+
+/* ============================================================
+   Exporting beats
+   ============================================================ */
+.export-modal { width: min(820px, 94vw); max-height: min(92vh, 940px); overflow-y: auto; }
+.export-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px 14px; align-items: end; }
+.export-grid .field select, .export-grid .field input { width: 100%; }
+.export-grid .field .row input { width: 72px; }
+.export-beats { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: var(--r-md); max-height: 250px; overflow-y: auto; }
+.export-beat {
+  display: grid; grid-template-columns: 30px minmax(0, 1fr) 100px 190px auto; align-items: center; gap: 8px;
+  padding: 5px 9px; border-top: 1px solid var(--border); font-size: 12.5px;
+}
+.export-beat:first-child { border-top: 0; }
+.export-beat.head { position: sticky; top: 0; background: var(--panel-2); font-size: 11.5px; font-weight: 600; color: var(--text-2); z-index: 1; }
+.export-beat input { width: 70px; font-family: var(--mono); font-size: 12px; }
+.export-beat select { width: 100%; font-size: 12px; }
+.export-beat .beat-no { cursor: default; }
+.export-note { display: flex; align-items: center; gap: 9px; padding: 8px 10px; border-radius: var(--r-md); background: var(--accent-soft); font-size: 12.5px; }
+.export-note svg { color: var(--accent); flex: none; }
+.export-actions { gap: 8px; align-items: center; }
+.export-bar { height: 8px; border-radius: 999px; background: var(--panel-3); overflow: hidden; }
+.export-bar span { display: block; height: 100%; background: var(--accent); transition: width 200ms ease; }
+.export-file { font-family: var(--mono); font-size: 12px; word-break: break-all; }
+.export-problems { margin: 0; padding-left: 18px; font-size: 12px; color: var(--warn); }
+.error-bar.static { cursor: default; border-radius: var(--r-md); white-space: pre-wrap; }
+
+/* While the beats are photographed: nothing is clickable, and a player's controls are not in the picture. */
+.export-shield { position: fixed; inset: 0; z-index: 9999; background: transparent; cursor: progress; }
+.app.exporting video::-webkit-media-controls { display: none !important; }
+.app.exporting video::-webkit-media-controls-enclosure { display: none !important; }
+
+/* Framing a vertical export, on the screen as it will be captured. */
+.export-framer { position: fixed; inset: 0; z-index: 9000; cursor: default; }
+.framer-box {
+  position: absolute; border: 2px solid var(--accent); border-radius: 4px; cursor: move; touch-action: none;
+  box-shadow: 0 0 0 200vmax rgb(0 0 0 / 0.55);
+}
+.framer-label {
+  position: absolute; top: 6px; left: 6px; padding: 1px 7px; border-radius: 999px; font-size: 11px; font-weight: 700;
+  background: var(--accent); color: #fff; pointer-events: none;
+}
+.framer-handle {
+  position: absolute; right: -8px; bottom: -8px; width: 16px; height: 16px; border-radius: 4px;
+  background: var(--accent); border: 2px solid #fff; cursor: nwse-resize; touch-action: none;
+}
+.framer-bar {
+  position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 9001;
+  display: flex; align-items: center; gap: 8px; max-width: min(820px, 94vw);
+  padding: 7px 10px; border: 1px solid var(--border-strong); border-radius: 999px;
+  background: var(--panel); box-shadow: var(--shadow-3); font-size: 12.5px;
+}
+.framer-point { max-width: 260px; }

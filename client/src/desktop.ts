@@ -1,3 +1,5 @@
+import type { ExportShape, TransitionKind, VerticalFrame } from "./types";
+
 /**
  * The desktop bridge.
  *
@@ -37,6 +39,32 @@ export type PresenterCommand =
   | { type: "goto"; index: number }
   | { type: "present"; on: boolean };
 
+/** A video on screen in a captured beat, in layout pixels of the export's viewport. */
+export interface ExportVideo {
+  name: string;
+  start: number;
+  rect: { x: number; y: number; w: number; h: number };
+}
+
+export interface ExportPlanBeat {
+  seconds: number;
+  transition: TransitionKind;
+  frame?: VerticalFrame;
+  videos: ExportVideo[];
+}
+
+export interface ExportPlan {
+  projectDir: string;
+  title: string;
+  shape: ExportShape;
+  quality: number;
+  fps: number;
+  transitionSeconds: number;
+  folder: string;
+  name: string;
+  beats: ExportPlanBeat[];
+}
+
 export interface StudioBridge {
   isDesktop: true;
   captureSources(): Promise<{ id: string; name: string; thumbnail: string }[]>;
@@ -49,6 +77,17 @@ export interface StudioBridge {
   pickFolder(title?: string): Promise<string | null>;
   openExternal(url: string): Promise<void>;
   renderExplanationPdf(markdown: string): Promise<string>;
+  /** Lay the window out at `css` size exactly, for framing a vertical export; `null` puts it back. */
+  exportView(css: { width: number; height: number } | null): Promise<void>;
+  exportBegin(options: { css: { width: number; height: number }; zoom: number }): Promise<{ zoom: number }>;
+  exportFrame(index: number): Promise<{ width: number; height: number }>;
+  exportEnd(): Promise<void>;
+  exportProbe(projectDir: string, names: string[]): Promise<Record<string, { duration: number | null; audio: boolean }>>;
+  exportVideo(plan: ExportPlan): Promise<{ file: string; seconds: number } | { cancelled: true }>;
+  exportPdf(plan: ExportPlan): Promise<{ file: string; pages: number }>;
+  exportCancel(): Promise<void>;
+  exportReveal(file: string): Promise<void>;
+  onExportProgress(fn: (p: { phase: "encode" | "pdf" | "idle"; fraction: number | null }) => void): () => void;
   installUpdate(): Promise<void>;
   updateState(): Promise<UpdateInfo>;
   checkForUpdates(): Promise<UpdateInfo>;

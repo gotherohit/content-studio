@@ -118,7 +118,8 @@ A source is anything you want on screen. Paste a URL in the top bar, click **Fil
 | PDF | A scrolling page view, or a Slides mode that fills the pane. See [PDFs](#pdfs) |
 | Markdown | Document view, or Slides — split on a line containing only `---` |
 | Jupyter notebook | Rendered cells with code, stdout, errors and image outputs |
-| Images, video, audio | Inline player or viewer |
+| Images, audio | Inline viewer or player |
+| Video (`.mp4`, `.webm`, `.mov`, `.m4v`) | A player that remembers where it is paused, so a beat can start it there — and an export plays it. See [Exporting beats](#exporting-beats-as-a-video-or-a-pdf) |
 | CSV, TSV | Data table |
 | Text, code, JSON, HTML | Text or rendered view |
 | Word, Excel | Export to PDF and add that instead |
@@ -450,6 +451,9 @@ Things worth knowing:
 * **A stage stores references, not copies.** Improve a note or refine a drawing and every beat pointing at it shows the better version. Only the arrangement is frozen.
 * **What you do inside a beat is not saved over it.** Scroll away, run a cell, make a mess — the beat still holds what you captured. Re-capture only when you ask for it, with the camera on that row.
 * **A broken reference is loud.** If a beat's source or highlight has been deleted, it restores everything it still can and says what it could not, rather than quietly showing the wrong thing.
+* **A video is part of a beat too.** Pause a video source where the segment should start, then
+  capture: the beat remembers that second. Showing the beat puts the video back there, paused,
+  ready to be played on cue — and an exported video plays it from there.
 * **The beat strip is inside the window**, so screen-capture software records it. Press **h** to hide it; it stays hidden until you press **h** again. Better, use the presenter window below.
 
 ### What to say on a beat
@@ -494,6 +498,63 @@ It shows the beat you are on, its point in large type, what comes next, and a cl
 Chapters and an edit map, from the take you just did. Start the clock when you start recording; the two agree to within a second or so. Exact timecodes need OBS itself to be driven by the app, which is not built yet.
 
 The log lives in the presenter window and is not saved — copy it before closing.
+
+### Exporting beats as a video or a PDF
+
+The **download** button next to **+ Beat** exports the running order without recording
+anything yourself. Each beat is put on screen exactly as Present mode shows it, photographed,
+and turned into a file:
+
+| Choice | Options |
+|---|---|
+| Export as | **Video** (MP4) or **PDF** (one page per beat) |
+| Shape | **16:9**, or **9:16 vertical** for Shorts and Reels |
+| Resolution | 1080p, 1440p or 4K — 1920 × 1080, 2560 × 1440, 3840 × 2160, or the same upright |
+| Frame rate | 30 or 60 fps |
+| Hold each beat | How long a beat without a video stays on screen |
+| Transition | Cut, cross-fade, fade through black, dissolve, slide left or up, wipe, smooth wipe, circle open, zoom in or pixelate, and how long it takes |
+| Wait for each beat | How long each beat is given to load before it is photographed — raise it for slow sites |
+
+The table of beats underneath overrides any of this per beat: its own length, and the
+transition *into* it. A beat showing a video shows the length of the rest of the clip; type a
+number to cut it shorter. The first beat has no transition, since nothing comes before it.
+
+**What happens when you press Export.** The dialog closes and the window steps through the
+beats on its own — about as long as *Wait for each beat* per beat. Leave the window on screen
+and do not minimise it; clicks are ignored while it works and the title bar counts the beats.
+**Esc** stops it. The window is drawn at the output's resolution while this happens, so text
+comes out sharp at 4K rather than enlarged — it looks larger than usual for those seconds, and
+so does the presenter window if it is open. Everything goes back when it is done. The encoding
+then runs by itself with a progress bar and **Cancel**; the studio is yours again.
+
+**The video** is H.264 (High profile) with AAC sound at 48 kHz in an MP4, with the index at the
+front — the format YouTube recommends for uploads. Beats without a video are silent.
+
+**Vertical exports** show a 9:16 part of each beat. **Frame the beats on screen…** lays the
+studio out exactly as it will be exported, with the first beat on it and a 9:16 box: drag the
+box to move it, drag its corner to take in less (a smaller frame is zoomed in, and captured at
+a higher resolution so it stays sharp). **←** and **→** move between beats, **Use for all
+beats** copies the frame to every beat, **Done** (or Esc) returns to the dialog. A beat you
+have not framed uses the centre. Frames are saved with the beats.
+
+**Videos in a beat play.** Wherever a video source was on screen, the export plays the real
+file there from the second the beat captured, at full quality and with its sound, rather than
+a recording of the screen. Two videos on one beat both play and are both heard. A clip that
+ends before its beat does holds its last frame.
+
+**Where it goes.** The project's `exports` folder unless you choose another; the name is the
+project's unless you give one. An existing file is never replaced — the next export is
+`Name (2).mp4`. **Show in folder** opens it in Explorer.
+
+Limits worth knowing:
+
+* Browser, Embed and Window panes are captured as they look, at the screen's own resolution,
+  so at 1440p and 4K they are slightly softer than the rest of the picture.
+* A video *inside a web page* — a YouTube embed in an article — is captured as a still. Add
+  the video file itself as a source to have it play.
+* PDFs in a beat are drawn at up to twice the screen's resolution, which is sharp at 1080p and
+  1440p and a little soft at 4K.
+* Exporting needs the desktop app.
 
 ## Files and code
 

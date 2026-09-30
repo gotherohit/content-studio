@@ -58,6 +58,8 @@ interface Props {
   onSummary: (summary: string) => void;
   /** A code source reports where it is scrolled, for a beat to capture. */
   onCodePlace: (code: CodeView) => void;
+  /** A video source reports the second it is at, for a beat to capture. */
+  onVideoTime?: (seconds: number) => void;
   dark: boolean;
   /** Links between sources, so a marker on this one can show where it leads. */
   links: SourceLink[];
@@ -383,6 +385,9 @@ export function SourcePane(p: Props) {
             onAddHighlight={addHighlight}
             onSelectHighlight={p.onSelectHighlight}
             presenting={p.presenting}
+            videoTime={view.videoTime}
+            restoreNonce={p.restoreNonce}
+            onVideoTime={p.onVideoTime}
             {...draw}
           />
         ) : mode === "original" ? (

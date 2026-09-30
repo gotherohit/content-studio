@@ -38,6 +38,11 @@ import { LinkDialog } from "./components/LinkDialog";
 import { SourceMap } from "./components/SourceMap";
 import { FilesPane } from "./components/FilesPane";
 import { NewProjectDialog } from "./components/NewProjectDialog";
+import { ExportDialog, defaultExportFolder, type ExportRun } from "./components/ExportDialog";
+import { ExportFramer } from "./components/ExportFramer";
+import { beatTiming, captureZoom, centredFrame, clampFrame, containedBox, exportSettings, exportViewport } from "./exportPlan";
+import type { ExportPlanBeat, ExportVideo } from "./desktop";
+import type { BeatExport, ExportSettings, VerticalFrame } from "./types";
 
 const KINDS: { id: PaneKind; label: string }[] = [
   { id: "source", label: "Source" },
@@ -71,6 +76,27 @@ const DEFAULT_LAYOUT: Layout = { preset: "2", panes: [{ kind: "source" }, { kind
 const sameBrowsedPage = (a?: string, b?: string) => (!a && !b) || (Boolean(a && b) && samePage(a!, b!));
 const lsGet = (k: string, d: string) => { try { return localStorage.getItem(k) ?? d; } catch { return d; } };
 const lsSet = (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* ignore */ } };
+const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
+
+/**
+ * The videos on screen, where their pictures sit and the second each is at. An export plays
+ * each clip over its own place in the captured picture, from that second.
+ */
+function measureVideos(): ExportVideo[] {
+  return [...document.querySelectorAll<HTMLVideoElement>("video[data-export-video]")].flatMap((video) => {
+    const r = video.getBoundingClientRect();
+    if (r.width < 4 || r.height < 4 || r.right <= 0 || r.bottom <= 0 || r.left >= window.innerWidth || r.top >= window.innerHeight) return [];
+    const rect = containedBox({ x: r.left, y: r.top, w: r.width, h: r.height }, { width: video.videoWidth, height: video.videoHeight });
+    return [{ name: video.dataset.exportVideo ?? "", start: video.currentTime, rect }];
+  });
+}
+
+/** A beat seeks its videos when applied; its picture is taken once they have the frame. */
+async function videosSettled(limit = 6000) {
+  const until = Date.now() + limit;
+  const videos = () => [...document.querySelectorAll<HTMLVideoElement>("video[data-export-video]")];
+  while (Date.now() < until && videos().some((v) => v.seeking || v.readyState < 2)) await sleep(100);
+}
 
 /** Fill in fields that older project files may lack. */
 function normalize(p: Project): Project {
@@ -117,6 +143,19 @@ export default function App() {
   const codeViews = useRef<Record<number, CodeView>>({});
   /** The folder each Jupyter pane has on screen, which a beat captures as it stands. */
   const jupyterRoots = useRef<Record<number, string>>({});
+  /** The second each video pane is at, reported as it plays and seeks. */
+  const videoTimes = useRef<Record<number, { sourceId: string; time: number }>>({});
+  /** Exporting: the dialog, the encode after capture, and the two passes that take over the window. */
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exportRun, setExportRun] = useState<ExportRun | null>(null);
+  /** Photographing the beats. Nothing but the beat itself may be on screen. */
+  const [capturing, setCapturing] = useState(false);
+  const capturingRef = useRef(false);
+  const exportCancel = useRef(false);
+  /** Choosing what a vertical export shows, on the screen laid out as it will be exported. */
+  const [framing, setFraming] = useState<{ index: number; viewport: { width: number; height: number } } | null>(null);
+  const framingRef = useRef(false);
+  const framingBefore = useRef<{ stage: Stage; beat: string | null; present: boolean } | null>(null);
   /** Where the canvas is looking now, and where a beat wants it pointed. */
   const canvasViewRef = useRef<CanvasView | null>(null);
   const [canvasTarget, setCanvasTarget] = useState<CanvasView | null>(null);
@@ -132,7 +171,7 @@ export default function App() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const presenterStateRef = useRef<() => void>(() => {});
   /** Read by the global key handler, which is registered before the beat helpers exist. */
-  const goToBeatRef = useRef<(i: number) => void>(() => {});
+  const goToBeatRef = useRef<(i: number) => unknown>(() => {});
   const presentationKeyRef = useRef<(key: string) => boolean>(() => false);
   const [showSettings, setShowSettings] = useState(false);
   const [settingsTab, setSettingsTab] = useState<"models" | "extensions">("models");
@@ -170,7 +209,7 @@ export default function App() {
   beatsRef.current = beats;
   beatIndexRef.current = beatIndex;
   presentationKeyRef.current = (key) => {
-    if (!present) return false;
+    if (!present || capturingRef.current || framingRef.current) return false;
     const last = beatsRef.current.length - 1;
     if (key === "Escape") { setPresent(false); return true; }
     if (last < 0) return false;
@@ -289,6 +328,9 @@ export default function App() {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement;
       const typing = ["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName) || t.isContentEditable;
+      // While the beats are photographed the only key is Esc, which stops it; the framer has its own.
+      if (capturingRef.current) { if (e.key === "Escape") exportCancel.current = true; e.preventDefault(); e.stopImmediatePropagation(); return; }
+      if (framingRef.current) return;
       if (navigation) { if (e.key === "Escape") { setNavigation(null); e.preventDefault(); } return; }
       if (e.altKey && !typing) {
         if (e.key === "p") { if (!present && beatIndexRef.current < 0 && beatsRef.current.length) goToBeatRef.current(0); setPresent((v) => !v); e.preventDefault(); }
@@ -673,6 +715,7 @@ export default function App() {
         // Jupyter serves one folder at a time: a beat remembers the one that was showing,
         // not the one the pane had asked for.
         jupyterRoot: pane.kind === "jupyter" ? jupyterRoots.current[i] ?? view.jupyterRoot : view.jupyterRoot,
+        videoTime: pane.kind === "source" && videoTimes.current[i]?.sourceId === sourceId ? videoTimes.current[i].time : view.videoTime,
         code: codeFor(pane, i, sourceId, view.code),
         position: pane.kind === "source" && live?.projectId === project?.id && live?.sourceId === sourceId && live?.mode === mode && sameBrowsedPage(live.page, view.page) ? { ...live.position } : undefined,
       }];
@@ -693,7 +736,7 @@ export default function App() {
    * that is no longer there — are reported rather than silently ignored, because finding
    * out mid-take that a beat shows the wrong thing is the failure worth avoiding.
    */
-  const applyStage = useCallback((stage: Stage) => {
+  const applyStage = useCallback((stage: Stage): string[] => {
     setNavigation(null);
     setNavigationPane(null);
     const missing: string[] = [];
@@ -730,15 +773,16 @@ export default function App() {
       },
     }));
     setError(missing.length ? `This beat could not restore ${missing.join(" or ")} — it may have been removed.` : null);
+    return missing;
   }, [project, mutate]);
 
-  const goToBeat = useCallback((i: number) => {
+  const goToBeat = useCallback((i: number): string[] => {
     const list = project?.beats ?? [];
-    if (i < 0 || i >= list.length) return;
+    if (i < 0 || i >= list.length) return [];
     // Update the ref immediately as presenter/iframe commands may arrive before React renders.
     beatIndexRef.current = i;
     setActiveBeatId(list[i].id);
-    applyStage(list[i].stage);
+    return applyStage(list[i].stage);
   }, [project?.beats, applyStage]);
   goToBeatRef.current = goToBeat;
 
@@ -754,6 +798,7 @@ export default function App() {
     const offFailed = desktop.onPresenterFailed((reason) =>
       setError(`The presenter window did not come up: ${reason}. Close it and open it again.`));
     const offCmd = desktop.onPresenterCommand((cmd) => {
+      if ((capturingRef.current || framingRef.current) && cmd.type !== "sync") return;
       if (cmd.type === "next") goToBeatRef.current(Math.min(beatsRef.current.length - 1, beatIndexRef.current + 1));
       if (cmd.type === "prev") goToBeatRef.current(Math.max(0, beatIndexRef.current - 1));
       if (cmd.type === "goto") goToBeatRef.current(cmd.index);
@@ -861,6 +906,139 @@ export default function App() {
     setBeatUndo(null);
   }
 
+  // ---- exporting the beats
+  //
+  // The window itself renders every beat, exactly as Present mode shows it, and the desktop
+  // process photographs it at the output's resolution. So an export is always what a take
+  // would have shown — and while it is being captured, nothing else may be on screen.
+
+  const setExportSettings = (patch: Partial<ExportSettings>) =>
+    mutate((p) => ({ ...p, settings: { ...p.settings, export: { ...p.settings.export, ...patch } } }));
+
+  /** A beat's own export choices; a field set back to undefined falls back to the project's. */
+  const setBeatExport = (id: string, patch: Partial<BeatExport>) => editBeat(id, (b) => {
+    const next: BeatExport = { ...b.export, ...patch };
+    for (const key of Object.keys(next) as (keyof BeatExport)[]) if (next[key] === undefined) delete next[key];
+    return { ...b, export: Object.keys(next).length ? next : undefined };
+  });
+
+  useEffect(() => desktop?.onExportProgress(({ phase, fraction }) => {
+    if (phase === "idle" || fraction == null) return;
+    setExportRun((run) => (run && (run.phase === "encode" || run.phase === "pdf") ? { ...run, fraction } : run));
+  }), []);
+
+  async function runExport(lengths: Record<string, number | null>) {
+    if (!desktop || !project?.beats.length) return;
+    const s = exportSettings(project.settings.export);
+    const list = project.beats;
+    const viewport = exportViewport(window.innerWidth, window.innerHeight);
+    const frames = list.map((b) => clampFrame(b.export?.frame ?? centredFrame(viewport), viewport));
+    const zoom = captureZoom(s, viewport, frames);
+    const timings = list.map((b) => beatTiming(b, s, project.sources, lengths));
+    const before = { stage: captureStage(), beat: activeBeatId, present };
+    const problems: string[] = [];
+    const planned: ExportPlanBeat[] = [];
+    const title = document.title;
+    let failure: string | null = null;
+    let began = false;
+    exportCancel.current = false;
+    setExportOpen(false);
+    setExportRun(null);
+    capturingRef.current = true;
+    setCapturing(true);
+    setPresent(true);
+    try {
+      await sleep(300);
+      await desktop.exportBegin({ css: viewport, zoom });
+      began = true;
+      // Canvases size themselves on resize; the zoom alone does not always tell them.
+      window.dispatchEvent(new Event("resize"));
+      for (let i = 0; i < list.length && !exportCancel.current; i++) {
+        document.title = `Exporting beat ${i + 1} of ${list.length} — Esc cancels`;
+        const missing = goToBeat(i);
+        if (missing.length) problems.push(`Beat ${i + 1} could not restore ${missing.join(" or ")}.`);
+        (document.activeElement as HTMLElement | null)?.blur?.();
+        // The first beat also waits for the zoomed window to be drawn again.
+        await sleep((s.settle + (i === 0 ? 2 : 0)) * 1000);
+        await videosSettled();
+        if (exportCancel.current) break;
+        const videos = measureVideos();
+        await desktop.exportFrame(i);
+        planned.push({ seconds: timings[i].seconds, transition: timings[i].transition, frame: frames[i], videos });
+      }
+    } catch (e) {
+      failure = (e as Error).message;
+    } finally {
+      if (began) await desktop.exportEnd().catch(() => {});
+      document.title = title;
+      capturingRef.current = false;
+      setCapturing(false);
+      setPresent(before.present);
+      applyStage(before.stage);
+      setActiveBeatId(before.beat);
+      // What a beat could not restore is reported with the result, not left on the bar.
+      setError(null);
+    }
+    if (failure) {
+      setExportRun({ phase: "error", message: `The beats could not be captured: ${failure}`, problems });
+      setExportOpen(true);
+      return;
+    }
+    if (exportCancel.current) { setNotice({ kind: "warn", text: "Export cancelled — nothing was written." }); return; }
+
+    const plan = {
+      projectDir: project.dir ?? "", title: project.title, shape: s.shape, quality: s.quality, fps: s.fps,
+      transitionSeconds: s.transitionSeconds, folder: s.folder || defaultExportFolder(project),
+      name: s.name || project.title || "beats", beats: planned,
+    };
+    setExportRun({ phase: s.format === "pdf" ? "pdf" : "encode", fraction: 0 });
+    setExportOpen(true);
+    try {
+      if (s.format === "pdf") {
+        const r = await desktop.exportPdf(plan);
+        setExportRun({ phase: "done", kind: "pdf", file: r.file, pages: r.pages, problems });
+      } else {
+        const r = await desktop.exportVideo(plan);
+        if ("cancelled" in r) { setExportRun(null); setExportOpen(false); setNotice({ kind: "warn", text: "Export cancelled — nothing was written." }); return; }
+        setExportRun({ phase: "done", kind: "video", file: r.file, seconds: r.seconds, problems });
+      }
+    } catch (e) {
+      setExportRun({ phase: "error", message: (e as Error).message, problems });
+    }
+  }
+
+  /** Lay the window out as the export will be and put the first beat to frame on it. */
+  async function startFraming(index: number) {
+    if (!desktop || !project?.beats.length) return;
+    const viewport = exportViewport(window.innerWidth, window.innerHeight);
+    framingBefore.current = { stage: captureStage(), beat: activeBeatId, present };
+    setExportOpen(false);
+    setPresent(true);
+    try {
+      await desktop.exportView(viewport);
+    } catch (e) {
+      setError(`The screen could not be laid out for framing: ${(e as Error).message}`);
+    }
+    framingRef.current = true;
+    setFraming({ index, viewport });
+    goToBeat(index);
+  }
+
+  async function endFraming() {
+    await desktop?.exportView(null).catch(() => {});
+    framingRef.current = false;
+    setFraming(null);
+    const was = framingBefore.current;
+    framingBefore.current = null;
+    if (was) {
+      setPresent(was.present);
+      applyStage(was.stage);
+      setActiveBeatId(was.beat);
+    }
+    setError(null);
+    setExportOpen(true);
+  }
+
   function setPreset(id: LayoutPreset) {
     const count = PRESETS.find((x) => x.id === id)!.count;
     setLayout((l) => {
@@ -947,6 +1125,7 @@ export default function App() {
             onSummaryOpen={setSummaryOpen}
             onSummary={(summary) => paneSource && updateSource(paneSource.id, (s) => ({ ...s, summary }))}
             onCodePlace={(code) => { codeViews.current[i] = code; }}
+            onVideoTime={(time) => { if (paneSource) videoTimes.current[i] = { sourceId: paneSource.id, time }; }}
             dark={dark}
             onRefresh={() => paneSource && refreshSource(paneSource)}
             scrollToId={paneSource && paneSource.id === activeSourceId && (navigationPane === null || navigationPane === i) ? selectedHl : null}
@@ -1079,8 +1258,8 @@ export default function App() {
   const hasRow = ["1+2", "2+1", "4"].includes(layout.preset);
 
   return (
-    <div className={`app ${present ? "present" : ""} ${collapsed ? "collapsed" : ""}`}>
-      <UpdateBanner onOpenSettings={() => setShowSettings(true)} />
+    <div className={`app ${present ? "present" : ""} ${collapsed ? "collapsed" : ""} ${capturing ? "exporting" : ""}`}>
+      {!capturing && <UpdateBanner onOpenSettings={() => setShowSettings(true)} />}
       {!present && !collapsed && (
         <Sidebar
           projects={projects}
@@ -1123,6 +1302,7 @@ export default function App() {
           undoLabel={beatUndo?.projectId === project?.id ? beatUndo?.label ?? null : null}
           onUndoBeat={undoBeatEdit}
           onRevealFolder={() => project?.dir && api.reveal(project.dir).catch((e) => setError(e.message))}
+          onExport={() => { setExportRun(null); setExportOpen(true); }}
         />
       )}
 
@@ -1176,7 +1356,7 @@ export default function App() {
           </header>
         )}
 
-        {error && <div className="error-bar" onClick={() => setError(null)}>{error}<X size={14} /></div>}
+        {error && !capturing && <div className="error-bar" onClick={() => setError(null)}>{error}<X size={14} /></div>}
         {pendingLink && !present && (
           <div className="pick-bar" role="status">
             <Crosshair size={14} />
@@ -1213,7 +1393,7 @@ export default function App() {
           {dragging && <div className="drag-shield" />}
         </main>
 
-        {present && showHud && beats.length > 0 && (
+        {present && showHud && !capturing && !framing && beats.length > 0 && (
           <div className="beat-hud">
             <button className="icon-btn" title="Previous beat (←)" disabled={beatIndex <= 0} onClick={() => goToBeat(beatIndex - 1)}><ChevronLeft size={15} /></button>
             <span className="beat-hud-no">{beatIndex < 0 ? "—" : beatIndex + 1}/{beats.length}</span>
@@ -1223,12 +1403,43 @@ export default function App() {
           </div>
         )}
 
-        {present && (
+        {present && !capturing && !framing && (
           <button className="exit-present" onClick={() => setPresent(false)} title="Exit present mode (Esc)">
             <Maximize2 size={13} /> Exit
           </button>
         )}
       </div>
+
+      {/* Transparent, so it is not in the picture, but nothing can be clicked while it is taken. */}
+      {capturing && <div className="export-shield" />}
+
+      {framing && project && beats[framing.index] && (
+        <ExportFramer
+          index={framing.index}
+          total={beats.length}
+          point={beats[framing.index].point}
+          frame={beats[framing.index].export?.frame}
+          viewport={framing.viewport}
+          onFrame={(frame: VerticalFrame) => setBeatExport(beats[framing.index].id, { frame })}
+          onBeat={(index) => { setFraming((f) => (f ? { ...f, index } : f)); goToBeat(index); }}
+          onAll={(frame) => mutate((p) => ({ ...p, beats: p.beats.map((b) => ({ ...b, export: { ...b.export, frame } })) }))}
+          onDone={endFraming}
+        />
+      )}
+
+      {exportOpen && project && !capturing && !framing && (
+        <ExportDialog
+          project={project}
+          settings={exportSettings(project.settings.export)}
+          onSettings={setExportSettings}
+          onBeat={setBeatExport}
+          onFrame={startFraming}
+          onRun={runExport}
+          run={exportRun}
+          onCancel={() => desktop?.exportCancel()}
+          onClose={() => { setExportOpen(false); setExportRun(null); }}
+        />
+      )}
 
       {dropping && (
         <div className="drop-overlay">

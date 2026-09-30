@@ -1,6 +1,6 @@
 import { useState } from "react";
 import {
-  ArrowDown, ArrowUp, Camera, ChevronDown, ChevronRight, Clapperboard, FileCode2, FileText, FolderOpen,
+  ArrowDown, ArrowUp, Camera, ChevronDown, ChevronRight, Clapperboard, Download, FileCode2, FileText, FolderOpen,
   Copy, Image, Network, Plus, Presentation, ScrollText, Settings, Table2, Trash2, Undo2, X,
 } from "lucide-react";
 import type { Beat, Project, ProjectSummary, Source } from "../types";
@@ -21,6 +21,8 @@ interface Props {
   /** Show every source and how they connect. */
   onShowMap: () => void;
   onRevealFolder: () => void;
+  /** Export the beats as a video or a PDF. */
+  onExport: () => void;
   beatIndex: number;
   onCaptureBeat: () => void;
   onGoToBeat: (i: number) => void;
@@ -203,9 +205,14 @@ export function Sidebar(p: Props) {
             title="Beats"
             count={p.project.beats?.length ?? 0}
             actions={
-              <button className="ghost small" title="Save what is on screen as a beat" onClick={p.onCaptureBeat}>
-                <Plus size={13} /> Beat
-              </button>
+              <>
+                <button className="icon-btn" title="Export the beats as a video (16:9 or 9:16) or a PDF" onClick={p.onExport} disabled={!p.project.beats?.length}>
+                  <Download size={13} />
+                </button>
+                <button className="ghost small" title="Save what is on screen as a beat" onClick={p.onCaptureBeat}>
+                  <Plus size={13} /> Beat
+                </button>
+              </>
             }
           >
             {p.undoLabel && <div className="beat-undo" role="status"><span>{p.undoLabel}</span><button className="ghost small" onClick={p.onUndoBeat}><Undo2 size={12} /> Undo</button></div>}

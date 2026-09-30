@@ -13,6 +13,8 @@ export const TYPES = {
   ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif",
   ".webp": "image/webp", ".svg": "image/svg+xml", ".avif": "image/avif",
   ".mp4": "video/mp4", ".webm": "video/webm", ".mp3": "audio/mpeg", ".wav": "audio/wav",
+  // Chromium plays an H.264 .mov or .m4v as the MP4 it is underneath, but not when it is named QuickTime.
+  ".mov": "video/mp4", ".m4v": "video/mp4",
   ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
   ".ppt": "application/vnd.ms-powerpoint",
   ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -30,7 +32,7 @@ export function viewerFor(ext) {
   if (ext === ".pdf") return "pdf";
   if (DECK_EXTS.includes(ext)) return "deck";
   if ([".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".avif"].includes(ext)) return "image";
-  if ([".mp4", ".webm"].includes(ext)) return "video";
+  if ([".mp4", ".webm", ".mov", ".m4v"].includes(ext)) return "video";
   if ([".mp3", ".wav"].includes(ext)) return "audio";
   if ([".html", ".htm"].includes(ext)) return "html";
   if ([".csv", ".tsv"].includes(ext)) return "table";

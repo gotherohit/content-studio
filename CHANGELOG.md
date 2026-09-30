@@ -2,6 +2,29 @@
 
 What changed in each release, newest first. Versions are the ones the app updates itself to.
 
+## 0.33.0
+
+- **Export the beats as a video.** The download button in the Beats section renders every
+  beat exactly as Present mode shows it and turns them into an MP4 ready for YouTube: 1080p,
+  1440p or 4K, 30 or 60 fps, H.264 High with AAC sound. Each beat is held for as long as you
+  choose, and beats are joined by a cut or a transition — cross-fade, fade through black,
+  dissolve, slide, wipe, circle, zoom or pixelate — set once for the whole video or per beat.
+- **Vertical 9:16 exports, framed on the screen itself.** Choose 9:16 and **Frame the beats on
+  screen**: the studio is laid out exactly as it will be captured, with a 9:16 box to drag and
+  resize over each beat. Output is 1080 × 1920 (or larger), captured sharp rather than
+  enlarged.
+- **Videos play in exported beats.** A video source remembers the second it is paused at when a
+  beat is captured, returns there (paused) when the beat is shown, and in an export plays from
+  that second, with its sound, over its own place on screen. A beat showing a video lasts for
+  the rest of the clip unless you give it a length. `.mov` and `.m4v` files now open as video
+  too.
+- **Export the beats as a PDF**: one page per beat, 16:9 or 9:16, at the chosen resolution.
+- Exports go to the project's `exports` folder unless you choose another, and never replace a
+  file that is already there. Esc stops the capture; Cancel stops the encoding; neither leaves
+  a partial file behind.
+- When Windows refuses an update's installer because Smart App Control is on, the message now
+  says so. The check for Smart App Control could never succeed: a stray character in it.
+
 ## 0.32.1
 
 - **Incomplete inline Vajra answers are identified.** Reopened passage conversations now show

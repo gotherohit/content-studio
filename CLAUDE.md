@@ -76,6 +76,9 @@ than `file://`. That is why websockets, cookies and the `<sub>.localhost` proxy 
 | `server/research-search.js` | search credentials and Tavily requests |
 | `server/slides.js` | PowerPoint COM, per-slide export |
 | `server/files.js` | the Files pane: list, read, save, create, rename and delete, confined to the chosen folder |
+| `electron/export.js` | exporting beats: renders the studio window at output size, photographs it, runs ffmpeg or prints the PDF |
+| `electron/export-video.js` | the ffmpeg graph, crops and file naming — pure, and tested with a real encode |
+| `client/src/exportPlan.ts` | export choices, lengths, vertical frames and capture zoom — pure and tested |
 | `client/src/App.tsx` | project state, layout, beats, the presenter bridge |
 | `client/src/Presenter.tsx` | the second window; holds no project state |
 
@@ -332,6 +335,44 @@ wait. The AI request aborts when the pane closes. Assume a recording is in progr
   scaled, through `toPane`. At the default text size (1.05) the zoom is exactly 1.
   When verifying, drive the page with `Input.dispatchMouseEvent` over CDP and close the drawing
   menu first: a drag that passes under the open menu is taken by the menu, not the page.
+- **An export renders the studio window at the output's size; it never enlarges a screenshot.**
+  The viewport is emulated at the output's pixels with a device pixel ratio of 1 (CDP, through
+  `webContents.debugger`), and the page is zoomed (`setZoomFactor`) until its layout is the
+  16:9 box of the window the beats were built on. Emulating a higher device pixel ratio instead
+  was tried first: the app drew sharp, but it does not reach the article frames — they are
+  other processes — and they came out enlarged and soft. Page zoom is handed to every frame as
+  a pixel ratio of its own. The cost is that zoom is per site, so the presenter window (same
+  origin) zooms with it during the capture. `<webview>` guests are separate contents and stay
+  at the screen's resolution.
+- **While beats are photographed nothing but the beat may be on screen.** `capturing` in `App`
+  forces Present mode and hides the beat strip, the Exit button, the error bar and the update
+  banner, and a transparent shield takes every click; `.app.exporting` hides the video
+  controls. Anything new that can appear over the panes must be hidden there too, or it is in
+  every frame of the export. Errors from applying a beat are collected and reported with the
+  result instead of shown.
+- **A video in an export is the file, not a recording of the screen.** The page reports where
+  each `video[data-export-video]` picture sits (letterbox removed) and the second it is at;
+  ffmpeg overlays the file there from that second. So the video beat captures is the paused
+  frame the viewer will see under it. Video time is captured like code places: reported into
+  `videoTimes` as it plays, stored as `PaneView.videoTime`, and put back paused on restore.
+- **One ffmpeg run makes the whole video.** Stills are read once and repeated with `loop`
+  (looping the file input decodes it every frame); a cut is `concat`, anything else `xfade`
+  and `acrossfade` of the same length, timed by `server/public/export-timing.js` so the
+  dialog's length is the file's. After `fps` the timebase is `1/fps`, so every join ends
+  `fps,settb=AVTB` or `xfade` refuses mismatched inputs. A capture's size is layout × zoom and
+  often odd: crop edges are rounded *inwards* (a 2895-pixel capture rounded up to 2896 asked
+  for a crop at y = −1 and every vertical export failed). The graph goes through
+  `-filter_complex_script`, since Windows limits a command line to 32K characters.
+- **An export never replaces a file.** It writes `<name>.part` and renames it at the end, picks
+  `Name (2).mp4` beside an existing file, and on failure or Cancel removes only its own
+  `.part`. The captured pictures live in a temporary folder of the app's, deleted when the
+  encode or PDF finishes (however it ends), on the next export and on quit; folders left by a
+  crash are swept at start once they are six hours old — not sooner, because a copy run from
+  source beside the installed app shares the temp folder.
+- **`ffmpeg-static` downloads its binary in an install script.** `npm ci` in the release
+  workflow runs it; a checkout installed with scripts disabled has no `ffmpeg.exe`, and the
+  test that encodes for real skips itself. With `asar: false` the packaged binary is found at
+  the same `node_modules` path.
 - **The element being dragged must keep its identity.** Moving a drawing is a pointer capture
   on the shape; rendering the drag as a *different* element (a preview with another key) takes
   the captured node out of the document and the drag dies on the first move. The same element
@@ -471,6 +512,10 @@ wait. The AI request aborts when the pane closes. Assume a recording is in progr
 
 ## How to work here
 
+- **A copy run from source can sit beside the installed app.** Set `CS_PROFILE` to a scratch
+  folder and it gets its own Electron profile and single-instance lock (ignored when packaged).
+  It still shares `~/.content-studio/` and so the real project index: test in a scratch
+  project exactly as before.
 - **Verify in the running app, not just the compiler.** `npx tsc -b` passing means nothing
   about whether a pane works. Launch the app with `--remote-debugging-port`, drive the real
   UI over CDP, and read the state back.

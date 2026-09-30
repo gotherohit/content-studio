@@ -34,6 +34,11 @@ interface Props {
   showNotes?: boolean;
   linkedIds?: string[];
   onNote?: (id: string, at: { x: number; y: number }) => void;
+  /** A video: the second a beat paused it at, put back whenever a beat is applied. */
+  videoTime?: number;
+  restoreNonce?: number;
+  /** A video reports where it is, for a beat to capture. */
+  onVideoTime?: (seconds: number) => void;
 }
 
 function parseDelimited(text: string, sep: string) {
@@ -49,6 +54,36 @@ function parseDelimited(text: string, sep: string) {
     out.push(cur);
     return out;
   });
+}
+
+/**
+ * A video source. A beat captures the second it was paused at and puts it back there, paused,
+ * so the take starts on the right frame; an export plays it from that second. It says which
+ * file it is, so an export can find it on screen and play the clip where it sat.
+ */
+function VideoView({ url, name, time, restoreNonce, onTime }: {
+  url: string; name: string; time?: number; restoreNonce?: number; onTime?: (seconds: number) => void;
+}) {
+  const ref = useRef<HTMLVideoElement>(null);
+  const report = useRef(onTime);
+  report.current = onTime;
+  useEffect(() => {
+    const video = ref.current;
+    if (!video || time === undefined) return;
+    const seek = () => {
+      video.pause();
+      if (Math.abs(video.currentTime - time) > 0.02) video.currentTime = Math.min(time, Number.isFinite(video.duration) ? video.duration : time);
+    };
+    if (video.readyState >= 1) { seek(); return; }
+    video.addEventListener("loadedmetadata", seek, { once: true });
+    return () => video.removeEventListener("loadedmetadata", seek);
+  }, [url, time, restoreNonce]);
+  const tell = (e: React.SyntheticEvent<HTMLVideoElement>) => report.current?.(e.currentTarget.currentTime);
+  return (
+    <div className="file-media">
+      <video ref={ref} src={url} controls preload="auto" data-export-video={name} onTimeUpdate={tell} onSeeked={tell} onPause={tell} onLoadedMetadata={tell} />
+    </div>
+  );
 }
 
 /** Shows a file source: markdown (with slideshow), notebook, PDF, image, table, text. */
@@ -218,7 +253,7 @@ export function FileView(p: Props) {
       </div>
     );
   }
-  if (viewer === "video") return <div className="file-media"><video src={url} controls /></div>;
+  if (viewer === "video") return <VideoView url={url} name={file.name} time={p.videoTime} restoreNonce={p.restoreNonce} onTime={p.onVideoTime} />;
   if (viewer === "audio") return <div className="file-media"><audio src={url} controls /></div>;
   if (viewer === "notebook") return <div className="file-scroll"><NotebookView url={url} /></div>;
   if (viewer === "deck") {

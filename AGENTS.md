@@ -67,6 +67,12 @@ committing.
   breaks inside source files; the file tool also turned `\u` escapes such as the byte-order mark into raw characters. Build
   a backslash as `String.fromCharCode(92)` / `bytes([92])` when a script must emit one, and check
   edited files for raw control characters before committing.
+- **A verification copy can run beside the installed app** with `CS_PROFILE=<scratch folder>`:
+  it gets its own profile and single-instance lock instead of refusing to start. It is not
+  isolated from the real project index — the scratch-project rules above still apply — and it
+  must be closed when you finish, like any other test copy.
+- **Exports write real files.** Export only from a scratch project, to its own `exports`
+  folder, and remove what you made when finished.
 - **Deleting in a Files test puts a real file in the Recycle Bin.** Only delete scratch files
   inside the sandbox, and say so in the report.
 - **Add regression tests with every change.** A test that fails on the old code for each bug,

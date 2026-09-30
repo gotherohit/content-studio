@@ -17,6 +17,22 @@ contextBridge.exposeInMainWorld("studio", {
   pickFolder: (title) => ipcRenderer.invoke("studio:pickFolder", title),
   openExternal: (url) => ipcRenderer.invoke("studio:openExternal", url),
   renderExplanationPdf: (markdown) => ipcRenderer.invoke("studio:explanationPdf", markdown),
+
+  // Exporting beats: the window is rendered at the output's size and photographed beat by beat.
+  exportView: (css) => ipcRenderer.invoke("export:view", css),
+  exportBegin: (options) => ipcRenderer.invoke("export:begin", options),
+  exportFrame: (index) => ipcRenderer.invoke("export:frame", index),
+  exportEnd: () => ipcRenderer.invoke("export:end"),
+  exportProbe: (projectDir, names) => ipcRenderer.invoke("export:probe", { projectDir, names }),
+  exportVideo: (plan) => ipcRenderer.invoke("export:video", plan),
+  exportPdf: (plan) => ipcRenderer.invoke("export:pdf", plan),
+  exportCancel: () => ipcRenderer.invoke("export:cancel"),
+  exportReveal: (file) => ipcRenderer.invoke("export:reveal", file),
+  onExportProgress: (fn) => {
+    const relay = (_e, p) => fn(p);
+    ipcRenderer.on("export:progress", relay);
+    return () => ipcRenderer.removeListener("export:progress", relay);
+  },
   installUpdate: () => ipcRenderer.invoke("studio:installUpdate"),
   updateState: () => ipcRenderer.invoke("studio:updateState"),
   checkForUpdates: () => ipcRenderer.invoke("studio:checkForUpdates"),
