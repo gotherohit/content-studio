@@ -32,6 +32,7 @@ contextBridge.exposeInMainWorld("studio", {
   exportPdf: (plan) => ipcRenderer.invoke("export:pdf", plan),
   exportCancel: () => ipcRenderer.invoke("export:cancel"),
   exportReveal: (file) => ipcRenderer.invoke("export:reveal", file),
+  exportTake: (options) => ipcRenderer.invoke("export:take", options),
   onExportProgress: (fn) => {
     const relay = (_e, p) => fn(p);
     ipcRenderer.on("export:progress", relay);

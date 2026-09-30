@@ -511,6 +511,14 @@ the top (clipping, which nothing can repair afterwards) or when your voice is ve
 also warns when the microphone is a Bluetooth headset: while recording, those fall back to
 telephone quality, and a USB or built-in microphone will sound far better.
 
+**Microphone boost** turns the microphone up or down, from −12 to +24 dB, before anything is
+recorded; the level bar shows the boosted sound, so what you see is what is recorded. Press
+**Auto** and talk for five seconds as you will on camera: the boost is set so your loud moments
+land at −6 dB, clear of clipping. Double-click the slider to put it back to 0. The boost is
+remembered for each microphone, and a take uses the same boost as a voice. If the bar still hits
+the top at 0 dB or below, the microphone itself is set too high — turn its level down in
+Windows sound settings.
+
 **Check the room** listens for three seconds while you stay quiet and says how noisy the room
 is, then picks the noise reduction to match.
 
@@ -519,18 +527,22 @@ is, then picks the noise reduction to match.
 | | What it does |
 |---|---|
 | Off | Rumble below the voice removed, loudness evened out. Nothing else touched. |
-| Light | Also takes out steady noise — a fan, hum, hiss — and turns the pauses down gently. Right for most rooms. |
-| Strong | Takes out more and makes the pauses nearly silent. For noisy rooms; the voice can sound slightly processed. |
+| Light | A speech model takes out what is not your voice — fans, hum, keyboards, traffic, hiss — and keeps a tenth of the original so the voice keeps its air. The pauses are turned down gently. Right for most rooms. |
+| Strong | The speech model alone, and the pauses made silent. For noisy rooms; the voice can sound slightly processed. |
 
-Every recording is cleaned the same way: rumble filtered out, the steady noise learnt from the
-room and subtracted, the whole recording lifted or lowered to **−16 LUFS** (what YouTube plays
-at) by one fixed amount so the pauses are never pumped up, the pauses quietened, and the peaks
-kept below −1.5 dB. The browser's own call processing — echo cancelling, noise suppression,
-automatic gain — is off, because it smears a voice. Change the setting after recording and
-the recording is cleaned again from its original; there is no need to record again.
+Every recording is cleaned the same way: rumble filtered out, the noise removed by RNNoise (a
+small speech model from Xiph, run inside the app), steady noise taken down further using the
+room's level, measured from the quietest stretch of the recording, the whole recording lifted
+or lowered to **−16 LUFS** (what YouTube plays at) by one fixed amount so the pauses are never
+pumped up, the pauses quietened, the voice evened out by a gentle compressor, and the peaks kept
+below −1.5 dB. The finished sound is measured once more, so it lands on −16 LUFS exactly. The
+browser's own call processing — echo cancelling, noise suppression, automatic gain — is off,
+because it smears a voice. Cleaning takes about a second for every two seconds recorded. Change
+the setting after recording and the recording is cleaned again from its original; there is no
+need to record again.
 
-**Record voice** starts with *Stay quiet* for one second — the app is listening to the room,
-which is what makes the noise reduction work — then *Speak now*. **Stop** when you are done;
+**Record voice** starts with *Stay quiet* for one second, then *Speak now*. The quiet second is
+cut off afterwards; if you started talking during it, only the part before your first word is. **Stop** when you are done;
 the cleaned recording appears with a player. **Record again** replaces it; **Remove** takes it
 away. In an export the beat plays its voice and lasts as long as it: the voice starts after
 the transition into the beat and the beat carries on long enough for the transition out, so
@@ -545,6 +557,13 @@ export's resolution while you record — shrunk to fit your window, so you see t
 and the take is recorded from the page itself: 1920 × 1080 at 1080p, sharp, with no window
 frame, title bar or taskbar in it. The beat lasts exactly as long as the take. **Mute it** or
 **Use its sound** switch its sound without recording again; **New take** replaces it.
+
+The take's player plays it as the export will: from after its quiet second, with its cleaned
+sound. **Save as MP4** writes the take on its own — H.264 video and AAC sound, the format YouTube
+and video editors take — into the export folder (**Show in folder** opens it). It never
+replaces a file: a second save is named `… take (2).mp4`. The files in the `recordings` folder
+are not for using directly: the take's picture there has no sound, because the sound is kept
+separately so it can be cleaned again.
 
 While a take records, the beats do not change. Scroll with the mouse wheel or **↑**/**↓**: in a
 live web page **←**, **→**, Page Down, Space, Home and End are kept for moving between beats,

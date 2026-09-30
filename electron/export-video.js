@@ -141,6 +141,24 @@ export function encoderArgs(out) {
   ];
 }
 
+/**
+ * Inputs and graph for one take on its own, as an MP4: the picture from after its silent
+ * lead-in, at an even size and a steady frame rate, and the cleaned sound — or silence, so
+ * every player and editor sees a sound track. `-t` on both inputs keeps them the same length.
+ */
+export function takeGraph({ video, sound, lead, seconds }, fps = 30) {
+  const length = num(Math.max(0.1, seconds));
+  const inputs = [...(lead > 0 ? ["-ss", num(lead)] : []), "-t", length, "-i", video];
+  if (sound) inputs.push("-t", length, "-i", sound);
+  else inputs.push("-f", "lavfi", "-t", length, "-i", "anullsrc=r=48000:cl=stereo");
+  const graph = [
+    `[0:v]fps=${fps},scale=trunc(iw/2)*2:trunc(ih/2)*2:flags=lanczos,setsar=1,format=yuv420p,` +
+      `tpad=stop_mode=clone:stop_duration=${length},trim=duration=${length}[vout]`,
+    `[1:a]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,apad,atrim=duration=${length}[aout]`,
+  ].join(";");
+  return { inputs, graph };
+}
+
 /** Length and whether there is sound, from what `ffmpeg -i` prints about a file. */
 export function parseProbe(text) {
   const d = /Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/.exec(text);

@@ -6,11 +6,14 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import ffmpegPath from "ffmpeg-static";
 import {
-  CLIP_DB, LEAD_SECONDS, isBluetoothMic, levelDb, micConstraints, peakDb, recordingInUse, recordingName, roomVerdict,
+  AUTO_PEAK_DB, CLIP_DB, GAIN_MAX, GAIN_MIN, LEAD_SECONDS, autoGain, clampGain, gainKey, isBluetoothMic, levelDb, micConstraints, peakDb,
+  recordingInUse, recordingName, roomVerdict,
 } from "../client/src/recording.ts";
 import { beatTimings, exportSettings, VOICE_TAIL } from "../client/src/exportPlan.ts";
-import { cleanFilter, denoiseFilter, derived, parseLoudness, processRecording, TARGET_LUFS } from "../server/recordings.js";
-import { videoGraph } from "../electron/export-video.js";
+import {
+  cleanFilter, DECODE, denoiseFilter, derived, finishFilter, frameLevels, parseLoudness, RNN_MIX, processRecording, quietSpan, roomLevel, TARGET_LUFS, voiceStart,
+} from "../server/recordings.js";
+import { parseProbe, takeGraph, videoGraph } from "../electron/export-video.js";
 import type { Beat, BeatTake, BeatVoice, Stage } from "../client/src/types.ts";
 
 const stage: Stage = { preset: "1", panes: [{ kind: "notes" }], views: {}, split: 50, rowSplit: 50, activeSourceId: null, highlightId: null, viewMode: "original" };
@@ -79,20 +82,47 @@ test("a take decides its beat's length; a voice does too, with room for the tran
   assert.equal(cuts[1].seconds, 3 + VOICE_TAIL);
 });
 
-test("cleaning learns the room from the silent lead-in and cuts it off", () => {
-  const f = denoiseFilter("strong", LEAD_SECONDS);
-  assert.match(f, /asendcmd=c='0\.1 afftdn sn start; 0\.85 afftdn sn stop'/);
-  assert.match(f, /afftdn=nr=24/);
-  assert.match(f, /atrim=start=1,asetpts=PTS-STARTPTS/);
-  assert.doesNotMatch(denoiseFilter("off", 1), /afftdn/);
-  assert.doesNotMatch(denoiseFilter("light", 0), /asendcmd|atrim/);
-  // One fixed gain to the target, never a dynamic normaliser that lifts the pauses.
-  const whole = cleanFilter("light", 1, -26);
-  assert.match(whole, /volume=10dB/);
+test("the room is read from the quietest stretch, not taken on trust from the lead-in", () => {
+  const f = 0.1;
+  // Quiet lead-in, speech, a pause, speech.
+  const levels = [...Array(10).fill(-60), ...Array(20).fill(-20), ...Array(8).fill(-61), ...Array(10).fill(-22)];
+  assert.deepEqual(quietSpan(levels, f, 1)?.map((n) => Math.round(n * 10) / 10), [0.1, 0.9]);
+  assert.ok(Math.abs(roomLevel(levels, f, quietSpan(levels, f, 1)) + 60) < 0.01);
+  // Talking straight away: the room is found in the pause instead.
+  const early = [...Array(3).fill(-60), ...Array(25).fill(-20), ...Array(8).fill(-58), ...Array(10).fill(-21)];
+  assert.deepEqual(quietSpan(early, f, 1)?.map((n) => Math.round(n * 10) / 10), [2.9, 3.5]);
+  // No pause long enough to be the room.
+  assert.equal(quietSpan([...Array(30).fill(-20), -60, -20], f, 1), null);
+  assert.deepEqual(frameLevels("lavfi.astats.1.RMS_level=-38.5\nlavfi.astats.1.RMS_level=-inf\n"), [-38.5, -100]);
+});
+
+test("a voice's lead-in is cut only up to the first word said in it", () => {
+  const f = 0.1;
+  const quiet = [...Array(10).fill(-60), ...Array(20).fill(-20)];
+  assert.equal(voiceStart(quiet, f, 1), 1);
+  const early = [...Array(6).fill(-60), ...Array(24).fill(-20)];
+  assert.equal(voiceStart(early, f, 1), 0.45);
+  assert.equal(voiceStart(early, f, 0), 0);
+});
+
+test("cleaning tells the spectral pass the room's level, and never normalises dynamically", () => {
+  assert.match(DECODE, /channel_layouts=mono,highpass=f=85,highpass=f=85$/);
+  assert.deepEqual(RNN_MIX, { off: 0, light: 0.9, strong: 1 });
+  const strong = denoiseFilter("strong", 1, -35);
+  // A -35 dB room: afftdn told a floor of -55 instead of assuming -50.
+  assert.match(strong, /afftdn=nr=18:nf=-55/);
+  assert.match(strong, /atrim=start=1,asetpts=PTS-STARTPTS$/);
+  assert.doesNotMatch(strong, /arnndn/, "ffmpeg's RNNoise gives a different result on every other run");
+  assert.match(denoiseFilter("light", 0, -35), /afftdn=nr=10:nf=-45$/);
+  assert.doesNotMatch(denoiseFilter("off", 1, -35), /afftdn/);
+  const whole = cleanFilter("light", 1, -40, 10, 3);
+  // The expander works at the known level, before the compressor can lift the pauses.
+  assert.match(whole, /volume=10dB,agate=threshold=0\.025:range=0\.25[^,]*,acompressor=[^,]*,volume=3dB,alimiter/);
   assert.doesNotMatch(whole, /loudnorm|dynaudnorm/);
   assert.match(whole, /alimiter=limit=0\.84/);
-  assert.match(cleanFilter("strong", 1, -20), /agate=threshold=0\.03:range=0\.08/);
-  assert.doesNotMatch(cleanFilter("off", 1, -20), /agate/);
+  assert.match(cleanFilter("strong", 1, -40, 0, 0), /agate=threshold=0\.03:range=0\.06/);
+  assert.match(finishFilter(2), /^volume=2dB,alimiter/);
+  assert.doesNotMatch(cleanFilter("off", 1, -40, 0, 0), /agate|acompressor/);
   assert.equal(parseLoudness("Summary:\n  Integrated loudness:\n    I:         -23.4 LUFS\n"), -23.4);
   assert.deepEqual(derived("take-a.webm"), { clean: "take-a.clean.flac", video: "take-a.video.webm" });
 });
@@ -114,12 +144,15 @@ test("a take plays instead of the still, from after its lead-in, and narration s
   assert.match(graph, /anullsrc=r=48000:cl=stereo,atrim=duration=3,aformat=sample_fmts=fltp:channel_layouts=stereo\[a2\]/);
 });
 
-// The real thing: a noisy recording with a silent second first, cleaned by ffmpeg.
+// The real thing: a noisy recording with a silent second first, cleaned by ffmpeg. The "voice"
+// is a pitch with harmonics that swells four times a second — a plain sine is not speech, and
+// the speech model rightly removes it.
 test("strong noise reduction takes the room out of the pauses and leaves the voice at -16 LUFS", { skip: !ffmpegPath || !fs.existsSync(ffmpegPath) }, async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cs-rec-"));
   try {
     const run = (args: string[]) => spawnSync(ffmpegPath as unknown as string, ["-hide_banner", "-loglevel", "error", "-y", ...args], { encoding: "utf8" });
-    run(["-f", "lavfi", "-i", "sine=f=220:d=6,volume='if(between(t,2,4),0.3,0)':eval=frame", "-f", "lavfi", "-i", "anoisesrc=d=6:c=pink:a=0.02:seed=7",
+    run(["-f", "lavfi", "-i", "sine=f=140:d=6,aeval='val(0)*(0.5+0.5*sin(2*PI*4*t))*(0.6*sin(2*PI*280*t)+0.4*sin(2*PI*420*t)+1)/2':c=same,volume='if(between(t,2,4),0.5,0)':eval=frame",
+      "-f", "lavfi", "-i", "anoisesrc=d=6:c=pink:a=0.02:seed=7",
       "-filter_complex", "[0][1]amix=inputs=2:normalize=0", "-c:a", "libopus", "-b:a", "128k", path.join(dir, "voice-t.webm")]);
     const rms = (file: string, from: number, to: number) => Number(/RMS level dB: (-?[\d.]+|-inf)/.exec(spawnSync(ffmpegPath as unknown as string,
       ["-hide_banner", "-i", file, "-af", `atrim=${from}:${to},astats=metadata=0`, "-f", "null", "-"], { encoding: "utf8" }).stderr)?.[1].replace("-inf", "-200"));
@@ -128,9 +161,14 @@ test("strong noise reduction takes the room out of the pauses and leaves the voi
     // The lead-in is gone: what was 2–4 s is now 1–3 s.
     assert.ok(Math.abs(made.seconds - 5) < 0.1, `seconds ${made.seconds}`);
     const speech = rms(clean, 1.3, 2.7), pause = rms(clean, 3.6, 4.8);
-    assert.ok(speech - pause > 35, `speech ${speech} dB, pause ${pause} dB`);
+    assert.ok(speech - pause > 45, `speech ${speech} dB, pause ${pause} dB`);
+    assert.ok(Math.abs(made.room! + 48) < 4, `room ${made.room}`);
     const loud = parseLoudness(spawnSync(ffmpegPath as unknown as string, ["-hide_banner", "-i", clean, "-af", "ebur128", "-f", "null", "-"], { encoding: "utf8" }).stderr);
     assert.ok(Math.abs((loud ?? 0) - TARGET_LUFS) < 1, `loudness ${loud}`);
+    // The same recording cleaned again comes out the same, sample for sample.
+    const first = fs.readFileSync(clean);
+    await processRecording(dir, "voice-t.webm", "strong", 1);
+    assert.ok(first.equals(fs.readFileSync(clean)), "cleaning is deterministic");
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -142,4 +180,84 @@ test("recordings are uploaded as plain bytes", () => {
   const upload = api.slice(api.indexOf("uploadRecording:"), api.indexOf("recleanRecording:"));
   assert.match(upload, /"content-type": "application\/octet-stream"/);
   assert.doesNotMatch(upload, /blob\.type/);
+});
+
+test("the microphone boost is set from the voice: its loud moments land at -6 dB", () => {
+  // Quiet speech peaking at -24 dB, with pauses the setting must ignore.
+  const quiet = [...Array(40).fill(-24), ...Array(10).fill(-30), ...Array(30).fill(-70)];
+  assert.equal(autoGain(quiet, 0), 18);
+  assert.equal(autoGain(quiet, 0)! + -24, AUTO_PEAK_DB);
+  // Too hot: turned down, and never past the ends of the range.
+  assert.equal(autoGain(Array(50).fill(-1), 0), -5);
+  assert.equal(autoGain(Array(50).fill(-50), 0), GAIN_MAX);
+  assert.equal(autoGain(Array(50).fill(0), -10), GAIN_MIN);
+  // Nothing said.
+  assert.equal(autoGain(Array(80).fill(-70), 0), null);
+  assert.equal(clampGain(99), GAIN_MAX);
+  assert.equal(clampGain(Number.NaN), 0);
+  assert.equal(gainKey(), "micGain:default");
+});
+
+// The picture a take keeps has no sound; played or downloaded on its own it was silent.
+test("a take is previewed with its cleaned sound, and the silent picture is never offered for download", () => {
+  const panel = fs.readFileSync(new URL("../client/src/components/BeatRecorder.tsx", import.meta.url), "utf8");
+  assert.match(panel, /<TakePlayer[\s\S]*?sound=\{p\.beat\.take\.clean && !p\.beat\.take\.muted/);
+  assert.match(panel, /controlsList="nodownload/);
+  assert.doesNotMatch(panel, /<video controls muted=\{p\.beat\.take/);
+});
+
+test("a take saved as MP4 starts after its lead-in and always has a sound track", () => {
+  const withSound = takeGraph({ video: "t.video.webm", sound: "t.clean.flac", lead: 1.04, seconds: 6.5 });
+  assert.deepEqual(withSound.inputs, ["-ss", "1.04", "-t", "6.5", "-i", "t.video.webm", "-t", "6.5", "-i", "t.clean.flac"]);
+  assert.match(withSound.graph, /scale=trunc\(iw\/2\)\*2:trunc\(ih\/2\)\*2/);
+  assert.match(withSound.graph, /channel_layouts=stereo,apad,atrim=duration=6\.5\[aout\]/);
+  const silent = takeGraph({ video: "t.video.webm", sound: null, lead: 0, seconds: 3 });
+  assert.deepEqual(silent.inputs.slice(0, 4), ["-t", "3", "-i", "t.video.webm"]);
+  assert.ok(silent.inputs.includes("anullsrc=r=48000:cl=stereo"));
+});
+
+test("a take really becomes an H.264 and AAC MP4 of its own length", { skip: !ffmpegPath || !fs.existsSync(ffmpegPath) }, () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cs-take-"));
+  try {
+    const ff = (args: string[]) => spawnSync(ffmpegPath as unknown as string, ["-hide_banner", "-y", ...args], { encoding: "utf8" });
+    ff(["-f", "lavfi", "-i", "testsrc2=s=321x181:r=25:d=4", "-c:v", "libvpx-vp9", "-b:v", "300k", path.join(dir, "t.video.webm")]);
+    ff(["-f", "lavfi", "-i", "sine=f=300:d=3", "-c:a", "flac", path.join(dir, "t.clean.flac")]);
+    const { inputs, graph } = takeGraph({ video: path.join(dir, "t.video.webm"), sound: path.join(dir, "t.clean.flac"), lead: 1, seconds: 3 });
+    const out = path.join(dir, "t.mp4");
+    const made = ff([...inputs, "-filter_complex", graph, "-map", "[vout]", "-map", "[aout]", "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p", "-c:a", "aac", "-movflags", "+faststart", out]);
+    assert.equal(made.status, 0, made.stderr.slice(-800));
+    const info = ff(["-i", out]).stderr;
+    assert.match(info, /Video: h264[^\n]*320x180/);
+    assert.match(info, /Audio: aac/);
+    assert.ok(Math.abs((parseProbe(info).duration ?? 0) - 3) < 0.1, info);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("RNNoise keeps the sound in time and the same length, and gives the same result every run", async () => {
+  const { loadRnnoise, rnnoiseStream } = await import("../server/rnnoise.js");
+  const rn = await loadRnnoise();
+  const len = 48000 + 123;
+  const input = new Float32Array(len);
+  for (let i = 0; i < len; i++) input[i] = 0.3 * Math.sin(i / 7) * Math.sin(i / 900) + 0.01 * Math.sin(i * 1.7);
+  const run = async (mix: number, chunk: number) => {
+    const stream = rnnoiseStream(rn, mix);
+    const out: Buffer[] = [];
+    stream.on("data", (b: Buffer) => out.push(b));
+    const bytes = Buffer.from(input.buffer);
+    // Odd chunk sizes: samples split across chunks must survive.
+    for (let at = 0; at < bytes.length; at += chunk) stream.write(bytes.subarray(at, at + chunk));
+    await new Promise((resolve) => stream.end(resolve));
+    const all = Buffer.concat(out);
+    return new Float32Array(all.buffer.slice(all.byteOffset, all.byteOffset + all.length));
+  };
+  // With none of the model mixed in, what comes out is exactly what went in: the delay is undone.
+  const dry = await run(0, 4001);
+  assert.equal(dry.length, len);
+  assert.deepEqual(Array.from(dry.subarray(0, 2000)), Array.from(input.subarray(0, 2000)));
+  assert.deepEqual(Array.from(dry.subarray(len - 2000)), Array.from(input.subarray(len - 2000)));
+  const a = await run(1, 777), b = await run(1, 65536);
+  assert.equal(a.length, len);
+  assert.deepEqual(Buffer.from(a.buffer), Buffer.from(b.buffer));
 });

@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { Circle, Clapperboard, Ear, Mic, Square, Trash2, Volume2, VolumeX, X } from "lucide-react";
+import { Circle, Clapperboard, Download, Ear, FolderOpen, Mic, Square, Trash2, Volume2, VolumeX, Wand2, X } from "lucide-react";
 import type { Beat, BeatTake, BeatVoice, NoiseReduction } from "../types";
 import { api } from "../api";
 import {
-  CLIP_DB, LEAD_SECONDS, QUIET_DB, formatSeconds, isBluetoothMic, levelDb, micConstraints, peakDb, recordingName, roomVerdict,
+  CLIP_DB, GAIN_MAX, GAIN_MIN, LEAD_SECONDS, QUIET_DB, autoGain, boostedMic, clampGain, formatSeconds, gainKey, isBluetoothMic, levelDb,
+  micConstraints, peakDb, recordingName, roomVerdict,
 } from "../recording";
 
 interface Props {
@@ -15,7 +16,10 @@ interface Props {
   onVoice: (voice: BeatVoice | undefined) => void;
   onTake: (take: BeatTake | undefined) => void;
   /** A take takes over the window, so the app runs it; this panel closes for it. */
-  onStartTake: (options: { deviceId?: string; sound: boolean }) => void;
+  onStartTake: (options: { deviceId?: string; sound: boolean; gainDb: number }) => void;
+  /** Write the take as an MP4 with its sound into the export folder; resolves to the file. */
+  onSaveTake?: () => Promise<string | null>;
+  onReveal?: (file: string) => void;
   onClose: () => void;
 }
 
@@ -41,28 +45,40 @@ export function BeatRecorder(p: Props) {
   const [elapsed, setElapsed] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [sound, setSound] = useState(true);
+  const [gainDb, setGainDb] = useState(() => clampGain(Number(lsGet(gainKey(lsGet("micDevice")))) || 0));
+  const [auto, setAuto] = useState(false);
+  const [micLabel, setMicLabel] = useState({ label: "", rate: 0 });
+  const [saved, setSaved] = useState<{ state: "saving" } | { state: "done"; file: string } | null>(null);
   const samples = useRef<Float32Array<ArrayBuffer> | null>(null);
   const analyser = useRef<AnalyserNode | null>(null);
   const recorder = useRef<MediaRecorder | null>(null);
+  const boost = useRef<ReturnType<typeof boostedMic> | null>(null);
+  const gainRef = useRef(gainDb);
+  gainRef.current = gainDb;
 
-  // Open the chosen microphone and keep a level meter on it for as long as the panel is open.
+  // Open the chosen microphone, boosted, and keep a level meter on it for as long as the panel
+  // is open. The meter listens after the boost: it shows what will be recorded.
   useEffect(() => {
     let live = true;
-    let ctx: AudioContext | null = null;
     let frame = 0;
     let opened: MediaStream | null = null;
+    let boosted: ReturnType<typeof boostedMic> | null = null;
     (async () => {
       try {
         opened = await navigator.mediaDevices.getUserMedia({ audio: micConstraints(deviceId || undefined) });
         if (!live) { opened.getTracks().forEach((t) => t.stop()); return; }
-        setStream(opened);
+        const track = opened.getAudioTracks()[0];
+        setMicLabel({ label: track?.label ?? "", rate: track?.getSettings().sampleRate ?? 0 });
+        boosted = boostedMic(opened, gainRef.current);
+        await boosted.ctx.resume();
+        boost.current = boosted;
+        setStream(boosted.stream);
         setError(null);
         // Labels are only given once the microphone is allowed.
         setDevices((await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === "audioinput"));
-        ctx = new AudioContext();
-        const node = ctx.createAnalyser();
+        const node = boosted.ctx.createAnalyser();
         node.fftSize = 2048;
-        ctx.createMediaStreamSource(opened).connect(node);
+        boosted.node.connect(node);
         analyser.current = node;
         samples.current = new Float32Array(node.fftSize);
         const tick = () => {
@@ -85,11 +101,40 @@ export function BeatRecorder(p: Props) {
       live = false;
       cancelAnimationFrame(frame);
       analyser.current = null;
+      boost.current = null;
+      boosted?.close();
       opened?.getTracks().forEach((t) => t.stop());
-      void ctx?.close();
       setStream(null);
     };
   }, [deviceId]);
+
+  function changeGain(db: number) {
+    const next = clampGain(db);
+    setGainDb(next);
+    boost.current?.setGain(next);
+    lsSet(gainKey(deviceId || undefined), String(next));
+    // A clip heard at the old boost says nothing about the new one.
+    setLoudest(-100);
+  }
+
+  /** Listen while the person talks as they will on camera, and set the boost from it. */
+  async function autoLevel() {
+    const node = analyser.current;
+    if (!node || !samples.current) return;
+    setAuto(true);
+    setError(null);
+    const peaks: number[] = [];
+    const until = Date.now() + 5000;
+    while (Date.now() < until) {
+      node.getFloatTimeDomainData(samples.current);
+      peaks.push(peakDb(samples.current));
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    const next = autoGain(peaks, gainRef.current);
+    if (next == null) setError("No voice was heard. Press Auto and talk for five seconds, as you will when recording.");
+    else changeGain(next);
+    setAuto(false);
+  }
 
   useEffect(() => {
     if (phase !== "recording" && phase !== "quiet") return;
@@ -98,9 +143,8 @@ export function BeatRecorder(p: Props) {
     return () => window.clearInterval(timer);
   }, [phase === "idle" || phase === "saving"]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const track = stream?.getAudioTracks()[0];
-  const label = track?.label ?? "";
-  const rate = track?.getSettings().sampleRate;
+  const label = stream ? micLabel.label : "";
+  const rate = stream ? micLabel.rate : 0;
 
   async function checkRoom() {
     const node = analyser.current;
@@ -187,7 +231,10 @@ export function BeatRecorder(p: Props) {
       {p.beat.point && <p className="muted small ellipsis">{p.beat.point}</p>}
 
       <label className="field"><span>Microphone</span>
-        <select value={deviceId} disabled={busy} onChange={(e) => { setDeviceId(e.target.value); lsSet("micDevice", e.target.value); setRoom(null); }}>
+        <select value={deviceId} disabled={busy || auto} onChange={(e) => {
+          setDeviceId(e.target.value); lsSet("micDevice", e.target.value); setRoom(null);
+          setGainDb(clampGain(Number(lsGet(gainKey(e.target.value || undefined))) || 0));
+        }}>
           <option value="">System default</option>
           {devices.filter((d) => d.deviceId !== "default" && d.deviceId !== "communications").map((d) => (
             <option key={d.deviceId} value={d.deviceId}>{d.label || "Microphone"}</option>
@@ -197,13 +244,23 @@ export function BeatRecorder(p: Props) {
       <div className="rec-meter" title={`${Math.round(level.rms)} dB`}>
         <span style={{ width: `${meter}%` }} className={clipping ? "clip" : ""} />
       </div>
+      <label className="field"><span>Microphone boost</span>
+        <div className="row rec-gain">
+          <input type="range" min={GAIN_MIN} max={GAIN_MAX} step={1} value={gainDb} disabled={busy || auto} aria-label="Microphone boost in decibels"
+            onChange={(e) => changeGain(Number(e.target.value))} onDoubleClick={() => changeGain(0)} title="Double-click to reset" />
+          <span className="rec-gain-value">{gainDb > 0 ? "+" : ""}{gainDb} dB</span>
+          <button className="ghost small" disabled={!stream || busy || auto} onClick={() => void autoLevel()} title="Talk for five seconds as you will on camera; the boost is set from your voice">
+            <Wand2 size={12} /> {auto ? "Listening… talk normally" : "Auto"}
+          </button>
+        </div>
+      </label>
       <div className="muted small rec-facts">
         {label && <span className="ellipsis">{label}</span>}
         {rate && <span>{rate / 1000} kHz</span>}
       </div>
       {isBluetoothMic(label) && <p className="rec-warn">This looks like a Bluetooth headset. Its microphone records at telephone quality — a USB or built-in microphone will sound far better.</p>}
-      {clipping && <p className="rec-warn">Too loud: the level is hitting the top. Turn the microphone's gain down in Windows sound settings, or move back a little.</p>}
-      {!clipping && phase === "recording" && loudest < QUIET_DB && elapsed > 3 && <p className="rec-warn">Very quiet: move closer to the microphone, or turn its gain up.</p>}
+      {clipping && <p className="rec-warn">Too loud: the level is hitting the top. {gainDb > 0 ? "Turn the boost down, or press Auto." : "Turn the microphone's level down in Windows sound settings, or move back a little."}</p>}
+      {!clipping && phase === "recording" && loudest < QUIET_DB && elapsed > 3 && <p className="rec-warn">Very quiet: move closer to the microphone, or turn the boost up.</p>}
 
       <div className="row rec-room">
         <button className="ghost small" disabled={!stream || busy || room === "measuring"} onClick={checkRoom} title="Stay quiet for three seconds while the microphone listens to the room">
@@ -244,14 +301,18 @@ export function BeatRecorder(p: Props) {
         <p className="muted small">The screen is laid out as it will be exported and recorded at full resolution while you scroll, point and talk. Esc stops. An export plays the take instead of the beat's picture.</p>
         {p.beat.take && phase === "idle" && (
           <>
-            <video controls muted={p.beat.take.muted} src={api.recordingUrl(p.projectId, p.beat.take.video)} />
-            <p className="muted small">{formatSeconds(p.beat.take.seconds)} · {p.beat.take.width} × {p.beat.take.height}{p.beat.take.muted ? " · muted" : ""}</p>
+            <TakePlayer
+              video={api.recordingUrl(p.projectId, p.beat.take.video)}
+              sound={p.beat.take.clean && !p.beat.take.muted ? api.recordingUrl(p.projectId, p.beat.take.clean) : null}
+              lead={p.beat.take.lead}
+            />
+            <p className="muted small">{formatSeconds(p.beat.take.seconds)} · {p.beat.take.width} × {p.beat.take.height} · {p.beat.take.muted || !p.beat.take.clean ? "no sound" : "with your voice"}</p>
           </>
         )}
         <div className="row">
           <label className="check"><input type="checkbox" checked={sound} disabled={busy} onChange={(e) => setSound(e.target.checked)} /> Record my voice with it</label>
           <span className="grow" />
-          <button className="primary small" disabled={busy || !!error && !stream} onClick={() => p.onStartTake({ deviceId: deviceId || undefined, sound })}>
+          <button className="primary small" disabled={busy || auto || !!error && !stream} onClick={() => p.onStartTake({ deviceId: deviceId || undefined, sound, gainDb })}>
             <Circle size={12} /> {p.beat.take ? "New take" : "Record a take"}
           </button>
         </div>
@@ -262,12 +323,63 @@ export function BeatRecorder(p: Props) {
                 {p.beat.take.muted ? <><Volume2 size={12} /> Use its sound</> : <><VolumeX size={12} /> Mute it</>}
               </button>
             )}
+            {p.onSaveTake && (
+              <button className="ghost small" disabled={saved?.state === "saving"} title="Write this take as an MP4 (H.264 and AAC) with its sound, into the export folder"
+                onClick={async () => {
+                  setSaved({ state: "saving" });
+                  setError(null);
+                  try {
+                    const file = await p.onSaveTake!();
+                    setSaved(file ? { state: "done", file } : null);
+                  } catch (e) {
+                    setSaved(null);
+                    setError(`The MP4 could not be written: ${(e as Error).message}`);
+                  }
+                }}>
+                <Download size={12} /> {saved?.state === "saving" ? "Writing MP4…" : "Save as MP4"}
+              </button>
+            )}
             <button className="ghost small danger" onClick={() => p.onTake(undefined)} title="Remove this take (its files go to the Recycle Bin)"><Trash2 size={12} /> Remove take</button>
           </div>
+        )}
+        {saved?.state === "done" && (
+          <p className="muted small rec-saved">
+            <span className="ellipsis">Saved {saved.file.split(/[\\/]/).pop()}</span>
+            {p.onReveal && <button className="ghost small" onClick={() => p.onReveal!(saved.file)}><FolderOpen size={12} /> Show in folder</button>}
+          </p>
         )}
       </div>
 
       {error && <div className="error-bar static">{error}</div>}
     </div>
+  );
+}
+
+/**
+ * A take played back as the export will play it: the picture from after its silent lead-in,
+ * with the cleaned sound beside it. The picture file has no sound of its own — the sound is
+ * made separately so it can be cleaned again — so the two are kept together here. The
+ * player's own download is turned off: it would save the silent picture file.
+ */
+function TakePlayer(p: { video: string; sound: string | null; lead: number }) {
+  const video = useRef<HTMLVideoElement>(null);
+  const audio = useRef<HTMLAudioElement>(null);
+  const sync = (force = false) => {
+    const v = video.current, a = audio.current;
+    if (!v || !a) return;
+    const at = v.currentTime - p.lead;
+    if (at < 0 || v.paused) { a.pause(); if (at < 0) a.currentTime = 0; return; }
+    if (force || Math.abs(a.currentTime - at) > 0.12) a.currentTime = at;
+    if (a.paused) void a.play().catch(() => {});
+  };
+  return (
+    <>
+      <video ref={video} controls controlsList="nodownload noplaybackrate" disablePictureInPicture src={p.video}
+        onLoadedMetadata={(e) => { e.currentTarget.currentTime = p.lead; }}
+        onPlay={() => sync(true)} onPause={() => audio.current?.pause()} onSeeked={() => sync(true)} onTimeUpdate={() => sync()}
+        onEnded={() => audio.current?.pause()}
+        onVolumeChange={(e) => { if (audio.current) { audio.current.volume = e.currentTarget.volume; audio.current.muted = e.currentTarget.muted; } }} />
+      {p.sound && <audio ref={audio} preload="auto" src={p.sound} hidden />}
+    </>
   );
 }

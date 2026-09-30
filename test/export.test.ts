@@ -120,3 +120,13 @@ test("only a video's picture is replaced by the clip, not the letterbox around i
   // Before its metadata arrives, the element's box is all there is.
   assert.deepEqual(containedBox({ x: 1, y: 2, w: 3, h: 4 }, { width: 0, height: 0 }), { x: 1, y: 2, w: 3, h: 4 });
 });
+
+// A pane with no source and no reported time made `undefined?.sourceId === undefined` a match,
+// and saving a beat in a project without sources failed with "reading 'time'".
+test("a beat's video time comes only from a report for its own source", async () => {
+  const { capturedVideoTime } = await import("../client/src/exportPlan.ts");
+  assert.equal(capturedVideoTime(undefined, undefined, undefined), undefined);
+  assert.equal(capturedVideoTime(undefined, "s1", 4), 4);
+  assert.equal(capturedVideoTime({ sourceId: "s1", time: 9 }, "s1", 4), 9);
+  assert.equal(capturedVideoTime({ sourceId: "s2", time: 9 }, "s1", 4), 4);
+});

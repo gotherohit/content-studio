@@ -12,7 +12,7 @@ import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import ffmpegPath from "ffmpeg-static";
-import { videoGraph, encoderArgs, parseProbe, progressSeconds, cropBox, outputSize, uniqueFile } from "./export-video.js";
+import { videoGraph, encoderArgs, parseProbe, progressSeconds, cropBox, outputSize, takeGraph, uniqueFile } from "./export-video.js";
 import { beatsPdfHtml, PAGE } from "./export-pdf.js";
 
 const VIDEO_EXTS = new Set([".mp4", ".webm", ".mov", ".m4v"]);
@@ -271,6 +271,41 @@ export function wireExport(getWin) {
       page.destroy();
       dropJob();
       progress(win, "idle", null);
+    }
+  });
+
+  // One take on its own, with its sound: the picture file a take keeps has none, because the
+  // sound is made from the original separately so it can be cleaned again.
+  let takeWriting = false;
+  ipcMain.handle("export:take", async (event, options) => {
+    studio(event);
+    if (takeWriting) throw new Error("A take is already being written.");
+    const video = recordingFile(options.projectDir, options.video);
+    const sound = options.clean ? recordingFile(options.projectDir, options.clean) : null;
+    const seconds = Math.min(3600, Math.max(0.1, Number(options.seconds) || 0));
+    const { inputs, graph } = takeGraph({ video, sound, lead: Math.max(0, Number(options.lead) || 0), seconds });
+    const file = uniqueFile(prepareFolder(options.folder), options.name || "take", ".mp4");
+    const part = `${file}.part`;
+    const size = probe(video);
+    const out = { width: size.width ?? 1920, height: size.height ?? 1080, fps: 30 };
+    takeWriting = true;
+    try {
+      const result = await new Promise((resolve) => {
+        let log = "";
+        const child = spawn(ffmpegPath, ["-hide_banner", "-nostats", "-y", ...inputs, "-filter_complex", graph, ...encoderArgs(out), "-f", "mp4", part], { windowsHide: true });
+        child.stderr.on("data", (chunk) => { log = (log + chunk).slice(-6000); });
+        child.on("error", (e) => resolve({ error: e.message }));
+        child.on("close", (code) => resolve(code === 0 ? { ok: true } : { error: log.trim().split("\n").slice(-4).join("\n") || `ffmpeg stopped (${code})` }));
+      });
+      if (!result.ok) {
+        fs.rm(part, { force: true }, () => {});
+        throw new Error(result.error);
+      }
+      fs.renameSync(part, file);
+      outputs.add(file);
+      return { file };
+    } finally {
+      takeWriting = false;
     }
   });
 

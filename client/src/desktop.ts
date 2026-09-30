@@ -95,6 +95,10 @@ export interface StudioBridge {
   exportPdf(plan: ExportPlan): Promise<{ file: string; pages: number }>;
   exportCancel(): Promise<void>;
   exportReveal(file: string): Promise<void>;
+  /** Write a take as an MP4 with its cleaned sound (or silent), never replacing a file. */
+  exportTake(options: {
+    projectDir: string; video: string; clean: string | null; lead: number; seconds: number; folder: string; name: string;
+  }): Promise<{ file: string }>;
   onExportProgress(fn: (p: { phase: "encode" | "pdf" | "idle"; fraction: number | null }) => void): () => void;
   installUpdate(): Promise<void>;
   updateState(): Promise<UpdateInfo>;

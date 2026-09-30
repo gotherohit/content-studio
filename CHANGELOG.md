@@ -2,6 +2,31 @@
 
 What changed in each release, newest first. Versions are the ones the app updates itself to.
 
+## 0.35.0
+
+- **A take's sound in its preview.** The player in the recorder showed the take's picture file,
+  which has no sound of its own — the sound is kept separately so it can be cleaned again — so
+  a take recorded with your voice looked silent. The preview now plays the picture with its
+  cleaned sound, in time, and no longer offers the silent picture for download.
+- **Save a take as MP4.** A take's **Save as MP4** writes it as H.264 video with AAC sound, from
+  after its quiet second, into the export folder, beside the exports. It never replaces a file.
+- **Microphone boost.** A slider from −12 to +24 dB turns the microphone up or down before
+  anything is recorded, and the level bar shows the boosted sound. **Auto** listens while you
+  talk for five seconds and sets it so your loud moments land at −6 dB. The boost is
+  remembered for each microphone and used for voices and takes alike.
+- **Much stronger noise removal.** Light and Strong now run RNNoise, a speech model that takes
+  out anything that is not a voice — fans, hum, keyboards, traffic, a room's hiss — steady or
+  not. The old spectral denoiser only removed steady noise, and took under 1 dB off a real room;
+  on the same recording, pauses now sit about 46 dB under the voice with Light and are silent
+  with Strong. A steeper rumble filter and a gentle compressor even the voice out, and the
+  finished sound is measured so it lands on −16 LUFS exactly. Cleaning takes a little longer:
+  about a second for every two seconds recorded.
+- **The room is measured, not assumed.** The noise is read from the quietest stretch of the
+  recording rather than trusted to the quiet second at the start, and if you start talking
+  during that second, a voice is cut only up to your first word.
+- Fixed: saving a beat in a project with no sources failed with "Cannot read properties of
+  undefined (reading 'time')". This came in with 0.33.0.
+
 ## 0.34.0
 
 - **Record your voice over a beat.** The microphone button on a beat opens its recorder: pick

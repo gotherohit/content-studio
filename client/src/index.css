@@ -1418,6 +1418,11 @@ mark.hl:hover { filter: brightness(0.94); }
 .rec-meter span { display: block; height: 100%; background: var(--ok); transition: width 60ms linear; }
 .rec-meter span.clip { background: var(--danger); }
 .rec-facts { display: flex; gap: 10px; justify-content: space-between; }
+.rec-gain { gap: 8px; align-items: center; }
+.rec-gain input[type="range"] { flex: 1; min-width: 0; }
+.rec-gain-value { min-width: 48px; text-align: right; font-variant-numeric: tabular-nums; font-size: 12px; }
+.rec-saved { display: flex; gap: 8px; align-items: center; margin: 0; }
+.rec-saved .ellipsis { flex: 1; min-width: 0; }
 .rec-warn { margin: 0; padding: 6px 9px; border-radius: var(--r-md); background: color-mix(in srgb, var(--warn) 14%, var(--panel)); color: var(--warn); font-size: 12px; }
 .rec-room { gap: 8px; align-items: flex-start; flex-wrap: wrap; }
 .rec-verdict { flex: 1; min-width: 160px; line-height: 1.45; }

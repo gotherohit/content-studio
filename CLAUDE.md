@@ -80,6 +80,7 @@ than `file://`. That is why websockets, cookies and the `<sub>.localhost` proxy 
 | `electron/export-video.js` | the ffmpeg graph, crops and file naming — pure, and tested with a real encode |
 | `client/src/exportPlan.ts` | export choices, lengths, vertical frames and capture zoom — pure and tested |
 | `server/recordings.js` | a beat's voice and takes: stored in `recordings/`, cleaned and remuxed with ffmpeg |
+| `server/rnnoise.js` | RNNoise as WebAssembly: a stream of float PCM in, denoised and back in time out |
 | `client/src/components/BeatRecorder.tsx` | the recorder panel: microphone, level, room check, voice, take controls |
 | `client/src/App.tsx` | project state, layout, beats, the presenter bridge |
 | `client/src/Presenter.tsx` | the second window; holds no project state |
@@ -380,16 +381,39 @@ wait. The AI request aborts when the pane closes. Assume a recording is in progr
   it (`<name>.clean.flac`, and a take's `<name>.video.webm`), so a different noise setting is
   a re-clean, not a re-record. Replacing or removing a recording sends its files to the Recycle
   Bin unless another beat — a duplicate — still uses them (`recordingInUse`).
-- **Every recording starts with a second of silence, and the cleaning depends on it.** `afftdn`
-  guessing the noise took off about 3 dB of pink noise; learning it from the lead-in
-  (`asendcmd … afftdn sn start/stop`) is what makes it work. The lead-in is trimmed from the
-  sound; a take's picture keeps it (a copy cannot cut between keyframes) and the export skips
-  it with `-ss lead`, so picture and sound agree.
+- **Every recording starts with a second of silence, but it is not trusted.** People start
+  talking early: the room's level is read from the quietest stretch of the whole recording
+  (`quietSpan`), and a voice's lead-in is only cut up to the first word (`voiceStart`). A take
+  keeps its full lead — its picture shows the "stay quiet" card until then — and its picture
+  file keeps the lead in it (a copy cannot cut between keyframes); the export and Save as MP4
+  skip it with `-ss lead`, so picture and sound agree.
+- **`afftdn` only removes noise near its `nf` floor**, which defaults to -50 dB. Neither that nor
+  a learnt profile (`sn start/stop`) touched a real -35 dB room: it took 0.6 dB off. Tell it the
+  measured room level. The real work is RNNoise, which took 23 dB off the same room.
+- **Never use ffmpeg's `arnndn`.** In every ffmpeg before its July 2026 fix it reads past the
+  end of a buffer, and the same recording comes out one of two ways — 5 LU apart on a real
+  voice, from run to run, even on one thread with SIMD off. RNNoise runs as WebAssembly instead
+  (`server/rnnoise.js`); that build refuses to start outside a browser, so `loadRnnoise` sets
+  `WorkerGlobalScope` for the length of the load — its WebAssembly is embedded, nothing is
+  fetched. Its output is 960 samples (two frames) late, measured on a real voice; the stream
+  undoes that, and a test checks a dry mix comes out sample-identical.
+- **Loudness is corrected on the written file, not by running the chain again.** An expander on
+  a voice that hovers at its threshold does not decide identically from run to run, so
+  "measure, then run it all again with the gain" landed 3 LU off. The shaped sound is written
+  to a temporary WAV, measured, and the correction and limiter applied to that file. The
+  expander goes before the compressor, or the compressor lifts the pauses back over it.
+- **A take's picture file has no sound.** Anything that plays or saves a take must pair
+  `take.video` with `take.clean` (`TakePlayer`, `takeGraph`); a bare `<video>` of it looked like
+  the take had not recorded the voice, and its download menu saved a silent WebM.
+- **The microphone boost is a Web Audio gain in front of everything** (`boostedMic`): meter,
+  voice and take all record its output, so the meter shows what is recorded. Its
+  `AudioContext` must be resumed before recording, or the destination stream is silent.
 - **Never normalise a voice with single-pass `loudnorm`.** In its dynamic mode it lifts the
   pauses, and brought the noise back up by as much as the denoiser had taken out. Loudness is
   measured once (`ebur128`) and applied as one fixed gain; the expander's threshold is then set
   relative to the known speech level. The real-encode test in `recording.test.ts` pins the
-  result: pauses more than 35 dB under speech at Strong, loudness within 1 LU of −16.
+  result: pauses more than 45 dB under speech at Strong, loudness within 1 LU of −16, and the
+  same output sample for sample when cleaned twice.
 - **Upload recordings as `application/octet-stream`.** MediaRecorder's type,
   `video/webm;codecs=vp9,opus`, has a comma the body parser rejects, so `express.raw` skipped
   the body and the take arrived as `{}`.

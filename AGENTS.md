@@ -76,6 +76,11 @@ committing.
   with Chromium's test tone. That switch also fakes screen capture, so test takes in a copy
   without it, with the take's sound turned off. Opening the recorder panel opens the
   microphone for its level meter even when nothing is recorded — say so if you do it.
+  The fake microphone is a beep, not a voice, and Light and Strong's speech model removes it:
+  check a recording's sound path on the original's level, not the cleaned file's.
+- **Tune the cleaning on copies.** When a real recording of the creator's is the best test of
+  the noise removal, copy it into the scratchpad and work on the copy; never process, restore
+  or rewrite it where it is, including in the Recycle Bin.
 - **Exports write real files.** Export only from a scratch project, to its own `exports`
   folder, and remove what you made when finished.
 - **Deleting in a Files test puts a real file in the Recycle Bin.** Only delete scratch files

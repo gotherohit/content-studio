@@ -40,9 +40,9 @@ import { FilesPane } from "./components/FilesPane";
 import { NewProjectDialog } from "./components/NewProjectDialog";
 import { ExportDialog, defaultExportFolder, type ExportRun } from "./components/ExportDialog";
 import { ExportFramer } from "./components/ExportFramer";
-import { beatTimings, captureZoom, centredFrame, clampFrame, containedBox, exportSettings, exportViewport, outputSize } from "./exportPlan";
+import { beatTimings, captureZoom, capturedVideoTime, centredFrame, clampFrame, containedBox, exportSettings, exportViewport, outputSize } from "./exportPlan";
 import { BeatRecorder } from "./components/BeatRecorder";
-import { LEAD_SECONDS, micConstraints, recordingInUse, recordingName } from "./recording";
+import { LEAD_SECONDS, boostedMic, micConstraints, recordingInUse, recordingName } from "./recording";
 import type { ExportPlanBeat, ExportVideo } from "./desktop";
 import type { BeatExport, BeatTake, BeatVoice, ExportSettings, VerticalFrame } from "./types";
 
@@ -735,7 +735,7 @@ export default function App() {
         // Jupyter serves one folder at a time: a beat remembers the one that was showing,
         // not the one the pane had asked for.
         jupyterRoot: pane.kind === "jupyter" ? jupyterRoots.current[i] ?? view.jupyterRoot : view.jupyterRoot,
-        videoTime: pane.kind === "source" && videoTimes.current[i]?.sourceId === sourceId ? videoTimes.current[i].time : view.videoTime,
+        videoTime: pane.kind === "source" ? capturedVideoTime(videoTimes.current[i], sourceId, view.videoTime) : view.videoTime,
         code: codeFor(pane, i, sourceId, view.code),
         position: pane.kind === "source" && live?.projectId === project?.id && live?.sourceId === sourceId && live?.mode === mode && sameBrowsedPage(live.page, view.page) ? { ...live.position } : undefined,
       }];
@@ -1054,7 +1054,7 @@ export default function App() {
     }
   }
 
-  async function startTake(index: number, options: { deviceId?: string; sound: boolean }) {
+  async function startTake(index: number, options: { deviceId?: string; sound: boolean; gainDb: number }) {
     if (!desktop || !project) return;
     const beat = project.beats[index];
     if (!beat) return;
@@ -1067,6 +1067,7 @@ export default function App() {
     const title = document.title;
     let screen: MediaStream | null = null;
     let mic: MediaStream | null = null;
+    let boosted: ReturnType<typeof boostedMic> | null = null;
     let blob: Blob | null = null;
     let lead = 0;
     setRecorderFor(null);
@@ -1080,7 +1081,12 @@ export default function App() {
       // Asked for straight after the click, while the browser still counts it as the person's.
       await desktop.recordSelf();
       screen = await navigator.mediaDevices.getDisplayMedia({ video: { width: { ideal: out.width }, height: { ideal: out.height }, frameRate: { ideal: 30, max: 30 } }, audio: false });
-      if (options.sound) mic = await navigator.mediaDevices.getUserMedia({ audio: micConstraints(options.deviceId) });
+      if (options.sound) {
+        mic = await navigator.mediaDevices.getUserMedia({ audio: micConstraints(options.deviceId) });
+        // The same boost the recorder's meter was set with.
+        boosted = boostedMic(mic, options.gainDb);
+        await boosted.ctx.resume();
+      }
       goToBeat(index);
       // The countdown doubles as the beat's time to load and settle; none of it is recorded.
       for (let n = 3; n >= 1 && !takeCancelled.current; n--) {
@@ -1088,7 +1094,7 @@ export default function App() {
         await sleep(1000);
       }
       if (takeCancelled.current) throw new Error("cancelled");
-      const tracks = [...screen.getVideoTracks(), ...(mic?.getAudioTracks() ?? [])];
+      const tracks = [...screen.getVideoTracks(), ...(boosted?.stream.getAudioTracks() ?? [])];
       const mime = ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"].find((m) => MediaRecorder.isTypeSupported(m)) ?? "video/webm";
       const rate = out.width >= 3840 ? 40e6 : out.width >= 2560 ? 24e6 : 16e6;
       const rec = new MediaRecorder(new MediaStream(tracks), { mimeType: mime, videoBitsPerSecond: rate, audioBitsPerSecond: 256000 });
@@ -1113,6 +1119,7 @@ export default function App() {
       if ((e as Error).message !== "cancelled") setError(`The take could not be recorded: ${(e as Error).message}`);
     } finally {
       screen?.getTracks().forEach((t) => t.stop());
+      boosted?.close();
       mic?.getTracks().forEach((t) => t.stop());
       await desktop.recordView(null).catch(() => {});
       document.title = title;
@@ -1138,6 +1145,20 @@ export default function App() {
       setTake(null);
       setRecorderFor(beat.id);
     }
+  }
+
+  /** A take as an MP4 with its sound, beside the exports — the file to upload or edit elsewhere. */
+  async function saveTakeMp4(id: string): Promise<string | null> {
+    if (!desktop || !project) return null;
+    const index = project.beats.findIndex((b) => b.id === id);
+    const t = project.beats[index]?.take;
+    if (!t) return null;
+    const s = exportSettings(project.settings.export);
+    const made = await desktop.exportTake({
+      projectDir: project.dir ?? "", video: t.video, clean: t.muted ? null : t.clean ?? null, lead: t.lead, seconds: t.seconds,
+      folder: s.folder || defaultExportFolder(project), name: `${project.title || "Beat"} - beat ${index + 1} take`,
+    });
+    return made.file;
   }
 
   /** Lay the window out as the export will be and put the first beat to frame on it. */
@@ -1563,6 +1584,8 @@ export default function App() {
           onVoice={(voice) => setBeatRecording(recorderFor, "voice", voice)}
           onTake={(next) => setBeatRecording(recorderFor, "take", next)}
           onStartTake={(options) => void startTake(beats.findIndex((b) => b.id === recorderFor), options)}
+          onSaveTake={desktop ? () => saveTakeMp4(recorderFor) : undefined}
+          onReveal={desktop ? (file) => void desktop?.exportReveal(file) : undefined}
           onClose={() => setRecorderFor(null)}
         />
       )}

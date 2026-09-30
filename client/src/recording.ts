@@ -69,3 +69,49 @@ export const formatSeconds = (seconds: number) => {
   const s = Math.max(0, Math.round(seconds));
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 };
+
+/** How far the microphone can be turned down or up before it is recorded, in dB. */
+export const GAIN_MIN = -12;
+export const GAIN_MAX = 24;
+export const clampGain = (db: number) => Math.round(Math.max(GAIN_MIN, Math.min(GAIN_MAX, Number.isFinite(db) ? db : 0)));
+
+/** Where Auto puts the loud moments of normal speech: clear of clipping, well above the room. */
+export const AUTO_PEAK_DB = -6;
+
+/**
+ * The boost that puts speech where it should be, from the block peaks heard while the person
+ * talked at the current boost. The loud moments decide — the 90th percentile of peaks, so one
+ * shout or bump does not — and pauses are left out. Null when no voice was heard.
+ */
+export function autoGain(peaksDb: number[], currentDb: number): number | null {
+  const voiced = peaksDb.filter((p) => p > -55).sort((a, b) => a - b);
+  if (voiced.length < 10) return null;
+  const loud = voiced[Math.floor(voiced.length * 0.9)];
+  return clampGain(currentDb + AUTO_PEAK_DB - loud);
+}
+
+/**
+ * The microphone turned up or down before anything hears it: the level meter, a voice and a
+ * take all record `stream`, so what the meter shows is what is recorded. Web Audio passes
+ * samples above full scale through, but the encoder clips them — the meter's clipping warning
+ * is measured after the boost for that reason.
+ */
+export function boostedMic(mic: MediaStream, db: number) {
+  const ctx = new AudioContext({ sampleRate: 48000 });
+  const source = ctx.createMediaStreamSource(mic);
+  const gain = ctx.createGain();
+  gain.gain.value = 10 ** (clampGain(db) / 20);
+  const out = ctx.createMediaStreamDestination();
+  out.channelCount = 1;
+  source.connect(gain).connect(out);
+  return {
+    ctx,
+    node: gain,
+    stream: out.stream,
+    setGain: (next: number) => gain.gain.setTargetAtTime(10 ** (clampGain(next) / 20), ctx.currentTime, 0.02),
+    close: () => { source.disconnect(); gain.disconnect(); void ctx.close(); },
+  };
+}
+
+/** The boost remembered for a microphone. */
+export const gainKey = (deviceId?: string) => `micGain:${deviceId || "default"}`;

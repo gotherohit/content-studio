@@ -14,7 +14,7 @@ export interface FsEntry { name: string; path: string; dir: boolean }
 /** What the server made from a recording: see `processRecording` in server/recordings.js. */
 export interface RecordingResult {
   file: string; clean?: string; video?: string; width?: number; height?: number;
-  seconds: number; noise: NoiseReduction; lead: number; loudness?: number;
+  seconds: number; noise: NoiseReduction; lead: number; loudness?: number; room?: number;
 }
 export interface FsText { content: string; mtime: number; size: number; eol: string; bom: boolean }
 

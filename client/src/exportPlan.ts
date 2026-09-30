@@ -86,6 +86,15 @@ export function captureZoom(settings: Pick<ExportSettings, "shape" | "quality">,
 }
 
 /** The video sources a beat puts on screen, with the second each was paused at. */
+/**
+ * The second a pane's video is at, for a beat being captured: what the pane last reported, if
+ * it reported it for this source, otherwise what the beat already had. A pane with no source
+ * and no report has neither — both are undefined, and must not count as a match.
+ */
+export function capturedVideoTime(live: { sourceId: string; time: number } | undefined, sourceId: string | undefined, saved?: number) {
+  return live && sourceId && live.sourceId === sourceId ? live.time : saved;
+}
+
 export function beatVideos(stage: Stage, sources: Source[]): { pane: number; name: string; start: number }[] {
   return stage.panes.flatMap((pane, i) => {
     if (pane.kind !== "source") return [];

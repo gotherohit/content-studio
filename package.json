@@ -21,6 +21,7 @@
     "@anthropic-ai/sdk": "latest",
     "@modelcontextprotocol/client": "2.1.0",
     "@mozilla/readability": "^0.6.0",
+    "@shiguredo/rnnoise-wasm": "2025.1.5",
     "@vscode/ripgrep": "1.18.0",
     "cors": "^2.8.5",
     "diff": "9.0.0",

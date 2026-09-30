@@ -65,7 +65,8 @@ Jupyter, a terminal, an Excalidraw canvas, code snippets and an AI chat are pane
 
 Video export uses [ffmpeg](https://ffmpeg.org), shipped inside the app through the
 `ffmpeg-static` package (a GPL build that includes x264). It adds about 80 MB to the installed
-app.
+app. Recorded voices are cleaned with [RNNoise](https://github.com/xiph/rnnoise), Xiph's speech
+denoiser, as WebAssembly from `@shiguredo/rnnoise-wasm`.
 
 New to it? **[A video, step by step](docs/guide.md#a-video-step-by-step)** walks through the whole workflow once. **[The full guide](docs/guide.md)** documents all of it. **[Changelog](CHANGELOG.md)** lists what changed in each release.
 
