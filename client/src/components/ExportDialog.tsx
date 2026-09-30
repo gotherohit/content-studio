@@ -151,6 +151,15 @@ export function ExportDialog(p: Props) {
                 {TRANSITIONS.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
               </select>
             </label>
+            {s.shape === "landscape" && beats.some((b) => b.take) && (
+              <label className="field" title="A take records the whole window. Fit keeps all of it, with bars where its shape is not 16:9; Fill has no bars and trims a thin slice at two edges.">
+                <span>Takes</span>
+                <select value={s.takeFraming} onChange={(e) => p.onSettings({ takeFraming: e.target.value as ExportSettings["takeFraming"] })}>
+                  <option value="fit">Fit — whole window, bars</option>
+                  <option value="fill">Fill — no bars, edges trimmed</option>
+                </select>
+              </label>
+            )}
             <label className="field"><span>Transition length</span>
               <span className="row"><input type="number" min={0.1} max={3} step={0.1} value={s.transitionSeconds} disabled={s.transition === "cut" && !beats.some((b) => b.export?.transition && b.export.transition !== "cut")} onChange={(e) => p.onSettings({ transitionSeconds: Number(e.target.value) })} /> s</span>
             </label>

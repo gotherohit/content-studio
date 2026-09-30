@@ -988,7 +988,7 @@ export default function App() {
         planned.push({
           seconds: timings[i].seconds, transition: timings[i].transition, frame: frames[i], videos,
           voice: beat.voice ? { name: beat.voice.clean, delay: timings[i].voiceDelay } : undefined,
-          take: beat.take ? { name: beat.take.video, clean: beat.take.clean, muted: beat.take.muted, lead: beat.take.lead } : undefined,
+          take: beat.take ? { name: beat.take.video, clean: beat.take.clean, muted: beat.take.muted, lead: beat.take.lead, framing: s.takeFraming } : undefined,
         });
       }
     } catch (e) {
@@ -1137,7 +1137,7 @@ export default function App() {
     if (!blob) { setTake(null); if (takeCancelled.current) setNotice({ kind: "warn", text: "Take cancelled — nothing was recorded." }); return; }
     setTake({ index, phase: "saving", count: 0 });
     try {
-      const made = await api.uploadRecording(project.id, recordingName("take", beat.id), blob, noise, lead, crop ? { ...crop, width: out.width, height: out.height } : undefined);
+      const made = await api.uploadRecording(project.id, recordingName("take", beat.id), blob, noise, lead, crop ?? undefined);
       if (!made.video || !made.width || !made.height) throw new Error("The recording has no picture.");
       setBeatRecording(beat.id, "take", {
         file: made.file, video: made.video, clean: made.clean, seconds: made.seconds, noise: made.noise, lead: made.lead,
@@ -1163,6 +1163,7 @@ export default function App() {
     const made = await desktop.exportTake({
       projectDir: project.dir ?? "", video: t.video, clean: t.muted ? null : t.clean ?? null, lead: t.lead, seconds: t.seconds,
       folder: s.folder || defaultExportFolder(project), name: `${project.title || "Beat"} - beat ${index + 1} take`,
+      quality: s.quality, framing: s.takeFraming,
     });
     return made.file;
   }
@@ -1586,6 +1587,8 @@ export default function App() {
           beat={beats.find((b) => b.id === recorderFor)!}
           index={beats.findIndex((b) => b.id === recorderFor)}
           noise={project.settings.noise ?? "light"}
+          framing={exportSettings(project.settings.export).takeFraming}
+          onFraming={(takeFraming) => setExportSettings({ takeFraming })}
           onNoise={(noise) => mutate((p) => ({ ...p, settings: { ...p.settings, noise } }))}
           onVoice={(voice) => setBeatRecording(recorderFor, "voice", voice)}
           onTake={(next) => setBeatRecording(recorderFor, "take", next)}

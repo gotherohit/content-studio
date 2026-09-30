@@ -33,12 +33,27 @@ export function cropBox(frame, picture) {
 }
 
 /**
+ * How a take — a recording of the whole window, whatever its shape — is made to fit the
+ * output. `fit` is what a screen recorder does: all of it, centred, with black bars where the
+ * shapes differ. `fill` has no bars: it is scaled until it covers the output and the centre is
+ * kept, so a thin slice at two opposite edges is trimmed. Neither ever stretches it. Converts to
+ * video colours on the way, as the plain scale does for a still.
+ */
+export function framingFilter(framing, out) {
+  const colour = `flags=lanczos:out_color_matrix=bt709:out_range=tv`;
+  return framing === "fill"
+    ? `scale=${out.width}:${out.height}:force_original_aspect_ratio=increase:${colour},crop=${out.width}:${out.height},format=yuv420p`
+    : `scale=${out.width}:${out.height}:force_original_aspect_ratio=decrease:force_divisible_by=2:${colour},` +
+      `pad=${out.width}:${out.height}:(ow-iw)/2:(oh-ih)/2:black,format=yuv420p`;
+}
+
+/**
  * The filter graph and inputs for one video.
  *
  * `beats`: [{ still, width, height, seconds, transition, crop?, take?, voice?, videos: [{ file, start, x, y, w, h, audio }] }]
  * where `width`/`height` are the still's pixels (or the take's) and a video's box is in those pixels too.
- * `take`: { file, lead, sound? } — a recording of the beat on screen, played instead of the still, with
- * its cleaned sound unless it was muted. `voice`: { file, delay } — narration recorded for the
+ * `take`: { file, lead, sound?, framing? } — a recording of the beat on screen, played instead of the
+ * still, with its cleaned sound unless it was muted, fitted (`fit`) or filled (`fill`) into 16:9. `voice`: { file, delay } — narration recorded for the
  * beat, starting `delay` seconds in so an incoming transition does not fade its first words.
  * `out`: { width, height, fps }.
  */
@@ -91,8 +106,12 @@ export function videoGraph(beats, out, transitionSeconds) {
     });
 
     const crop = beat.crop ? `crop=${beat.crop.w}:${beat.crop.h}:${beat.crop.x}:${beat.crop.y},` : "";
-    // Converted to video colours once, with the HD matrix, and tagged as such on the way out.
-    lines.push(`[${layer}]${crop}scale=${out.width}:${out.height}:flags=lanczos:out_color_matrix=bt709:out_range=tv,format=yuv420p,setsar=1,fps=${fps},settb=AVTB[v${k}]`);
+    // Converted to video colours once, with the HD matrix, and tagged as such on the way out. A
+    // take is its window's shape, so it is fitted or filled rather than stretched; a vertical
+    // crop is already the output's shape.
+    const shape = beat.take && !beat.crop ? framingFilter(beat.take.framing, out)
+      : `scale=${out.width}:${out.height}:flags=lanczos:out_color_matrix=bt709:out_range=tv,format=yuv420p`;
+    lines.push(`[${layer}]${crop}${shape},setsar=1,fps=${fps},settb=AVTB[v${k}]`);
 
     if (!sounds.length) {
       lines.push(`anullsrc=r=48000:cl=stereo,atrim=duration=${num(length)},aformat=sample_fmts=fltp:channel_layouts=stereo[a${k}]`);
@@ -143,16 +162,17 @@ export function encoderArgs(out) {
 
 /**
  * Inputs and graph for one take on its own, as an MP4: the picture from after its silent
- * lead-in, at an even size and a steady frame rate, and the cleaned sound — or silence, so
- * every player and editor sees a sound track. `-t` on both inputs keeps them the same length.
+ * lead-in, fitted or filled into `out`, at a steady frame rate, and the cleaned sound — or
+ * silence, so every player and editor sees a sound track. `-t` on both inputs keeps them the
+ * same length.
  */
-export function takeGraph({ video, sound, lead, seconds }, fps = 30) {
+export function takeGraph({ video, sound, lead, seconds, out = { width: 1920, height: 1080 }, framing = "fit" }, fps = 30) {
   const length = num(Math.max(0.1, seconds));
   const inputs = [...(lead > 0 ? ["-ss", num(lead)] : []), "-t", length, "-i", video];
   if (sound) inputs.push("-t", length, "-i", sound);
   else inputs.push("-f", "lavfi", "-t", length, "-i", "anullsrc=r=48000:cl=stereo");
   const graph = [
-    `[0:v]fps=${fps},scale=trunc(iw/2)*2:trunc(ih/2)*2:flags=lanczos,setsar=1,format=yuv420p,` +
+    `[0:v]fps=${fps},${framingFilter(framing, out)},setsar=1,` +
       `tpad=stop_mode=clone:stop_duration=${length},trim=duration=${length}[vout]`,
     `[1:a]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,apad,atrim=duration=${length}[aout]`,
   ].join(";");

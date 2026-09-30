@@ -13,7 +13,7 @@ import { beatTimings, exportSettings, VOICE_TAIL } from "../client/src/exportPla
 import {
   cleanFilter, DECODE, denoiseFilter, derived, finishFilter, frameLevels, parseLoudness, parsePicture, pictureFilter, RNN_MIX, processRecording, quietSpan, roomLevel, TARGET_LUFS, voiceStart,
 } from "../server/recordings.js";
-import { parseProbe, takeGraph, videoGraph } from "../electron/export-video.js";
+import { framingFilter, parseProbe, takeGraph, videoGraph } from "../electron/export-video.js";
 import type { Beat, BeatTake, BeatVoice, Stage } from "../client/src/types.ts";
 
 const stage: Stage = { preset: "1", panes: [{ kind: "notes" }], views: {}, split: 50, rowSplit: 50, activeSourceId: null, highlightId: null, viewMode: "original" };
@@ -205,23 +205,25 @@ test("a take is previewed with its cleaned sound, and the silent picture is neve
   assert.doesNotMatch(panel, /<video controls muted=\{p\.beat\.take/);
 });
 
-test("a take saved as MP4 starts after its lead-in and always has a sound track", () => {
-  const withSound = takeGraph({ video: "t.video.webm", sound: "t.clean.flac", lead: 1.04, seconds: 6.5 });
-  assert.deepEqual(withSound.inputs, ["-ss", "1.04", "-t", "6.5", "-i", "t.video.webm", "-t", "6.5", "-i", "t.clean.flac"]);
-  assert.match(withSound.graph, /scale=trunc\(iw\/2\)\*2:trunc\(ih\/2\)\*2/);
+test("a take saved as MP4 starts after its lead-in, is framed into 16:9, and always has a sound track", () => {
+  const withSound = takeGraph({ video: "t.video.mp4", sound: "t.clean.flac", lead: 1.04, seconds: 6.5 });
+  assert.deepEqual(withSound.inputs, ["-ss", "1.04", "-t", "6.5", "-i", "t.video.mp4", "-t", "6.5", "-i", "t.clean.flac"]);
+  // Fit by default, into 1920 × 1080 unless told otherwise.
+  assert.ok(withSound.graph.includes(framingFilter("fit", { width: 1920, height: 1080 })), withSound.graph);
   assert.match(withSound.graph, /channel_layouts=stereo,apad,atrim=duration=6\.5\[aout\]/);
-  const silent = takeGraph({ video: "t.video.webm", sound: null, lead: 0, seconds: 3 });
-  assert.deepEqual(silent.inputs.slice(0, 4), ["-t", "3", "-i", "t.video.webm"]);
-  assert.ok(silent.inputs.includes("anullsrc=r=48000:cl=stereo"));
+  const filled = takeGraph({ video: "t.video.mp4", sound: null, lead: 0, seconds: 3, out: { width: 2560, height: 1440 }, framing: "fill" });
+  assert.ok(filled.graph.includes(framingFilter("fill", { width: 2560, height: 1440 })), filled.graph);
+  assert.deepEqual(filled.inputs.slice(0, 4), ["-t", "3", "-i", "t.video.mp4"]);
+  assert.ok(filled.inputs.includes("anullsrc=r=48000:cl=stereo"));
 });
 
-test("a take really becomes an H.264 and AAC MP4 of its own length", { skip: !ffmpegPath || !fs.existsSync(ffmpegPath) }, () => {
+test("a take really becomes an H.264 and AAC MP4 of the export's size and its own length", { skip: !ffmpegPath || !fs.existsSync(ffmpegPath) }, () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cs-take-"));
   try {
     const ff = (args: string[]) => spawnSync(ffmpegPath as unknown as string, ["-hide_banner", "-y", ...args], { encoding: "utf8" });
-    ff(["-f", "lavfi", "-i", "testsrc2=s=321x181:r=25:d=4", "-c:v", "libvpx-vp9", "-b:v", "300k", path.join(dir, "t.video.webm")]);
+    ff(["-f", "lavfi", "-i", "testsrc2=s=322x200:r=25:d=4", "-c:v", "libx264", "-pix_fmt", "yuv420p", path.join(dir, "t.video.mp4")]);
     ff(["-f", "lavfi", "-i", "sine=f=300:d=3", "-c:a", "flac", path.join(dir, "t.clean.flac")]);
-    const { inputs, graph } = takeGraph({ video: path.join(dir, "t.video.webm"), sound: path.join(dir, "t.clean.flac"), lead: 1, seconds: 3 });
+    const { inputs, graph } = takeGraph({ video: path.join(dir, "t.video.mp4"), sound: path.join(dir, "t.clean.flac"), lead: 1, seconds: 3, out: { width: 320, height: 180 } });
     const out = path.join(dir, "t.mp4");
     const made = ff([...inputs, "-filter_complex", graph, "-map", "[vout]", "-map", "[aout]", "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p", "-c:a", "aac", "-movflags", "+faststart", out]);
     assert.equal(made.status, 0, made.stderr.slice(-800));
@@ -261,60 +263,116 @@ test("RNNoise keeps the sound in time and the same length, and gives the same re
   assert.deepEqual(Buffer.from(a.buffer), Buffer.from(b.buffer));
 });
 
-// A take on a 1913 × 1010 window came out as the window pixel for pixel in a 1920 × 1080 frame,
-// padded with black on the right and below.
-test("the window is found in a take's picture, however the capture sized it", async () => {
+// Nothing about a take may assume one screen: every size is measured when it is recorded.
+test("the window is found in a take's picture on any screen, however the capture sized it", async () => {
   const { takeCrop } = await import("../client/src/exportPlan.ts");
-  const page = { width: 1913, height: 1010 };
-  // Copied pixel for pixel into a padded frame.
-  const padded = takeCrop(page, page, { width: 1920, height: 1080 }, 1);
+  const whole = (page: { width: number; height: number }, frame: { width: number; height: number }, ratio: number) => takeCrop(page, page, frame, ratio);
+  // Copied pixel for pixel into a padded 1920 × 1080 frame — a 1913 × 1010 window did this.
+  const padded = whole({ width: 1913, height: 1010 }, { width: 1920, height: 1080 }, 1);
   assert.ok(Math.abs(padded.w * 1920 - 1913) < 0.01 && Math.abs(padded.h * 1080 - 1010) < 0.01, JSON.stringify(padded));
-  // On a display at 150 %: 1275 × 673 CSS pixels are 1913 × 1010 on screen.
-  const scaled150 = takeCrop({ width: 1275, height: 673 }, { width: 1275, height: 673 }, { width: 1920, height: 1080 }, 1.5);
-  assert.ok(Math.abs(scaled150.w * 1920 - 1912.5) < 0.01, JSON.stringify(scaled150));
-  // Recorded at the window's own size, or scaled to fit it: all of the frame is the window.
-  for (const frame of [{ width: 1913, height: 1010 }, { width: 3826, height: 2020 }]) assert.deepEqual(takeCrop(page, page, frame, 1), { w: 1, h: 1 });
+  // A display at 150 %: 1275 × 673 CSS pixels are 1913 × 1010 on screen.
+  const at150 = whole({ width: 1275, height: 673 }, { width: 1920, height: 1080 }, 1.5);
+  assert.ok(Math.abs(at150.w * 1920 - 1912.5) < 0.01, JSON.stringify(at150));
+  // Recorded at the window's own size, or scaled evenly: all of the frame is the window — a
+  // 16:10 laptop at 125 %, a 21:9 ultrawide, a portrait screen and a 4K screen at 200 % alike.
+  for (const [page, frame, ratio] of [
+    [{ width: 1536, height: 960 }, { width: 1920, height: 1200 }, 1.25],
+    [{ width: 3440, height: 1392 }, { width: 3440, height: 1392 }, 1],
+    [{ width: 1080, height: 1850 }, { width: 1080, height: 1850 }, 1],
+    [{ width: 1920, height: 1040 }, { width: 3840, height: 2080 }, 2],
+  ] as const) assert.deepEqual(whole(page, frame, ratio), { w: 1, h: 1 }, JSON.stringify(page));
 });
 
-test("a take's picture instructions are checked, and the window is fitted whole into 16:9", () => {
-  assert.deepEqual(parsePicture("0.996354,0.935185,1920,1080"), { w: 0.996354, h: 0.935185, width: 1920, height: 1080 });
-  assert.equal(parsePicture("1.2,1,1920,1080"), null);
-  assert.equal(parsePicture("0.9,0.9,1921,1080"), null);
+test("a take's picture instructions are checked, and the window is kept at its own size", () => {
+  assert.deepEqual(parsePicture("0.996354,0.935185"), { w: 0.996354, h: 0.935185 });
+  // 0.36.0 and 0.37.0 also sent a size; it is ignored.
+  assert.deepEqual(parsePicture("0.996354,0.935185,1920,1080"), { w: 0.996354, h: 0.935185 });
+  assert.equal(parsePicture("1.2,1"), null);
   assert.equal(parsePicture(undefined), null);
-  // Rounded to the nearest pixel and capped at the frame, then fitted — never stretched, never cropped — with bars.
-  assert.equal(pictureFilter({ w: 0.996354, h: 0.935185, width: 1920, height: 1080 }),
+  // Only the padding is cut — the window's area rounded to the nearest pixel — and an odd size
+  // is made even by stretching a pixel, not cutting one.
+  assert.equal(pictureFilter({ w: 0.996354, h: 0.935185 }),
     String.raw`crop=min(iw\,round(iw*0.996354)):min(ih\,round(ih*0.935185)):0:0,` +
-    "scale=1920:1080:force_original_aspect_ratio=decrease:force_divisible_by=2:flags=lanczos,pad=1920:1080:(ow-iw)/2:(oh-ih)/2:black,setsar=1,format=yuv420p");
+    "scale=trunc((iw+1)/2)*2:trunc((ih+1)/2)*2:flags=lanczos,setsar=1,format=yuv420p");
   assert.deepEqual(derived("take-a.webm"), { clean: "take-a.clean.flac", video: "take-a.video.mp4", legacyVideo: "take-a.video.webm" });
 });
 
-test("a take keeps all of the window, edge to edge, and fits it into 16:9 like a screen recorder", { skip: !ffmpegPath || !fs.existsSync(ffmpegPath) }, async () => {
+test("fit keeps all of a take with bars, fill has no bars; neither stretches", () => {
+  const out = { width: 1920, height: 1080 };
+  assert.match(framingFilter("fit", out), /^scale=1920:1080:force_original_aspect_ratio=decrease:.*pad=1920:1080:\(ow-iw\)\/2:\(oh-ih\)\/2:black/);
+  assert.match(framingFilter("fill", out), /^scale=1920:1080:force_original_aspect_ratio=increase:.*crop=1920:1080,format=yuv420p$/);
+  assert.equal(framingFilter(undefined, out), framingFilter("fit", out), "fit unless fill is chosen");
+  // An export fits or fills a take; a vertical export's crop is already 9:16 and is scaled.
+  const still = { still: "s.png", width: 1920, height: 1080, seconds: 2, transition: "cut", videos: [] };
+  const take = (framing?: string, crop?: object) => videoGraph([{ ...still, width: 1913, height: 1010, crop, take: { file: "t.mp4", lead: 0, sound: null, framing } }], { width: 1920, height: 1080, fps: 30 }, 0).graph;
+  assert.ok(take("fit").includes(framingFilter("fit", { width: 1920, height: 1080 })));
+  assert.ok(take("fill").includes(framingFilter("fill", { width: 1920, height: 1080 })));
+  assert.doesNotMatch(take("fill", { x: 0, y: 0, w: 568, h: 1010 }), /force_original_aspect_ratio/);
+});
+
+test("a take keeps all of the window, edge to edge, at its own size", { skip: !ffmpegPath || !fs.existsSync(ffmpegPath) }, async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cs-crop-"));
   try {
     const ff = (args: string[]) => spawnSync(ffmpegPath as unknown as string, ["-hide_banner", "-y", ...args], { encoding: "utf8" });
-    // A 320 × 200 window (16:10) in a 400 × 240 frame padded with black, as the capture makes it:
-    // red, with a yellow left edge, a blue right edge and a green bottom edge, two pixels each.
+    // A 320 × 200 window in a 400 × 240 frame padded with black, as the capture makes it: red,
+    // with a yellow left edge, a blue right edge and a green bottom edge, two pixels each.
     ff(["-f", "lavfi", "-i", "color=c=black:s=400x240:r=30:d=2", "-vf",
       "drawbox=x=0:y=0:w=320:h=200:c=red:t=fill,drawbox=x=0:y=0:w=2:h=200:c=yellow:t=fill," +
       "drawbox=x=318:y=0:w=2:h=200:c=blue:t=fill,drawbox=x=0:y=198:w=320:h=2:c=green:t=fill",
       "-c:v", "libvpx-vp9", "-b:v", "2M", path.join(dir, "take-c.webm")]);
-    const made = await processRecording(dir, "take-c.webm", "light", 0, parsePicture("0.8,0.833333,640,360"));
+    const made = await processRecording(dir, "take-c.webm", "light", 0, parsePicture("0.8,0.833333"));
     assert.equal(made.video, "take-c.video.mp4");
-    assert.deepEqual([made.width, made.height], [640, 360]);
-    const pixel = (x: number, y: number) => {
-      const raw = spawnSync(ffmpegPath as unknown as string, ["-hide_banner", "-loglevel", "error", "-i", path.join(dir, made.video!), "-frames:v", "1",
-        "-vf", `crop=2:2:${x}:${y},format=rgb24`, "-f", "rawvideo", "-"]).stdout;
-      return [...raw.subarray(0, 3)];
-    };
-    const dark = ([r, g, b]: number[]) => r < 40 && g < 40 && b < 40;
-    // 16:10 in 16:9 is 576 × 360, centred: 32-pixel bars left and right, as a screen recorder gives.
-    assert.ok(dark(pixel(10, 100)) && dark(pixel(628, 100)), `bars ${pixel(10, 100)} ${pixel(628, 100)}`);
-    const [yr, yg, yb] = pixel(33, 100), [br, bg, bb] = pixel(605, 100), [gr, gg, gb] = pixel(300, 358), [rr, , rb] = pixel(300, 100);
-    // Every edge of the window is still there: nothing cut.
+    assert.deepEqual([made.width, made.height], [320, 200], "the window, not the padded frame");
+    const pixel = (x: number, y: number) => [...spawnSync(ffmpegPath as unknown as string, ["-hide_banner", "-loglevel", "error", "-i", path.join(dir, made.video!), "-frames:v", "1",
+      "-vf", `crop=2:2:${x}:${y},format=rgb24`, "-f", "rawvideo", "-"]).stdout.subarray(0, 3)];
+    const [yr, yg, yb] = pixel(0, 100), [br, bg, bb] = pixel(318, 100), [gr, gg, gb] = pixel(160, 198);
     assert.ok(yr > 150 && yg > 150 && yb < 100, `left edge is yellow: ${yr},${yg},${yb}`);
     assert.ok(bb > 150 && br < 100 && bg < 100, `right edge is blue: ${br},${bg},${bb}`);
     assert.ok(gg > 90 && gr < 100 && gb < 100, `bottom edge is green: ${gr},${gg},${gb}`);
-    assert.ok(rr > 180 && rb < 80, `middle is the window: ${rr},${rb}`);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// Real encodes of windows of every common shape into 16:9: fit keeps each edge and puts bars
+// only where the shapes differ; fill leaves no bars at all.
+test("fit and fill work for any window shape: laptop, ultrawide, portrait and 16:9", { skip: !ffmpegPath || !fs.existsSync(ffmpegPath) }, () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cs-frame-"));
+  const out = { width: 640, height: 360 };
+  try {
+    const ff = (args: string[]) => spawnSync(ffmpegPath as unknown as string, ["-hide_banner", "-y", "-loglevel", "error", ...args], { encoding: "utf8" });
+    for (const [name, w, h] of [["16x10", 320, 200], ["21x9", 420, 180], ["portrait", 180, 320], ["16x9", 320, 180]] as const) {
+      const src = path.join(dir, `${name}.png`);
+      // Red, with a 4-pixel yellow left, blue right, green bottom and magenta top edge.
+      ff(["-f", "lavfi", "-i", `color=c=red:s=${w}x${h}:d=1`, "-frames:v", "1", "-vf",
+        `drawbox=x=0:y=0:w=4:h=${h}:c=yellow:t=fill,drawbox=x=${w - 4}:y=0:w=4:h=${h}:c=blue:t=fill,` +
+        `drawbox=x=0:y=${h - 4}:w=${w}:h=4:c=green:t=fill,drawbox=x=4:y=0:w=${w - 8}:h=4:c=magenta:t=fill`, src]);
+      const pixel = (file: string, x: number, y: number) => [...spawnSync(ffmpegPath as unknown as string, ["-hide_banner", "-loglevel", "error", "-i", file,
+        "-vf", `crop=2:2:${Math.max(0, Math.min(out.width - 2, Math.round(x)))}:${Math.max(0, Math.min(out.height - 2, Math.round(y)))},format=rgb24`, "-f", "rawvideo", "-"]).stdout.subarray(0, 3)];
+      const dark = ([r, g, b]: number[]) => r < 40 && g < 40 && b < 40;
+      for (const framing of ["fit", "fill"] as const) {
+        const file = path.join(dir, `${name}-${framing}.png`);
+        const made = ff(["-i", src, "-vf", framingFilter(framing, out), "-frames:v", "1", file]);
+        assert.equal(made.status, 0, made.stderr);
+        const size = /(\d+)x(\d+)/.exec(spawnSync(ffmpegPath as unknown as string, ["-hide_banner", "-i", file], { encoding: "utf8" }).stderr.split("Video:")[1])!;
+        assert.deepEqual([Number(size[1]), Number(size[2])], [out.width, out.height], `${name} ${framing} size`);
+        if (framing === "fill") {
+          for (const [x, y] of [[1, 1], [637, 1], [1, 357], [637, 357]]) assert.ok(!dark(pixel(file, x, y)), `${name} fill has no bar at ${x},${y}: ${pixel(file, x, y)}`);
+          continue;
+        }
+        const k = Math.min(out.width / w, out.height / h), bw = w * k, bh = h * k, x0 = (out.width - bw) / 2, y0 = (out.height - bh) / 2;
+        const [lr, lg, lb] = pixel(file, x0 + 1, y0 + bh / 2), [rr, rg, rb] = pixel(file, x0 + bw - 3, y0 + bh / 2);
+        const [br, bg, bb] = pixel(file, x0 + bw / 2, y0 + bh - 3), [tr, tg, tb] = pixel(file, x0 + bw / 2, y0 + 1);
+        assert.ok(lr > 150 && lg > 150 && lb < 110, `${name} fit keeps the left edge: ${lr},${lg},${lb}`);
+        assert.ok(rb > 150 && rr < 110 && rg < 110, `${name} fit keeps the right edge: ${rr},${rg},${rb}`);
+        assert.ok(bg > 90 && br < 110 && bb < 110, `${name} fit keeps the bottom edge: ${br},${bg},${bb}`);
+        assert.ok(tr > 150 && tb > 150 && tg < 110, `${name} fit keeps the top edge: ${tr},${tg},${tb}`);
+        // Bars only where the shapes differ.
+        if (x0 >= 4) assert.ok(dark(pixel(file, 1, out.height / 2)) && dark(pixel(file, out.width - 3, out.height / 2)), `${name} fit has side bars`);
+        if (y0 >= 4) assert.ok(dark(pixel(file, out.width / 2, 1)) && dark(pixel(file, out.width / 2, out.height - 3)), `${name} fit has top and bottom bars`);
+        if (x0 < 1 && y0 < 1) assert.ok(!dark(pixel(file, 1, 1)), `${name} fit of a 16:9 window has no bars`);
+      }
+    }
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

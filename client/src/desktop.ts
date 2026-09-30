@@ -54,7 +54,7 @@ export interface ExportPlanBeat {
   /** Narration: its cleaned file in the recordings folder, and how far into the beat it starts. */
   voice?: { name: string; delay: number };
   /** A take, played instead of the still: its picture, its cleaned sound, and the lead-in to skip. */
-  take?: { name: string; clean?: string; muted: boolean; lead: number };
+  take?: { name: string; clean?: string; muted: boolean; lead: number; framing: "fit" | "fill" };
 }
 
 export interface ExportPlan {
@@ -96,6 +96,7 @@ export interface StudioBridge {
   /** Write a take as an MP4 with its cleaned sound (or silent), never replacing a file. */
   exportTake(options: {
     projectDir: string; video: string; clean: string | null; lead: number; seconds: number; folder: string; name: string;
+    quality: number; framing: "fit" | "fill";
   }): Promise<{ file: string }>;
   onExportProgress(fn: (p: { phase: "encode" | "pdf" | "idle"; fraction: number | null }) => void): () => void;
   installUpdate(): Promise<void>;

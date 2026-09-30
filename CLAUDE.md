@@ -425,10 +425,14 @@ wait. The AI request aborts when the pane closes. Assume a recording is in progr
   cropping it out (0.36.0) was not what was wanted either. The capture is the window at its
   own size (a padded frame is still handled: `takeCrop` finds the page at the frame's top-left,
   scaled or padded told apart by shape). The upload carries that area as `picture=`, and the
-  server cuts the padding away — rounded to the nearest pixel, never inwards — and fits the
-  window whole into the output size, centred, with black bars (`pictureFilter`), as H.264
-  (`<name>.video.mp4`). Never crop or stretch a take to fill 16:9. A re-clean keeps the
-  picture it has. `getDisplayMedia` needs the click's user activation, so it is requested
+  server cuts the padding away — rounded to the nearest pixel, never inwards — and keeps the
+  window at its own size and shape (`pictureFilter`), as H.264 (`<name>.video.mp4`). Fitting it
+  into 16:9 happens only when a video is made, by `framingFilter`: `fit` (default, whole window,
+  bars) or `fill` (no bars, centre kept, two edges trimmed) — `settings.export.takeFraming`,
+  used by the export graph and Save as MP4. Never stretch a take, and never bake the framing
+  into the stored picture: the creator switches it without recording again. Nothing may assume
+  one screen — sizes and pixel ratio are measured at record time; the tests cover 16:10, 21:9,
+  portrait, 16:9 and scaled displays. A re-clean keeps the picture it has. `getDisplayMedia` needs the click's user activation, so it is requested
   straight after the click, before the countdown.
 - **Chromium's fake media devices fake the screen too.** `--use-fake-device-for-media-stream`
   gives a test microphone, and also replaces tab capture with a test pattern — test voice with

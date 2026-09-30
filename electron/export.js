@@ -166,6 +166,7 @@ export function wireExport(getWin) {
         take: takeFile ? {
           file: takeFile, lead: Math.max(0, Number(beat.take.lead) || 0),
           sound: !beat.take.muted && beat.take.clean ? recordingFile(plan.projectDir, beat.take.clean) : null,
+          framing: beat.take.framing === "fill" ? "fill" : "fit",
         } : undefined,
         voice: beat.voice ? { file: recordingFile(plan.projectDir, beat.voice.name), delay: Math.max(0, Number(beat.voice.delay) || 0) } : undefined,
         videos: takeFile ? [] : (beat.videos ?? []).map((video) => {
@@ -262,11 +263,11 @@ export function wireExport(getWin) {
     const video = recordingFile(options.projectDir, options.video);
     const sound = options.clean ? recordingFile(options.projectDir, options.clean) : null;
     const seconds = Math.min(3600, Math.max(0.1, Number(options.seconds) || 0));
-    const { inputs, graph } = takeGraph({ video, sound, lead: Math.max(0, Number(options.lead) || 0), seconds });
+    const out = { ...outputSize("landscape", Number(options.quality) || 1080), fps: 30 };
+    const framing = options.framing === "fill" ? "fill" : "fit";
+    const { inputs, graph } = takeGraph({ video, sound, lead: Math.max(0, Number(options.lead) || 0), seconds, out, framing });
     const file = uniqueFile(prepareFolder(options.folder), options.name || "take", ".mp4");
     const part = `${file}.part`;
-    const size = probe(video);
-    const out = { width: size.width ?? 1920, height: size.height ?? 1080, fps: 30 };
     takeWriting = true;
     try {
       const result = await new Promise((resolve) => {

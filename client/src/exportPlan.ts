@@ -4,7 +4,7 @@ import { timeline } from "../../server/public/export-timing.js";
 export const DEFAULT_EXPORT: ExportSettings = {
   format: "video", shape: "landscape", quality: 1080, fps: 30,
   seconds: 5, transition: "fade", transitionSeconds: 0.6, settle: 3,
-  folder: "", name: "",
+  folder: "", name: "", takeFraming: "fit",
 };
 
 export const TRANSITIONS: { id: TransitionKind; label: string }[] = [
@@ -37,6 +37,7 @@ export function exportSettings(saved?: Partial<ExportSettings>): ExportSettings 
     transition: TRANSITIONS.some((t) => t.id === s.transition) ? s.transition : DEFAULT_EXPORT.transition,
     transitionSeconds: Number.isFinite(s.transitionSeconds) ? clamp(s.transitionSeconds, 0.1, 3) : DEFAULT_EXPORT.transitionSeconds,
     settle: Number.isFinite(s.settle) ? clamp(s.settle, 1, 30) : DEFAULT_EXPORT.settle,
+    takeFraming: s.takeFraming === "fill" ? "fill" : "fit",
   };
 }
 

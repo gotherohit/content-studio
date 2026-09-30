@@ -294,6 +294,8 @@ export interface BeatExport {
 export type ExportShape = "landscape" | "vertical";
 
 /** The last export's choices, kept with the project so the next one starts from them. */
+export type TakeFraming = "fit" | "fill";
+
 export interface ExportSettings {
   format: "video" | "pdf";
   shape: ExportShape;
@@ -308,6 +310,12 @@ export interface ExportSettings {
   settle: number;
   /** The folder the file is written to; the project's exports folder when empty. */
   folder: string;
+  /**
+   * How a take — the whole window, whatever its shape — becomes 16:9: `fit` keeps all of it
+   * with bars where the shapes differ, as a screen recorder does; `fill` has no bars and trims
+   * a thin slice at two edges. Used by exports and by a take saved as MP4.
+   */
+  takeFraming: TakeFraming;
   name: string;
 }
 

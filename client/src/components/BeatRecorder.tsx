@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Circle, Clapperboard, Download, Ear, FolderOpen, Mic, Square, Trash2, Volume2, VolumeX, Wand2, X } from "lucide-react";
-import type { Beat, BeatTake, BeatVoice, NoiseReduction } from "../types";
+import type { Beat, BeatTake, BeatVoice, NoiseReduction, TakeFraming } from "../types";
 import { api } from "../api";
 import {
   CLIP_DB, GAIN_MAX, GAIN_MIN, LEAD_SECONDS, QUIET_DB, autoGain, boostedMic, clampGain, formatSeconds, gainKey, isBluetoothMic, levelDb,
@@ -15,6 +15,9 @@ interface Props {
   onNoise: (noise: NoiseReduction) => void;
   onVoice: (voice: BeatVoice | undefined) => void;
   onTake: (take: BeatTake | undefined) => void;
+  /** How a take becomes 16:9 — the project's export setting, shared with the export dialog. */
+  framing: TakeFraming;
+  onFraming: (framing: TakeFraming) => void;
   /** A take takes over the window, so the app runs it; this panel closes for it. */
   onStartTake: (options: { deviceId?: string; sound: boolean; gainDb: number }) => void;
   /** Write the take as an MP4 with its sound into the export folder; resolves to the file. */
@@ -305,7 +308,17 @@ export function BeatRecorder(p: Props) {
               video={api.recordingUrl(p.projectId, p.beat.take.video)}
               sound={p.beat.take.clean && !p.beat.take.muted ? api.recordingUrl(p.projectId, p.beat.take.clean) : null}
               lead={p.beat.take.lead}
+              framing={p.framing}
             />
+            <div className="row rec-framing">
+              <span className="muted small">In 16:9</span>
+              <div className="seg" role="group" aria-label="How the take fills 16:9">
+                <button className={p.framing === "fit" ? "active" : ""} onClick={() => p.onFraming("fit")}
+                  title="All of the window, with bars where its shape is not 16:9 — as a screen recorder records it">Fit — whole window</button>
+                <button className={p.framing === "fill" ? "active" : ""} onClick={() => p.onFraming("fill")}
+                  title="No bars: fills 16:9, trimming a thin slice at two edges when the window is another shape">Fill — no bars</button>
+              </div>
+            </div>
             <p className="muted small">{formatSeconds(p.beat.take.seconds)} · {p.beat.take.width} × {p.beat.take.height} · {p.beat.take.muted || !p.beat.take.clean ? "no sound" : "with your voice"}</p>
           </>
         )}
@@ -356,12 +369,12 @@ export function BeatRecorder(p: Props) {
 }
 
 /**
- * A take played back as the export will play it: the picture from after its silent lead-in,
+ * A take played back as the export will play it: fitted or filled into 16:9, from after its silent lead-in,
  * with the cleaned sound beside it. The picture file has no sound of its own — the sound is
  * made separately so it can be cleaned again — so the two are kept together here. The
  * player's own download is turned off: it would save the silent picture file.
  */
-function TakePlayer(p: { video: string; sound: string | null; lead: number }) {
+function TakePlayer(p: { video: string; sound: string | null; lead: number; framing: TakeFraming }) {
   const video = useRef<HTMLVideoElement>(null);
   const audio = useRef<HTMLAudioElement>(null);
   const sync = (force = false) => {
@@ -372,14 +385,15 @@ function TakePlayer(p: { video: string; sound: string | null; lead: number }) {
     if (force || Math.abs(a.currentTime - at) > 0.12) a.currentTime = at;
     if (a.paused) void a.play().catch(() => {});
   };
+  // Shown in a 16:9 box, fitted or filled the way the video will be made.
   return (
-    <>
+    <div className={`take-frame ${p.framing}`}>
       <video ref={video} controls controlsList="nodownload noplaybackrate" disablePictureInPicture src={p.video}
         onLoadedMetadata={(e) => { e.currentTarget.currentTime = p.lead; }}
         onPlay={() => sync(true)} onPause={() => audio.current?.pause()} onSeeked={() => sync(true)} onTimeUpdate={() => sync()}
         onEnded={() => audio.current?.pause()}
         onVolumeChange={(e) => { if (audio.current) { audio.current.volume = e.currentTarget.volume; audio.current.muted = e.currentTarget.muted; } }} />
       {p.sound && <audio ref={audio} preload="auto" src={p.sound} hidden />}
-    </>
+    </div>
   );
 }

@@ -2,6 +2,22 @@
 
 What changed in each release, newest first. Versions are the ones the app updates itself to.
 
+## 0.38.0
+
+- **Fit or Fill for takes.** A take is kept as your whole window at its own size and shape,
+  and how it becomes 16:9 is chosen when a video is made. **Fit** — the default, as a screen
+  recorder does — keeps all of the window, with black bars where its shape is not 16:9. **Fill**
+  has no bars: it fills 16:9 and trims a thin slice at two opposite edges. Neither ever
+  stretches the picture. Switch it under the take's player (the preview shows it) or in the
+  export dialog; it applies to **Save as MP4** and to exports, and changing it needs no new
+  recording.
+- Works on any screen: the window's size, shape and display scaling are measured when the take
+  is recorded, so a 16:10 laptop, a 21:9 ultrawide, a portrait monitor or a 4K display at 200 %
+  all come out right.
+- A take's picture is kept at the window's own resolution, not scaled on the way in, so a
+  4K-quality export of a take from a large screen keeps its detail. Takes recorded with 0.36.0
+  or 0.37.0 were already scaled to 16:9 when saved; record them again to use Fill properly.
+
 ## 0.37.0
 
 - **A take records the whole window, like a screen recorder.** The window is no longer laid

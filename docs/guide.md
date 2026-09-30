@@ -559,9 +559,23 @@ stretched, and if the window is not exactly 16:9 there are black bars at the sid
 bottom, as OBS gives. A maximised window on a 16:9 screen is close to 16:9, so its bars are
 thin. The detail is your screen's. The beat lasts exactly as long as the take.
 
+**Fit or Fill.** Under the take's player, **In 16:9** chooses how the window becomes 16:9:
+
+| | What you get |
+|---|---|
+| Fit — whole window | All of the window, with black bars where its shape is not 16:9. What a screen recorder gives. |
+| Fill — no bars | No bars: the window fills 16:9 and a thin slice is trimmed at two opposite edges — top and bottom on a window taller than 16:9, left and right on a wider one. |
+
+Neither stretches the picture. The preview shows your choice, and it is the same setting as
+**Takes** in the export dialog, so **Save as MP4** and the beats video both use it. The take
+itself keeps the whole window, so you can switch at any time without recording again. It works
+the same on any screen — a laptop, an ultrawide, a portrait monitor, a scaled 4K display — since
+the window is measured when the take is recorded.
+
 A take looks like your window, not like the export's layout of the beat, so beside ordinary
-beats in an export it can look slightly different; for a vertical (9:16) export, the take is
-framed the way the beat's picture is. **Mute it** or
+beats in an export it can look slightly different. In the export dialog, **Takes** (shown when
+a beat has one) is the same Fit/Fill choice. For a vertical (9:16) export, a take is framed the
+way the beat's picture is, from its whole window. **Mute it** or
 **Use its sound** switch its sound without recording again; **New take** replaces it.
 
 The take's player plays it as the export will: from after its quiet second, with its cleaned

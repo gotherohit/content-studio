@@ -146,29 +146,29 @@ export function derived(name) {
 }
 
 /**
- * Where the window is in a take, from the upload's `picture=w,h,width,height`: its area as
- * fractions of the recorded frame, from the top-left corner, and the size to make it.
- * Null when missing or out of range, and the picture is then kept as it was recorded.
+ * Where the window is in a take, from the upload's `picture=w,h`: its area as fractions of the
+ * recorded frame, from the top-left corner. (0.36.0 and 0.37.0 also sent an output size; it is
+ * ignored.) Null when missing or out of range, and the picture is then kept as it was recorded.
  */
 export function parsePicture(text) {
-  const [w, h, width, height] = String(text ?? "").split(",").map(Number);
+  const [w, h] = String(text ?? "").split(",").map(Number);
   const fraction = (n) => n > 0.2 && n <= 1;
-  const size = (n) => Number.isInteger(n) && n >= 16 && n <= 7680 && n % 2 === 0;
-  return fraction(w) && fraction(h) && size(width) && size(height) ? { w, h, width, height } : null;
+  return fraction(w) && fraction(h) ? { w, h } : null;
 }
 
 /**
  * A take records the whole window, as a screen recorder records a screen. The capture copies it
- * into a larger frame padded with black; that padding is cut away — the window's own area is
- * rounded to the nearest pixel, never inwards, so nothing of it is lost — and the window is
- * fitted whole into the output's 16:9, centred, with black bars when its shape is not 16:9.
+ * into a larger frame padded with black; the padding is cut away — the window's own area rounded
+ * to the nearest pixel, never inwards, so nothing of it is lost — and the window is kept at its
+ * own size and shape. Fitting it into 16:9, with bars or filled, happens when a video is made
+ * (`framingFilter`), so the choice can change without recording again.
  */
-export function pictureFilter({ w, h, width, height }) {
+export function pictureFilter({ w, h }) {
   // Six places: at three, a fraction of a 1913-pixel window could be two pixels out.
   const f = (n) => String(Math.round(n * 1e6) / 1e6);
+  // H.264 needs even sizes: an odd edge is stretched by a pixel rather than cut.
   return `crop=min(iw\\,round(iw*${f(w)})):min(ih\\,round(ih*${f(h)})):0:0,` +
-    `scale=${width}:${height}:force_original_aspect_ratio=decrease:force_divisible_by=2:flags=lanczos,` +
-    `pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:black,setsar=1,format=yuv420p`;
+    "scale=trunc((iw+1)/2)*2:trunc((ih+1)/2)*2:flags=lanczos,setsar=1,format=yuv420p";
 }
 
 /** Integrated loudness from ffmpeg's `ebur128` summary. */
@@ -254,7 +254,8 @@ export async function processRecording(dir, name, level, lead = 0, picture = nul
       await run(["-i", file, "-map", "0:v:0", "-vf", pictureFilter(picture), "-fps_mode", "cfr", "-r", "30",
         "-c:v", "libx264", "-preset", "veryfast", "-crf", "14", "-profile:v", "high", "-pix_fmt", "yuv420p",
         "-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709", "-an", "-movflags", "+faststart", path.join(dir, out.video)]);
-      Object.assign(result, { video: out.video, width: picture.width, height: picture.height });
+      const size = await probe(path.join(dir, out.video));
+      Object.assign(result, { video: out.video, width: size.width ?? original.width, height: size.height ?? original.height });
     } else {
       // Where the beat sits is not known: the picture is kept as recorded, copied so it gains a
       // length and an index.

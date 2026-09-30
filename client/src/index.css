@@ -1419,6 +1419,10 @@ mark.hl:hover { filter: brightness(0.94); }
 .rec-meter span.clip { background: var(--danger); }
 .rec-facts { display: flex; gap: 10px; justify-content: space-between; }
 .rec-gain { gap: 8px; align-items: center; }
+.take-frame { position: relative; aspect-ratio: 16 / 9; background: #000; border-radius: var(--r-md); overflow: hidden; }
+.beat-recorder .take-frame video { width: 100%; height: 100%; max-height: none; border-radius: 0; object-fit: contain; }
+.beat-recorder .take-frame.fill video { object-fit: cover; }
+.rec-framing { gap: 8px; align-items: center; flex-wrap: wrap; }
 .rec-gain input[type="range"] { flex: 1; min-width: 0; }
 .rec-gain-value { min-width: 48px; text-align: right; font-variant-numeric: tabular-nums; font-size: 12px; }
 .rec-saved { display: flex; gap: 8px; align-items: center; margin: 0; }
