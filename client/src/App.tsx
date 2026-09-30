@@ -1059,12 +1059,11 @@ export default function App() {
     const beat = project.beats[index];
     if (!beat) return;
     const s = exportSettings(project.settings.export);
-    // The window as it is before the take lays it out: the beat's box is measured against it.
+    // A take records the whole window as it is, the way a screen recorder records a screen;
+    // the picture is fitted into 16:9 afterwards, with bars if the window is another shape.
     const page = { width: window.innerWidth, height: window.innerHeight };
     const pixelRatio = window.devicePixelRatio || 1;
-    const viewport = exportViewport(page.width, page.height);
     const out = outputSize("landscape", s.quality);
-    const zoom = Math.min(4, Math.max(1, out.width / viewport.width));
     const noise = project.settings.noise ?? "light";
     let crop: { w: number; h: number } | null = null;
     const before = { stage: captureStage(), beat: activeBeatId, present };
@@ -1081,7 +1080,6 @@ export default function App() {
     setTake({ index, phase: "countdown", count: 3 });
     setPresent(true);
     try {
-      await desktop.recordView({ css: viewport, zoom });
       // Asked for straight after the click, while the browser still counts it as the person's.
       await desktop.recordSelf();
       // No size asked for: the window is recorded at its own size, and the strip beside the
@@ -1101,7 +1099,8 @@ export default function App() {
       }
       if (takeCancelled.current) throw new Error("cancelled");
       const size = screen.getVideoTracks()[0]?.getSettings();
-      if (size?.width && size?.height) crop = takeCrop(viewport, page, { width: size.width, height: size.height }, pixelRatio);
+      // Where the window is in the recorded frame, which pads it with black to 1920 × 1080.
+      if (size?.width && size?.height) crop = takeCrop(page, page, { width: size.width, height: size.height }, pixelRatio);
       const tracks = [...screen.getVideoTracks(), ...(boosted?.stream.getAudioTracks() ?? [])];
       const mime = ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"].find((m) => MediaRecorder.isTypeSupported(m)) ?? "video/webm";
       const rate = out.width >= 3840 ? 40e6 : out.width >= 2560 ? 24e6 : 16e6;
@@ -1129,7 +1128,6 @@ export default function App() {
       screen?.getTracks().forEach((t) => t.stop());
       boosted?.close();
       mic?.getTracks().forEach((t) => t.stop());
-      await desktop.recordView(null).catch(() => {});
       document.title = title;
       takingRef.current = false;
       setPresent(before.present);

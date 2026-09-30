@@ -146,8 +146,8 @@ export function derived(name) {
 }
 
 /**
- * Where the beat is in a take, from the upload's `picture=w,h,width,height`: the beat's 16:9
- * box as fractions of the recorded page, from its top-left corner, and the size to make it.
+ * Where the window is in a take, from the upload's `picture=w,h,width,height`: its area as
+ * fractions of the recorded frame, from the top-left corner, and the size to make it.
  * Null when missing or out of range, and the picture is then kept as it was recorded.
  */
 export function parsePicture(text) {
@@ -158,17 +158,17 @@ export function parsePicture(text) {
 }
 
 /**
- * A take records the whole window, and the beat is laid out in the largest 16:9 box that fits
- * it, against the top-left corner; a window wider than 16:9 leaves a strip beside it. The strip
- * is cut away and the box — all of it, nothing of the beat cut — scaled to the export's size.
- * The box is rounded to the nearest whole pixel, never inwards: a pixel of strip is invisible,
- * a pixel of the beat is not.
+ * A take records the whole window, as a screen recorder records a screen. The capture copies it
+ * into a larger frame padded with black; that padding is cut away — the window's own area is
+ * rounded to the nearest pixel, never inwards, so nothing of it is lost — and the window is
+ * fitted whole into the output's 16:9, centred, with black bars when its shape is not 16:9.
  */
 export function pictureFilter({ w, h, width, height }) {
   // Six places: at three, a fraction of a 1913-pixel window could be two pixels out.
   const f = (n) => String(Math.round(n * 1e6) / 1e6);
   return `crop=min(iw\\,round(iw*${f(w)})):min(ih\\,round(ih*${f(h)})):0:0,` +
-    `scale=${width}:${height}:flags=lanczos,setsar=1,format=yuv420p`;
+    `scale=${width}:${height}:force_original_aspect_ratio=decrease:force_divisible_by=2:flags=lanczos,` +
+    `pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:black,setsar=1,format=yuv420p`;
 }
 
 /** Integrated loudness from ffmpeg's `ebur128` summary. */

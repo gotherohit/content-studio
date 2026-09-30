@@ -31,12 +31,8 @@ export function wireExport(getWin) {
     return win;
   };
 
-  /**
-   * Render the window at `css` layout size, `zoom` times over; `null` puts it back. `fit` also
-   * shrinks what the window shows to its own size, for a take: the creator must see the whole
-   * beat while talking over it, and the recording still gets every pixel.
-   */
-  async function render(win, css, zoom, restoreZoom, fit = false) {
+  /** Render the window at `css` layout size, `zoom` times over; `null` puts it back. */
+  async function render(win, css, zoom, restoreZoom) {
     const dbg = win.webContents.debugger;
     if (!css) {
       if (dbg.isAttached()) {
@@ -50,7 +46,6 @@ export function wireExport(getWin) {
     // Pixels are pixels: a ratio of 1 whatever the display, so the zoom alone decides the output.
     await dbg.sendCommand("Emulation.setDeviceMetricsOverride", {
       width: Math.round(css.width * zoom), height: Math.round(css.height * zoom), deviceScaleFactor: 1, mobile: false,
-      scale: fit ? 1 / zoom : 1,
     });
     win.webContents.setZoomFactor(zoom);
   }
@@ -85,22 +80,6 @@ export function wireExport(getWin) {
     }
     if (!job?.framing) job = { framing: true, restoreZoom: win.webContents.getZoomFactor() };
     await render(win, css, 1);
-  });
-
-  // A take: the beat laid out as it will be exported and drawn at the output's resolution, so
-  // recording the page itself gives full-resolution video — shrunk on screen to fit the window.
-  let takeRestore = null;
-  ipcMain.handle("record:view", async (event, options) => {
-    const win = studio(event);
-    if (!options) {
-      await render(win, null, 0, takeRestore ?? 1);
-      takeRestore = null;
-      return;
-    }
-    if (takeRestore === null) takeRestore = win.webContents.getZoomFactor();
-    const zoom = Math.min(4, Math.max(1, Number(options.zoom) || 1));
-    await render(win, { width: Math.round(options.css.width), height: Math.round(options.css.height) }, zoom, 1, true);
-    return { zoom };
   });
 
   ipcMain.handle("export:begin", async (event, { css, zoom }) => {

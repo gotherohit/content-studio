@@ -2,6 +2,17 @@
 
 What changed in each release, newest first. Versions are the ones the app updates itself to.
 
+## 0.37.0
+
+- **A take records the whole window, like a screen recorder.** The window is no longer laid
+  out in a 16:9 box for a take, with an empty strip beside it: it stays exactly as you see it,
+  all of it is recorded, and the video is fitted into 16:9 — whole, never cropped or stretched —
+  with black bars at the sides or top and bottom when the window is another shape, the way OBS
+  fits a screen into its canvas. On a window close to 16:9 the bars are a few pixels.
+- A take therefore looks like your window, not like the export's layout of the beat, so in an
+  export it can differ from the beats either side of it, and a vertical (9:16) export frames it
+  as it frames any other beat's picture.
+
 ## 0.36.0
 
 - **No empty strip beside a take.** A take is laid out in the largest 16:9 box that fits the

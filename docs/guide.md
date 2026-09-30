@@ -549,18 +549,19 @@ the transition into the beat and the beat carries on long enough for the transit
 no word is said during a cross-fade.
 
 **A take** records the beat on screen — you scroll, point, play a video, talk — and an export
-plays it instead of the beat's picture. Tick **Record my voice with it** for sound, or leave
-it unticked for a silent take (a recorded voice then plays under it). **Record a take** lays
-the screen out exactly as an export does, counts down from three while the beat settles, asks
-for one second of quiet, then records until you press **Esc**. The page is drawn at the
-export's resolution while you record — shrunk to fit your window, so you see the whole beat —
-and the take is recorded from the page itself, with no window frame, title bar or taskbar in
-it. The beat sits in the largest 16:9 box your window has room for, against its top-left
-corner; if the window is wider than 16:9 an empty strip is left on the right (taller, and it is
-at the bottom). The strip is not kept: when the take is saved, the beat's box is cut out whole
-— nothing of the beat is cut — and scaled to fill 1920 × 1080 (or the export's size). The detail
-is your screen's, since the take records the window as you see it: on a 1920 × 1080 display the
-beat is about 1800 pixels wide. The beat lasts exactly as long as the take. **Mute it** or
+plays it instead of the beat's picture. It works like a screen recorder: the window stays as
+you see it and all of it is recorded. Tick **Record my voice with it** for sound, or leave
+it unticked for a silent take (a recorded voice then plays under it). **Record a take** puts
+the beat on screen, counts down from three while it settles, asks for one second of quiet, then
+records until you press **Esc**. The take is the window's page — no window frame, title bar or
+taskbar — fitted whole into 1920 × 1080 (or the export's size): nothing is cropped or
+stretched, and if the window is not exactly 16:9 there are black bars at the sides or top and
+bottom, as OBS gives. A maximised window on a 16:9 screen is close to 16:9, so its bars are
+thin. The detail is your screen's. The beat lasts exactly as long as the take.
+
+A take looks like your window, not like the export's layout of the beat, so beside ordinary
+beats in an export it can look slightly different; for a vertical (9:16) export, the take is
+framed the way the beat's picture is. **Mute it** or
 **Use its sound** switch its sound without recording again; **New take** replaces it.
 
 The take's player plays it as the export will: from after its quiet second, with its cleaned

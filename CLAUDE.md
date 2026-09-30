@@ -417,18 +417,19 @@ wait. The AI request aborts when the pane closes. Assume a recording is in progr
 - **Upload recordings as `application/octet-stream`.** MediaRecorder's type,
   `video/webm;codecs=vp9,opus`, has a comma the body parser rejects, so `express.raw` skipped
   the body and the take arrived as `{}`.
-- **A take records the window's page as it is shown, not the emulated viewport.**
-  `record:self` makes the next `getDisplayMedia` resolve to `win.webContents.mainFrame` (tab
-  capture): no frame, title bar or taskbar. `record:view` lays the beat out as an export does,
-  with `scale: 1/zoom` so the window shows all of it — but the capture is what the window
-  shows, at the screen's resolution, and 0.34.0/0.35.0 said otherwise. Tab capture copies the
-  page pixel for pixel into a 1920 × 1080 frame and pads the rest with black (a 1913 × 1010 or
-  1584 × 961 window alike), so the strip beside the 16:9 box and the padding were both in every
-  take. `takeCrop` finds the box in the frame (the page is always at its top-left; scaled or
-  padded is told apart by shape), the upload carries it as `picture=`, and the server cuts it
-  out whole — rounded to the nearest pixel, never inwards — and scales it to the output size as
-  H.264 (`<name>.video.mp4`). A re-clean keeps the picture it has. `getDisplayMedia` needs the
-  click's user activation, so it is requested straight after the click, before the countdown.
+- **A take is a screen recording of the window, fitted into 16:9 like OBS.** `record:self` makes
+  the next `getDisplayMedia` resolve to `win.webContents.mainFrame` (tab capture): no frame,
+  title bar or taskbar. The window is left exactly as the creator sees it — 0.34.0–0.36.0 laid
+  the beat out in a 16:9 box with device emulation, which left an empty strip on screen and,
+  because the emulated viewport was padded into a 1920 × 1080 frame, in the recording too;
+  cropping it out (0.36.0) was not what was wanted either. The capture is the window at its
+  own size (a padded frame is still handled: `takeCrop` finds the page at the frame's top-left,
+  scaled or padded told apart by shape). The upload carries that area as `picture=`, and the
+  server cuts the padding away — rounded to the nearest pixel, never inwards — and fits the
+  window whole into the output size, centred, with black bars (`pictureFilter`), as H.264
+  (`<name>.video.mp4`). Never crop or stretch a take to fill 16:9. A re-clean keeps the
+  picture it has. `getDisplayMedia` needs the click's user activation, so it is requested
+  straight after the click, before the countdown.
 - **Chromium's fake media devices fake the screen too.** `--use-fake-device-for-media-stream`
   gives a test microphone, and also replaces tab capture with a test pattern — test voice with
   it, and takes without it, muted.

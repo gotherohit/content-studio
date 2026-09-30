@@ -85,8 +85,6 @@ export interface StudioBridge {
   exportView(css: { width: number; height: number } | null): Promise<void>;
   /** The next screen-capture request records this window's own page. */
   recordSelf(): Promise<void>;
-  /** Lay out and draw the window for a take, shrunk to fit on screen; `null` puts it back. */
-  recordView(options: { css: { width: number; height: number }; zoom: number } | null): Promise<{ zoom: number } | void>;
   exportBegin(options: { css: { width: number; height: number }; zoom: number }): Promise<{ zoom: number }>;
   exportFrame(index: number): Promise<{ width: number; height: number }>;
   exportEnd(): Promise<void>;

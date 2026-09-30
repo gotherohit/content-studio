@@ -298,7 +298,7 @@ export function BeatRecorder(p: Props) {
 
       <div className="rec-block">
         <div className="rec-title"><Clapperboard size={13} /> Take — record this beat on screen</div>
-        <p className="muted small">The screen is laid out as it will be exported and recorded while you scroll, point and talk; only the beat is kept, at 16:9. Esc stops. An export plays the take instead of the beat's picture.</p>
+        <p className="muted small">Everything in the window is recorded while you scroll, point and talk, and fitted into 16:9 — with bars if the window is another shape. Esc stops. An export plays the take instead of the beat's picture.</p>
         {p.beat.take && phase === "idle" && (
           <>
             <TakePlayer
