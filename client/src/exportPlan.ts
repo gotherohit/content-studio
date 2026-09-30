@@ -87,6 +87,21 @@ export function captureZoom(settings: Pick<ExportSettings, "shape" | "quality">,
 
 /** The video sources a beat puts on screen, with the second each was paused at. */
 /**
+ * Where the beat is in a take's recorded picture, as fractions of it from the top-left corner.
+ * A take records the whole window; the beat is laid out in `viewport`, the 16:9 box of the
+ * `page` (both in CSS pixels, against the top-left corner). The capture either scales the page
+ * to fill its frame — the frame then has the page's shape — or copies it pixel for pixel into a
+ * larger frame and fills the rest with black, which a 0.35.0 take on a 1913 × 1010 window did in
+ * a 1920 × 1080 frame. Either way the page starts at the frame's corner.
+ */
+export function takeCrop(viewport: { width: number; height: number }, page: { width: number; height: number }, frame: { width: number; height: number }, pixelRatio: number) {
+  const scaled = Math.abs(frame.width / frame.height - page.width / page.height) < 0.01;
+  const w = scaled ? viewport.width / page.width : (viewport.width * pixelRatio) / frame.width;
+  const h = scaled ? viewport.height / page.height : (viewport.height * pixelRatio) / frame.height;
+  return { w: Math.min(1, w), h: Math.min(1, h) };
+}
+
+/**
  * The second a pane's video is at, for a beat being captured: what the pane last reported, if
  * it reported it for this source, otherwise what the beat already had. A pane with no source
  * and no report has neither — both are undefined, and must not count as a match.

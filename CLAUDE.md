@@ -417,12 +417,18 @@ wait. The AI request aborts when the pane closes. Assume a recording is in progr
 - **Upload recordings as `application/octet-stream`.** MediaRecorder's type,
   `video/webm;codecs=vp9,opus`, has a comma the body parser rejects, so `express.raw` skipped
   the body and the take arrived as `{}`.
-- **A take records the page, not the window.** `record:self` makes the next `getDisplayMedia`
-  resolve to `win.webContents.mainFrame` (tab capture): no frame, title bar or taskbar, and it
-  records the emulated viewport. `record:view` renders it the way an export does — output
-  pixels, page zoom to the export layout — plus `scale: 1/zoom` in the emulation, so the window
-  shows the whole beat while the capture gets 1920 × 1080. `getDisplayMedia` needs the click's
-  user activation, so it is requested straight after the click, before the countdown.
+- **A take records the window's page as it is shown, not the emulated viewport.**
+  `record:self` makes the next `getDisplayMedia` resolve to `win.webContents.mainFrame` (tab
+  capture): no frame, title bar or taskbar. `record:view` lays the beat out as an export does,
+  with `scale: 1/zoom` so the window shows all of it — but the capture is what the window
+  shows, at the screen's resolution, and 0.34.0/0.35.0 said otherwise. Tab capture copies the
+  page pixel for pixel into a 1920 × 1080 frame and pads the rest with black (a 1913 × 1010 or
+  1584 × 961 window alike), so the strip beside the 16:9 box and the padding were both in every
+  take. `takeCrop` finds the box in the frame (the page is always at its top-left; scaled or
+  padded is told apart by shape), the upload carries it as `picture=`, and the server cuts it
+  out whole — rounded to the nearest pixel, never inwards — and scales it to the output size as
+  H.264 (`<name>.video.mp4`). A re-clean keeps the picture it has. `getDisplayMedia` needs the
+  click's user activation, so it is requested straight after the click, before the countdown.
 - **Chromium's fake media devices fake the screen too.** `--use-fake-device-for-media-stream`
   gives a test microphone, and also replaces tab capture with a test pattern — test voice with
   it, and takes without it, muted.

@@ -554,8 +554,13 @@ it unticked for a silent take (a recorded voice then plays under it). **Record a
 the screen out exactly as an export does, counts down from three while the beat settles, asks
 for one second of quiet, then records until you press **Esc**. The page is drawn at the
 export's resolution while you record — shrunk to fit your window, so you see the whole beat —
-and the take is recorded from the page itself: 1920 × 1080 at 1080p, sharp, with no window
-frame, title bar or taskbar in it. The beat lasts exactly as long as the take. **Mute it** or
+and the take is recorded from the page itself, with no window frame, title bar or taskbar in
+it. The beat sits in the largest 16:9 box your window has room for, against its top-left
+corner; if the window is wider than 16:9 an empty strip is left on the right (taller, and it is
+at the bottom). The strip is not kept: when the take is saved, the beat's box is cut out whole
+— nothing of the beat is cut — and scaled to fill 1920 × 1080 (or the export's size). The detail
+is your screen's, since the take records the window as you see it: on a 1920 × 1080 display the
+beat is about 1800 pixels wide. The beat lasts exactly as long as the take. **Mute it** or
 **Use its sound** switch its sound without recording again; **New take** replaces it.
 
 The take's player plays it as the export will: from after its quiet second, with its cleaned

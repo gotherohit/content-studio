@@ -11,7 +11,7 @@ import {
 } from "../client/src/recording.ts";
 import { beatTimings, exportSettings, VOICE_TAIL } from "../client/src/exportPlan.ts";
 import {
-  cleanFilter, DECODE, denoiseFilter, derived, finishFilter, frameLevels, parseLoudness, RNN_MIX, processRecording, quietSpan, roomLevel, TARGET_LUFS, voiceStart,
+  cleanFilter, DECODE, denoiseFilter, derived, finishFilter, frameLevels, parseLoudness, parsePicture, pictureFilter, RNN_MIX, processRecording, quietSpan, roomLevel, TARGET_LUFS, voiceStart,
 } from "../server/recordings.js";
 import { parseProbe, takeGraph, videoGraph } from "../electron/export-video.js";
 import type { Beat, BeatTake, BeatVoice, Stage } from "../client/src/types.ts";
@@ -124,7 +124,6 @@ test("cleaning tells the spectral pass the room's level, and never normalises dy
   assert.match(finishFilter(2), /^volume=2dB,alimiter/);
   assert.doesNotMatch(cleanFilter("off", 1, -40, 0, 0), /agate|acompressor/);
   assert.equal(parseLoudness("Summary:\n  Integrated loudness:\n    I:         -23.4 LUFS\n"), -23.4);
-  assert.deepEqual(derived("take-a.webm"), { clean: "take-a.clean.flac", video: "take-a.video.webm" });
 });
 
 test("a take plays instead of the still, from after its lead-in, and narration sits under the beat", () => {
@@ -260,4 +259,61 @@ test("RNNoise keeps the sound in time and the same length, and gives the same re
   const a = await run(1, 777), b = await run(1, 65536);
   assert.equal(a.length, len);
   assert.deepEqual(Buffer.from(a.buffer), Buffer.from(b.buffer));
+});
+
+// A 0.35.0 take on a 1913 × 1010 window came out as the window pixel for pixel in a 1920 × 1080
+// frame: the beat's 16:9 box, a dark strip beside it and black below.
+test("the beat's box is found in a take's picture, however the capture sized it", async () => {
+  const { takeCrop } = await import("../client/src/exportPlan.ts");
+  const { exportViewport } = await import("../client/src/exportPlan.ts");
+  const page = { width: 1913, height: 1010 };
+  const box = exportViewport(page.width, page.height);
+  assert.deepEqual(box, { width: 1796, height: 1010 });
+  // Copied pixel for pixel into a padded frame.
+  const padded = takeCrop(box, page, { width: 1920, height: 1080 }, 1);
+  assert.ok(Math.abs(padded.w * 1920 - 1796) < 0.01 && Math.abs(padded.h * 1080 - 1010) < 0.01, JSON.stringify(padded));
+  // Recorded at the window's own size, or scaled to fit: the same fraction of the page.
+  for (const frame of [{ width: 1913, height: 1010 }, { width: 3826, height: 2020 }]) {
+    const c = takeCrop(box, page, frame, 1);
+    assert.ok(Math.abs(c.w - 1796 / 1913) < 1e-9 && c.h === 1, JSON.stringify(c));
+  }
+  // A 16:9 window has nothing to cut.
+  assert.deepEqual(takeCrop({ width: 1600, height: 900 }, { width: 1600, height: 900 }, { width: 3200, height: 1800 }, 2), { w: 1, h: 1 });
+});
+
+test("a take's picture instructions are checked, and the crop never goes inwards", () => {
+  assert.deepEqual(parsePicture("0.935417,0.935185,1920,1080"), { w: 0.935417, h: 0.935185, width: 1920, height: 1080 });
+  assert.equal(parsePicture("1.2,1,1920,1080"), null);
+  assert.equal(parsePicture("0.9,0.9,1921,1080"), null);
+  assert.equal(parsePicture(undefined), null);
+  // Rounded to the nearest pixel and capped at the frame; the comma inside min() is escaped for the filter.
+  assert.equal(pictureFilter({ w: 0.935417, h: 0.935185, width: 1920, height: 1080 }),
+    String.raw`crop=min(iw\,round(iw*0.935417)):min(ih\,round(ih*0.935185)):0:0,scale=1920:1080:flags=lanczos,setsar=1,format=yuv420p`);
+  assert.deepEqual(derived("take-a.webm"), { clean: "take-a.clean.flac", video: "take-a.video.mp4", legacyVideo: "take-a.video.webm" });
+});
+
+test("a take loses the strip beside the beat and keeps every pixel of the beat", { skip: !ffmpegPath || !fs.existsSync(ffmpegPath) }, async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cs-crop-"));
+  try {
+    const ff = (args: string[]) => spawnSync(ffmpegPath as unknown as string, ["-hide_banner", "-y", ...args], { encoding: "utf8" });
+    // A 400 × 240 window: the beat is the red 320 × 180 box, its last two columns blue; grey beside and below.
+    ff(["-f", "lavfi", "-i", "color=c=0x505050:s=400x240:r=30:d=2", "-vf",
+      "drawbox=x=0:y=0:w=320:h=180:c=red:t=fill,drawbox=x=318:y=0:w=2:h=180:c=blue:t=fill",
+      "-c:v", "libvpx-vp9", "-b:v", "2M", path.join(dir, "take-c.webm")]);
+    const made = await processRecording(dir, "take-c.webm", "light", 0, parsePicture("0.8,0.75,640,360"));
+    assert.equal(made.video, "take-c.video.mp4");
+    assert.deepEqual([made.width, made.height], [640, 360]);
+    const pixel = (x: number, y: number) => {
+      const raw = spawnSync(ffmpegPath as unknown as string, ["-hide_banner", "-loglevel", "error", "-i", path.join(dir, made.video!), "-frames:v", "1",
+        "-vf", `crop=2:2:${x}:${y},format=rgb24`, "-f", "rawvideo", "-"]).stdout;
+      return [...raw.subarray(0, 3)];
+    };
+    const [r1, , b1] = pixel(10, 10), [r2, g2, b2] = pixel(638, 180), [r3, , b3] = pixel(320, 358);
+    assert.ok(r1 > 180 && b1 < 80, `top-left is the beat: ${r1},${b1}`);
+    // The beat's own right edge is still there — nothing cut — and no grey strip came with it.
+    assert.ok(b2 > 150 && r2 < 100 && g2 < 100, `right edge is the blue line: ${r2},${g2},${b2}`);
+    assert.ok(r3 > 180 && b3 < 80, `bottom is the beat, not the grey below it: ${r3},${b3}`);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });

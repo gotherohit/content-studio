@@ -14,7 +14,7 @@ import { attachTerminal } from "./terminal.js";
 import { createJupyter } from "./jupyter.js";
 import { createInput } from "./input.js";
 import { TYPES, viewerFor, safeName, uniqueName, removeAsset } from "./assets.js";
-import { derived, processRecording } from "./recordings.js";
+import { derived, parsePicture, processRecording } from "./recordings.js";
 import { renderDeck, openSlideshow, hasPowerPoint, findSoffice } from "./slides.js";
 import { pickFolder } from "./picker.js";
 import { FilesError, MAX_BYTES, createEntry, deleteEntry, listDir, readText, renameEntry, statFile, writeText } from "./files.js";
@@ -85,7 +85,7 @@ app.put("/api/projects/:id/recordings/:name", express.raw({ type: "*/*", limit: 
     await fs.mkdir(dir, { recursive: true });
     const name = await uniqueName(dir, safeName(req.params.name));
     await fs.writeFile(path.join(dir, name), req.body);
-    res.json(await processRecording(dir, name, String(req.query.noise || "light"), Number(req.query.lead) || 0));
+    res.json(await processRecording(dir, name, String(req.query.noise || "light"), Number(req.query.lead) || 0, parsePicture(req.query.picture)));
   } catch (e) {
     res.status(500).json({ error: `The recording could not be saved: ${e.message}` });
   }
@@ -416,7 +416,7 @@ app.get("/api/projects/:id/recordings/:name", (req, res) => {
   if (!safeId(req.params.id) || !config.dirOf(req.params.id)) return res.status(400).end();
   const name = safeName(req.params.name);
   const ext = path.extname(name).toLowerCase();
-  res.type(ext === ".flac" ? "audio/flac" : ext === ".webm" ? "video/webm" : "application/octet-stream");
+  res.type(ext === ".flac" ? "audio/flac" : ext === ".webm" ? "video/webm" : ext === ".mp4" ? "video/mp4" : "application/octet-stream");
   res.sendFile(path.join(recordingsDir(req.params.id), name), (err) => { if (err && !res.headersSent) res.status(404).end(); });
 });
 
@@ -426,7 +426,7 @@ app.delete("/api/projects/:id/recordings/:name", async (req, res) => {
   const name = safeName(req.params.name);
   const dir = recordingsDir(req.params.id);
   try {
-    for (const file of [name, derived(name).clean, derived(name).video]) await removeAsset(dir, file);
+    for (const file of [name, derived(name).clean, derived(name).video, derived(name).legacyVideo]) await removeAsset(dir, file);
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: e.message });

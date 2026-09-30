@@ -2,6 +2,18 @@
 
 What changed in each release, newest first. Versions are the ones the app updates itself to.
 
+## 0.36.0
+
+- **No empty strip beside a take.** A take is laid out in the largest 16:9 box that fits the
+  window, and a window wider (or taller) than 16:9 leaves a strip beside it. That strip, and a
+  black band under it, were in the recording: a take on a 1913 × 1010 window came out as the
+  window copied into a 1920 × 1080 frame. When a take is saved, the beat's box is now cut out
+  whole — nothing of the beat is lost — and scaled to fill 1920 × 1080 (or the export's size),
+  as H.264. Takes recorded with 0.35.0 keep their strip; record the take again to lose it.
+- The documentation said a take was recorded at the export's full resolution. It is recorded
+  as the window shows it, so its detail is your screen's: on a 1920 × 1080 display the beat is
+  about 1800 pixels wide, scaled up to 1920.
+
 ## 0.35.0
 
 - **A take's sound in its preview.** The player in the recorder showed the take's picture file,

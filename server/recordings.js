@@ -10,6 +10,7 @@
 // start talking early, so it is not taken on trust: the recording is measured first, the room's
 // level is read from its quietest stretch, and a voice's lead-in is only cut up to the first word.
 import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { pipeline } from "node:stream/promises";
@@ -140,7 +141,34 @@ export const cleanFilter = (level, start, roomDb, gainDb, correctDb) =>
 /** Names for what is made from an original: `take-x.webm` → `take-x.clean.flac`, `take-x.video.webm`. */
 export function derived(name) {
   const stem = name.replace(/\.[^.]+$/, "");
-  return { clean: `${stem}.clean.flac`, video: `${stem}.video.webm` };
+  // Takes recorded before 0.36.0 kept their picture as a WebM copy.
+  return { clean: `${stem}.clean.flac`, video: `${stem}.video.mp4`, legacyVideo: `${stem}.video.webm` };
+}
+
+/**
+ * Where the beat is in a take, from the upload's `picture=w,h,width,height`: the beat's 16:9
+ * box as fractions of the recorded page, from its top-left corner, and the size to make it.
+ * Null when missing or out of range, and the picture is then kept as it was recorded.
+ */
+export function parsePicture(text) {
+  const [w, h, width, height] = String(text ?? "").split(",").map(Number);
+  const fraction = (n) => n > 0.2 && n <= 1;
+  const size = (n) => Number.isInteger(n) && n >= 16 && n <= 7680 && n % 2 === 0;
+  return fraction(w) && fraction(h) && size(width) && size(height) ? { w, h, width, height } : null;
+}
+
+/**
+ * A take records the whole window, and the beat is laid out in the largest 16:9 box that fits
+ * it, against the top-left corner; a window wider than 16:9 leaves a strip beside it. The strip
+ * is cut away and the box — all of it, nothing of the beat cut — scaled to the export's size.
+ * The box is rounded to the nearest whole pixel, never inwards: a pixel of strip is invisible,
+ * a pixel of the beat is not.
+ */
+export function pictureFilter({ w, h, width, height }) {
+  // Six places: at three, a fraction of a 1913-pixel window could be two pixels out.
+  const f = (n) => String(Math.round(n * 1e6) / 1e6);
+  return `crop=min(iw\\,round(iw*${f(w)})):min(ih\\,round(ih*${f(h)})):0:0,` +
+    `scale=${width}:${height}:flags=lanczos,setsar=1,format=yuv420p`;
 }
 
 /** Integrated loudness from ffmpeg's `ebur128` summary. */
@@ -208,7 +236,7 @@ async function denoiseToFile(file, dest, level) {
  * picture with a proper length. `lead` is the silent second the recorder asked for. Returns
  * what the beat stores; its `lead` is what was actually cut from the sound.
  */
-export async function processRecording(dir, name, level, lead = 0) {
+export async function processRecording(dir, name, level, lead = 0, picture = null) {
   const file = path.join(dir, name);
   const out = derived(name);
   const original = await probe(file);
@@ -216,11 +244,23 @@ export async function processRecording(dir, name, level, lead = 0) {
   const safe = safeLevel(level);
   const result = { file: name, noise: safe, lead: asked };
   if (original.width) {
-    // Copying the picture is quick and loses nothing; it only gains a length and an index. The
-    // lead-in stays in the file — cutting without re-encoding lands on a keyframe — and the
-    // export starts the picture that far in.
-    await run(["-i", file, "-map", "0:v:0", "-c", "copy", path.join(dir, out.video)]);
-    Object.assign(result, { video: out.video, width: original.width, height: original.height });
+    // The lead-in stays in the picture and the export starts that far in, so a picture made
+    // before is still right when only the sound is cleaned again — it is kept, not remade.
+    const made = [out.video, out.legacyVideo].find((v) => existsSync(path.join(dir, v)));
+    if (made && !picture) {
+      const size = await probe(path.join(dir, made));
+      Object.assign(result, { video: made, width: size.width ?? original.width, height: size.height ?? original.height });
+    } else if (picture) {
+      await run(["-i", file, "-map", "0:v:0", "-vf", pictureFilter(picture), "-fps_mode", "cfr", "-r", "30",
+        "-c:v", "libx264", "-preset", "veryfast", "-crf", "14", "-profile:v", "high", "-pix_fmt", "yuv420p",
+        "-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709", "-an", "-movflags", "+faststart", path.join(dir, out.video)]);
+      Object.assign(result, { video: out.video, width: picture.width, height: picture.height });
+    } else {
+      // Where the beat sits is not known: the picture is kept as recorded, copied so it gains a
+      // length and an index.
+      await run(["-i", file, "-map", "0:v:0", "-c", "copy", path.join(dir, out.legacyVideo)]);
+      Object.assign(result, { video: out.legacyVideo, width: original.width, height: original.height });
+    }
   }
   if (original.audio) {
     const levels = await analyse(file);

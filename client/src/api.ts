@@ -152,8 +152,9 @@ export const api = {
    * plain bytes: a recorder's own type, "video/webm;codecs=vp9,opus", is not one the server's
    * body parser accepts, and the take arrived empty.
    */
-  uploadRecording: (projectId: string, name: string, blob: Blob, noise: NoiseReduction, lead: number) =>
-    fetch(`/api/projects/${projectId}/recordings/${encodeURIComponent(name)}?noise=${noise}&lead=${lead}`, { method: "PUT", headers: { "content-type": "application/octet-stream" }, body: blob })
+  /** `picture`, for a take: where the beat is in the recorded window, and the size to make it. */
+  uploadRecording: (projectId: string, name: string, blob: Blob, noise: NoiseReduction, lead: number, picture?: { w: number; h: number; width: number; height: number }) =>
+    fetch(`/api/projects/${projectId}/recordings/${encodeURIComponent(name)}?noise=${noise}&lead=${lead}${picture ? `&picture=${[picture.w, picture.h, picture.width, picture.height].join(",")}` : ""}`, { method: "PUT", headers: { "content-type": "application/octet-stream" }, body: blob })
       .then((r) => j<RecordingResult>(r)),
   recleanRecording: (projectId: string, name: string, noise: NoiseReduction, lead: number) =>
     fetch(`/api/projects/${projectId}/recordings/${encodeURIComponent(name)}/clean`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ noise, lead }) })

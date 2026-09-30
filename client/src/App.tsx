@@ -40,7 +40,7 @@ import { FilesPane } from "./components/FilesPane";
 import { NewProjectDialog } from "./components/NewProjectDialog";
 import { ExportDialog, defaultExportFolder, type ExportRun } from "./components/ExportDialog";
 import { ExportFramer } from "./components/ExportFramer";
-import { beatTimings, captureZoom, capturedVideoTime, centredFrame, clampFrame, containedBox, exportSettings, exportViewport, outputSize } from "./exportPlan";
+import { beatTimings, captureZoom, capturedVideoTime, takeCrop, centredFrame, clampFrame, containedBox, exportSettings, exportViewport, outputSize } from "./exportPlan";
 import { BeatRecorder } from "./components/BeatRecorder";
 import { LEAD_SECONDS, boostedMic, micConstraints, recordingInUse, recordingName } from "./recording";
 import type { ExportPlanBeat, ExportVideo } from "./desktop";
@@ -1059,10 +1059,14 @@ export default function App() {
     const beat = project.beats[index];
     if (!beat) return;
     const s = exportSettings(project.settings.export);
-    const viewport = exportViewport(window.innerWidth, window.innerHeight);
+    // The window as it is before the take lays it out: the beat's box is measured against it.
+    const page = { width: window.innerWidth, height: window.innerHeight };
+    const pixelRatio = window.devicePixelRatio || 1;
+    const viewport = exportViewport(page.width, page.height);
     const out = outputSize("landscape", s.quality);
     const zoom = Math.min(4, Math.max(1, out.width / viewport.width));
     const noise = project.settings.noise ?? "light";
+    let crop: { w: number; h: number } | null = null;
     const before = { stage: captureStage(), beat: activeBeatId, present };
     const title = document.title;
     let screen: MediaStream | null = null;
@@ -1080,7 +1084,9 @@ export default function App() {
       await desktop.recordView({ css: viewport, zoom });
       // Asked for straight after the click, while the browser still counts it as the person's.
       await desktop.recordSelf();
-      screen = await navigator.mediaDevices.getDisplayMedia({ video: { width: { ideal: out.width }, height: { ideal: out.height }, frameRate: { ideal: 30, max: 30 } }, audio: false });
+      // No size asked for: the window is recorded at its own size, and the strip beside the
+      // beat is cut away afterwards. Asking for 1920 × 1080 padded a smaller window with black.
+      screen = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: { ideal: 30, max: 30 } }, audio: false });
       if (options.sound) {
         mic = await navigator.mediaDevices.getUserMedia({ audio: micConstraints(options.deviceId) });
         // The same boost the recorder's meter was set with.
@@ -1094,6 +1100,8 @@ export default function App() {
         await sleep(1000);
       }
       if (takeCancelled.current) throw new Error("cancelled");
+      const size = screen.getVideoTracks()[0]?.getSettings();
+      if (size?.width && size?.height) crop = takeCrop(viewport, page, { width: size.width, height: size.height }, pixelRatio);
       const tracks = [...screen.getVideoTracks(), ...(boosted?.stream.getAudioTracks() ?? [])];
       const mime = ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"].find((m) => MediaRecorder.isTypeSupported(m)) ?? "video/webm";
       const rate = out.width >= 3840 ? 40e6 : out.width >= 2560 ? 24e6 : 16e6;
@@ -1131,7 +1139,7 @@ export default function App() {
     if (!blob) { setTake(null); if (takeCancelled.current) setNotice({ kind: "warn", text: "Take cancelled — nothing was recorded." }); return; }
     setTake({ index, phase: "saving", count: 0 });
     try {
-      const made = await api.uploadRecording(project.id, recordingName("take", beat.id), blob, noise, lead);
+      const made = await api.uploadRecording(project.id, recordingName("take", beat.id), blob, noise, lead, crop ? { ...crop, width: out.width, height: out.height } : undefined);
       if (!made.video || !made.width || !made.height) throw new Error("The recording has no picture.");
       setBeatRecording(beat.id, "take", {
         file: made.file, video: made.video, clean: made.clean, seconds: made.seconds, noise: made.noise, lead: made.lead,
