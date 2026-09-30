@@ -1,6 +1,6 @@
 import { useState } from "react";
 import {
-  ArrowDown, ArrowUp, Camera, ChevronDown, ChevronRight, Clapperboard, Download, FileCode2, FileText, FolderOpen,
+  ArrowDown, ArrowUp, Camera, ChevronDown, ChevronRight, Clapperboard, Download, FileCode2, FileText, FolderOpen, Mic,
   Copy, Image, Network, Plus, Presentation, ScrollText, Settings, Table2, Trash2, Undo2, X,
 } from "lucide-react";
 import type { Beat, Project, ProjectSummary, Source } from "../types";
@@ -34,6 +34,8 @@ interface Props {
   onDuplicateBeat: (id: string) => void;
   undoLabel: string | null;
   onUndoBeat: () => void;
+  /** Open the recorder for a beat: its voice, or a take of it on screen. */
+  onRecord: (id: string) => void;
 }
 
 const lsGet = (k: string, d: string) => { try { return localStorage.getItem(k) ?? d; } catch { return d; } };
@@ -89,7 +91,7 @@ function confirmRemoval(s: Source) {
   return confirm(`Remove "${s.title}"?${notes}\n\n${s.file.name} moves to the Recycle Bin, where you can restore it. Leaving it in the project folder would bring this source back when the project is opened again.`);
 }
 
-function BeatRow({ beat, index, active, last, onGo, onPoint, onRecapture, onMove, onRemove, onScript, onDuplicate }: {
+function BeatRow({ beat, index, active, last, onGo, onPoint, onRecapture, onMove, onRemove, onScript, onDuplicate, onRecord }: {
   beat: Beat; index: number; active: boolean; last: boolean;
   onGo: () => void;
   onPoint: (point: string) => void;
@@ -98,6 +100,7 @@ function BeatRow({ beat, index, active, last, onGo, onPoint, onRecapture, onMove
   onRemove: () => void;
   onScript: () => void;
   onDuplicate: () => void;
+  onRecord: () => void;
 }) {
   return (
     <div className={`list-item beat-row ${active ? "active" : ""}`}>
@@ -120,6 +123,11 @@ function BeatRow({ beat, index, active, last, onGo, onPoint, onRecapture, onMove
         title={beat.script?.trim() ? "Edit what to say here" : "Write what to say here"}
         onClick={(e) => { e.stopPropagation(); onScript(); }}
       ><ScrollText size={12} /></button>
+      <button
+        className={beat.voice || beat.take ? "icon-btn has-script" : "icon-btn"}
+        title={beat.take ? "Recorded take — record again or change it" : beat.voice ? "Recorded voice — record again or change it" : "Record your voice over this beat, or a take of it on screen"}
+        onClick={(e) => { e.stopPropagation(); onRecord(); }}
+      ><Mic size={12} /></button>
       <button className="icon-btn" title="Move up" disabled={index === 0} onClick={onMove.bind(null, -1)}><ArrowUp size={12} /></button>
       <button className="icon-btn" title="Move down" disabled={last} onClick={onMove.bind(null, 1)}><ArrowDown size={12} /></button>
       <button className="icon-btn" title="Duplicate beat" onClick={onDuplicate}><Copy size={12} /></button>
@@ -230,6 +238,7 @@ export function Sidebar(p: Props) {
                 onMove={(delta) => p.onMoveBeat(i, i + delta)}
                 onRemove={() => p.onRemoveBeat(b.id)}
                 onScript={() => p.onEditScript(b.id)}
+                onRecord={() => p.onRecord(b.id)}
               />
             ))}
             {!(p.project.beats ?? []).length && (

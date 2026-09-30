@@ -52,6 +52,7 @@ The whole studio is one window, and panes inside it are real Chromium views rath
 | [Beats](docs/guide.md#beats) | The running order. Capture an arrangement per point you make; one key walks them while recording. |
 | [The presenter window](docs/guide.md#the-presenter-window) | A second window for your other monitor, outside any screen capture, with the clock and a chapter log. |
 | [Exporting beats](docs/guide.md#exporting-beats-as-a-video-or-a-pdf) | The beats as a YouTube-ready MP4 — 16:9 or vertical 9:16, up to 4K, with transitions and videos that play — or as a PDF. |
+| [Recording a beat](docs/guide.md#recording-a-beat) | Your voice over a beat, cleaned of background noise, or a take of the beat on screen — both used by the export. |
 | [Layout](docs/guide.md#layout) | Up to four panes, each showing a different source or tool. |
 | [Research with AI](docs/guide.md#research-with-ai) | A tool-using research agent with reviewed file/shell actions, web search and persistent project or global conversations. |
 | [Models and keys](docs/guide.md#models-and-keys) | Anthropic- or OpenAI-compatible providers; research requires a tool-capable model. Keys encrypted at rest, never shown again. |

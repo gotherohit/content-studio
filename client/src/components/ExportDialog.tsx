@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { Crop, FileDown, FolderOpen, Film, X } from "lucide-react";
+import { Clapperboard, Crop, FileDown, FolderOpen, Film, Mic, X } from "lucide-react";
 import type { Beat, ExportSettings, Project, TransitionKind } from "../types";
-import { beatTiming, beatVideos, exportLength, formatLength, outputSize, TRANSITIONS } from "../exportPlan";
+import { beatTimings, beatVideos, exportLength, formatLength, outputSize, TRANSITIONS } from "../exportPlan";
 import { FolderField } from "./FolderField";
 import { desktop } from "../desktop";
 
@@ -51,7 +51,7 @@ export function ExportDialog(p: Props) {
     return () => { live = false; };
   }, [project.dir, videoNames.join("\n")]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const timings = beats.map((b) => beatTiming(b, s, project.sources, lengths));
+  const timings = beatTimings(beats, s, project.sources, lengths);
   const total = exportLength(timings, s.transitionSeconds);
   const out = outputSize(s.shape, s.quality);
   const busy = p.run?.phase === "encode" || p.run?.phase === "pdf";
@@ -179,7 +179,9 @@ export function ExportDialog(p: Props) {
                       placeholder={String(t.seconds)}
                       onChange={(e) => p.onBeat(beat.id, { seconds: e.target.value ? Number(e.target.value) : undefined })}
                     />
-                    {clips.length > 0 && <Film size={12} className="muted" />}
+                    {beat.take ? <span title={`Plays its take${beat.take.muted ? ", muted" : ""}`}><Clapperboard size={12} className="muted" /></span>
+                      : clips.length > 0 && <Film size={12} className="muted" />}
+                    {beat.voice && <span title="Plays its recorded voice"><Mic size={12} className="muted" /></span>}
                   </span>
                 )}
                 {video && (

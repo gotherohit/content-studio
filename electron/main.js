@@ -287,9 +287,20 @@ function createWindow() {
     if (captureChoice && Date.now() - captureChoice.at < 10000) throw new Error("Another capture is starting. Try again in a moment.");
     captureChoice = { id, at: Date.now() };
   });
+  // A take records the studio itself: its own page, asked for moments before by the page.
+  let selfCapture = 0;
+  ipcMain.handle("record:self", (event) => {
+    if (event.sender !== win.webContents) throw new Error("Takes are recorded from Studio");
+    selfCapture = Date.now();
+  });
   win.webContents.session.setDisplayMediaRequestHandler(async (request, callback) => {
     const choice = captureChoice;
     if (request.frame !== win.webContents.mainFrame) { callback({}); return; }
+    if (selfCapture && Date.now() - selfCapture < 10000) {
+      selfCapture = 0;
+      callback({ video: win.webContents.mainFrame });
+      return;
+    }
     captureChoice = null;
     if (!choice || Date.now() - choice.at > 10000) { callback({}); return; }
     try {

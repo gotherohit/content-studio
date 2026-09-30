@@ -31,8 +31,12 @@ export function wireExport(getWin) {
     return win;
   };
 
-  /** Render the window at `css` layout size, `zoom` times over; `null` puts it back. */
-  async function render(win, css, zoom, restoreZoom) {
+  /**
+   * Render the window at `css` layout size, `zoom` times over; `null` puts it back. `fit` also
+   * shrinks what the window shows to its own size, for a take: the creator must see the whole
+   * beat while talking over it, and the recording still gets every pixel.
+   */
+  async function render(win, css, zoom, restoreZoom, fit = false) {
     const dbg = win.webContents.debugger;
     if (!css) {
       if (dbg.isAttached()) {
@@ -46,6 +50,7 @@ export function wireExport(getWin) {
     // Pixels are pixels: a ratio of 1 whatever the display, so the zoom alone decides the output.
     await dbg.sendCommand("Emulation.setDeviceMetricsOverride", {
       width: Math.round(css.width * zoom), height: Math.round(css.height * zoom), deviceScaleFactor: 1, mobile: false,
+      scale: fit ? 1 / zoom : 1,
     });
     win.webContents.setZoomFactor(zoom);
   }
@@ -80,6 +85,22 @@ export function wireExport(getWin) {
     }
     if (!job?.framing) job = { framing: true, restoreZoom: win.webContents.getZoomFactor() };
     await render(win, css, 1);
+  });
+
+  // A take: the beat laid out as it will be exported and drawn at the output's resolution, so
+  // recording the page itself gives full-resolution video — shrunk on screen to fit the window.
+  let takeRestore = null;
+  ipcMain.handle("record:view", async (event, options) => {
+    const win = studio(event);
+    if (!options) {
+      await render(win, null, 0, takeRestore ?? 1);
+      takeRestore = null;
+      return;
+    }
+    if (takeRestore === null) takeRestore = win.webContents.getZoomFactor();
+    const zoom = Math.min(4, Math.max(1, Number(options.zoom) || 1));
+    await render(win, { width: Math.round(options.css.width), height: Math.round(options.css.height) }, zoom, 1, true);
+    return { zoom };
   });
 
   ipcMain.handle("export:begin", async (event, { css, zoom }) => {
@@ -121,6 +142,15 @@ export function wireExport(getWin) {
     }
     return file;
   };
+  /** A beat's own recording: its voice or its take, kept in the project's recordings folder. */
+  const recordingFile = (projectDir, name) => {
+    const folder = path.resolve(String(projectDir || ""), "recordings");
+    const file = path.resolve(folder, String(name || ""));
+    if (!file.startsWith(folder + path.sep) || !fs.existsSync(file)) {
+      throw new Error(`The recording ${name} is not in this project's recordings folder any more.`);
+    }
+    return file;
+  };
   const probe = (file) => parseProbe(spawnSync(ffmpegPath, ["-hide_banner", "-i", file], { encoding: "utf8", windowsHide: true }).stderr || "");
 
   ipcMain.handle("export:probe", (event, { projectDir, names }) => {
@@ -145,12 +175,21 @@ export function wireExport(getWin) {
     const beats = plan.beats.map((beat, i) => {
       const picture = job.pictures[i];
       if (!picture) throw new Error(`Beat ${i + 1} was not captured.`);
+      // A recorded take replaces the picture: it is the beat, played as it was recorded.
+      const takeFile = beat.take ? recordingFile(plan.projectDir, beat.take.name) : null;
+      const takeInfo = takeFile ? probe(takeFile) : null;
+      const base = takeInfo?.width ? { width: takeInfo.width, height: takeInfo.height } : picture;
       return {
-        still: picture.file, width: picture.width, height: picture.height,
+        still: picture.file, width: base.width, height: base.height,
         seconds: Math.min(3600, Math.max(0.5, Number(beat.seconds) || 5)),
         transition: beat.transition || "cut",
-        crop: plan.shape === "vertical" ? cropBox(beat.frame, picture) : undefined,
-        videos: (beat.videos ?? []).map((video) => {
+        crop: plan.shape === "vertical" ? cropBox(beat.frame, base) : undefined,
+        take: takeFile ? {
+          file: takeFile, lead: Math.max(0, Number(beat.take.lead) || 0),
+          sound: !beat.take.muted && beat.take.clean ? recordingFile(plan.projectDir, beat.take.clean) : null,
+        } : undefined,
+        voice: beat.voice ? { file: recordingFile(plan.projectDir, beat.voice.name), delay: Math.max(0, Number(beat.voice.delay) || 0) } : undefined,
+        videos: takeFile ? [] : (beat.videos ?? []).map((video) => {
           const file = videoFile(plan.projectDir, video.name);
           return {
             file, start: Math.max(0, Number(video.start) || 0), audio: probe(file).audio,

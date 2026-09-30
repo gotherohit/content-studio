@@ -20,6 +20,10 @@ contextBridge.exposeInMainWorld("studio", {
 
   // Exporting beats: the window is rendered at the output's size and photographed beat by beat.
   exportView: (css) => ipcRenderer.invoke("export:view", css),
+  /** The next screen-capture request records this window's own page, for a beat's take. */
+  recordSelf: () => ipcRenderer.invoke("record:self"),
+  /** Lay out and draw the window for a take; `null` puts it back. */
+  recordView: (options) => ipcRenderer.invoke("record:view", options),
   exportBegin: (options) => ipcRenderer.invoke("export:begin", options),
   exportFrame: (index) => ipcRenderer.invoke("export:frame", index),
   exportEnd: () => ipcRenderer.invoke("export:end"),

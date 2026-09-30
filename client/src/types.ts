@@ -231,6 +231,40 @@ export interface Beat {
   createdAt: string;
   /** How this beat is exported. Every field is optional: the project's export settings fill the rest. */
   export?: BeatExport;
+  /** Narration recorded over this beat. An export plays it, and the beat lasts as long as it. */
+  voice?: BeatVoice;
+  /** The beat recorded on screen, played in an export instead of its still picture. */
+  take?: BeatTake;
+}
+
+/** How much steady background noise is taken out of a recording. */
+export type NoiseReduction = "off" | "light" | "strong";
+
+/**
+ * A recording kept in the project's recordings folder. `file` is the original, kept so it can
+ * be cleaned again; `clean` is its sound as used. `lead` is the silent second recorded first,
+ * which the cleaning learns the room from and which is not played.
+ */
+export interface BeatRecording {
+  file: string;
+  clean?: string;
+  seconds: number;
+  noise: NoiseReduction;
+  lead: number;
+  /** Loudness of the voice before it was brought to the target, in LUFS. */
+  loudness?: number;
+  recordedAt: string;
+}
+
+export type BeatVoice = BeatRecording & { clean: string };
+
+export interface BeatTake extends BeatRecording {
+  /** The picture, remuxed so it has a length. */
+  video: string;
+  width: number;
+  height: number;
+  /** Recorded or played without its sound; the beat's narration, if any, plays under it. */
+  muted: boolean;
 }
 
 /**
@@ -306,6 +340,8 @@ export interface Project {
     drawStyles?: Partial<Record<ShapeKind, ShapeStyle>>;
     /** The choices made in the last export of the beats. */
     export?: Partial<ExportSettings>;
+    /** How much background noise recordings for this project's beats have taken out. */
+    noise?: NoiseReduction;
   };
 }
 

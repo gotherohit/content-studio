@@ -110,6 +110,35 @@ export function beatTiming(beat: Beat, settings: ExportSettings, sources: Source
   return { seconds: clamp(seconds, 0.5, 3600), transition: beat.export?.transition ?? settings.transition, fromVideo: !own && rest.length > 0 };
 }
 
+/** A breath after the last word, so a beat does not cut away the moment the voice stops. */
+export const VOICE_TAIL = 0.4;
+
+export type TimedBy = "own" | "take" | "voice" | "video" | "hold";
+
+/**
+ * Every beat's length and how it arrives, with its recordings taken into account. A take is
+ * the beat, so it lasts exactly as long. Narration decides a beat's length too, and it is
+ * delayed by the transition coming in and given room for the one going out: both overlap the
+ * beat, and a word said during a cross-fade is half-heard.
+ */
+export function beatTimings(beats: Beat[], settings: ExportSettings, sources: Source[], lengths: Record<string, number | null | undefined>) {
+  const base = beats.map((b) => beatTiming(b, settings, sources, lengths));
+  return base.map((t, i) => {
+    const beat = beats[i];
+    const into = i > 0 && t.transition !== "cut" ? settings.transitionSeconds : 0;
+    const next = base[i + 1];
+    const out = next && next.transition !== "cut" ? settings.transitionSeconds : 0;
+    const voiceDelay = beat.voice && !(beat.take && !beat.take.muted) ? into : 0;
+    if (beat.export?.seconds && beat.export.seconds > 0) return { ...t, voiceDelay, by: "own" as TimedBy };
+    if (beat.take) return { ...t, seconds: beat.take.seconds, fromVideo: false, voiceDelay, by: "take" as TimedBy };
+    if (beat.voice) {
+      const seconds = Math.round((into + beat.voice.seconds + Math.max(VOICE_TAIL, out + 0.2)) * 10) / 10;
+      return { ...t, seconds, fromVideo: false, voiceDelay, by: "voice" as TimedBy };
+    }
+    return { ...t, voiceDelay, by: (t.fromVideo ? "video" : "hold") as TimedBy };
+  });
+}
+
 /** The finished video's length, transitions taken out. */
 export const exportLength = (timings: { seconds: number; transition: TransitionKind }[], transitionSeconds: number) =>
   timeline(timings, transitionSeconds).total;

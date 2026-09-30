@@ -1,4 +1,4 @@
-import type { DeckRender, Project, ProjectSummary, Snippet, SourceFile } from "./types";
+import type { DeckRender, NoiseReduction, Project, ProjectSummary, Snippet, SourceFile } from "./types";
 
 /** Parse a JSON response, turning a down or non-JSON API into a readable error. */
 async function j<T>(r: Response): Promise<T> {
@@ -11,6 +11,11 @@ async function j<T>(r: Response): Promise<T> {
 }
 
 export interface FsEntry { name: string; path: string; dir: boolean }
+/** What the server made from a recording: see `processRecording` in server/recordings.js. */
+export interface RecordingResult {
+  file: string; clean?: string; video?: string; width?: number; height?: number;
+  seconds: number; noise: NoiseReduction; lead: number; loudness?: number;
+}
 export interface FsText { content: string; mtime: number; size: number; eol: string; bom: boolean }
 
 export interface JupyterStatus { installed: boolean | null; running: boolean; url: string | null; log: string; port: number; rootDir?: string | null }
@@ -142,6 +147,20 @@ export const api = {
   deleteFile: (projectId: string, name: string) =>
     fetch(`/api/projects/${projectId}/sources/${encodeURIComponent(name)}`, { method: "DELETE" }).then((r) => j<{ ok: true }>(r)),
   fileUrl: (projectId: string, name: string) => `/api/projects/${projectId}/sources/${encodeURIComponent(name)}`,
+  /**
+   * A beat's voice or take, as recorded; the server cleans it and says what it made. Sent as
+   * plain bytes: a recorder's own type, "video/webm;codecs=vp9,opus", is not one the server's
+   * body parser accepts, and the take arrived empty.
+   */
+  uploadRecording: (projectId: string, name: string, blob: Blob, noise: NoiseReduction, lead: number) =>
+    fetch(`/api/projects/${projectId}/recordings/${encodeURIComponent(name)}?noise=${noise}&lead=${lead}`, { method: "PUT", headers: { "content-type": "application/octet-stream" }, body: blob })
+      .then((r) => j<RecordingResult>(r)),
+  recleanRecording: (projectId: string, name: string, noise: NoiseReduction, lead: number) =>
+    fetch(`/api/projects/${projectId}/recordings/${encodeURIComponent(name)}/clean`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ noise, lead }) })
+      .then((r) => j<RecordingResult>(r)),
+  deleteRecording: (projectId: string, name: string) =>
+    fetch(`/api/projects/${projectId}/recordings/${encodeURIComponent(name)}`, { method: "DELETE" }).then((r) => j<{ ok: true }>(r)),
+  recordingUrl: (projectId: string, name: string) => `/api/projects/${projectId}/recordings/${encodeURIComponent(name)}`,
 
   inputTargets: () => fetch("/api/input/targets").then((r) => j<{ available: boolean; error?: string; windows: InputTarget[]; screens: InputTarget[] }>(r)),
   sendInput: (msg: Record<string, unknown>) =>

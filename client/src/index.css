@@ -1399,3 +1399,44 @@ mark.hl:hover { filter: brightness(0.94); }
   background: var(--panel); box-shadow: var(--shadow-3); font-size: 12.5px;
 }
 .framer-point { max-width: 260px; }
+
+/* ============================================================
+   Recording for a beat
+   ============================================================ */
+/* In a corner, not over the middle: the beat stays on screen while its voice is recorded. */
+.beat-recorder {
+  position: fixed; right: 16px; bottom: 16px; z-index: 120; width: min(380px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px); overflow-y: auto; display: flex; flex-direction: column; gap: 10px;
+  padding: 14px 16px; background: var(--panel); border: 1px solid var(--border-strong);
+  border-radius: var(--r-lg); box-shadow: var(--shadow-3); font-size: 12.5px;
+}
+.beat-recorder .modal-head h3 { margin: 0; font-size: 14px; font-weight: 650; }
+.beat-recorder select { width: 100%; }
+.beat-recorder audio, .beat-recorder video { width: 100%; border-radius: var(--r-md); }
+.beat-recorder video { max-height: 190px; background: #000; }
+.rec-meter { height: 8px; border-radius: 999px; background: var(--panel-3); overflow: hidden; }
+.rec-meter span { display: block; height: 100%; background: var(--ok); transition: width 60ms linear; }
+.rec-meter span.clip { background: var(--danger); }
+.rec-facts { display: flex; gap: 10px; justify-content: space-between; }
+.rec-warn { margin: 0; padding: 6px 9px; border-radius: var(--r-md); background: color-mix(in srgb, var(--warn) 14%, var(--panel)); color: var(--warn); font-size: 12px; }
+.rec-room { gap: 8px; align-items: flex-start; flex-wrap: wrap; }
+.rec-verdict { flex: 1; min-width: 160px; line-height: 1.45; }
+.rec-verdict.ok { color: var(--ok); }
+.rec-verdict.warn { color: var(--warn); }
+.rec-verdict.fail { color: var(--danger); }
+.rec-block { display: flex; flex-direction: column; gap: 7px; padding-top: 10px; border-top: 1px solid var(--border); }
+.rec-block .row { gap: 8px; align-items: center; }
+.rec-title { display: flex; align-items: center; gap: 6px; font-weight: 650; font-size: 12.5px; }
+.rec-live { margin: 0; font-weight: 650; color: var(--danger); }
+.rec-live.quiet { color: var(--warn); }
+.rec-stop { background: var(--danger); border-color: var(--danger); }
+
+/* Before a take: the count, then a second of quiet. The count is never recorded; the quiet
+   second is, and is cut from the take. */
+.take-overlay {
+  position: fixed; inset: 0; z-index: 9500; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 14px; background: rgb(0 0 0 / 0.55); color: #fff; pointer-events: none;
+}
+.take-count { font-size: 120px; font-weight: 800; line-height: 1; }
+.take-quiet { font-size: 42px; font-weight: 700; }
+.take-hint { font-size: 15px; opacity: 0.85; }

@@ -79,6 +79,8 @@ than `file://`. That is why websockets, cookies and the `<sub>.localhost` proxy 
 | `electron/export.js` | exporting beats: renders the studio window at output size, photographs it, runs ffmpeg or prints the PDF |
 | `electron/export-video.js` | the ffmpeg graph, crops and file naming — pure, and tested with a real encode |
 | `client/src/exportPlan.ts` | export choices, lengths, vertical frames and capture zoom — pure and tested |
+| `server/recordings.js` | a beat's voice and takes: stored in `recordings/`, cleaned and remuxed with ffmpeg |
+| `client/src/components/BeatRecorder.tsx` | the recorder panel: microphone, level, room check, voice, take controls |
 | `client/src/App.tsx` | project state, layout, beats, the presenter bridge |
 | `client/src/Presenter.tsx` | the second window; holds no project state |
 
@@ -373,6 +375,33 @@ wait. The AI request aborts when the pane closes. Assume a recording is in progr
   workflow runs it; a checkout installed with scripts disabled has no `ffmpeg.exe`, and the
   test that encodes for real skips itself. With `asar: false` the packaged binary is found at
   the same `node_modules` path.
+- **Recordings live in `recordings/`, never `sources/`.** Anything in `sources/` is adopted as a
+  source on open. The original a recorder made is kept; the server makes what is played from
+  it (`<name>.clean.flac`, and a take's `<name>.video.webm`), so a different noise setting is
+  a re-clean, not a re-record. Replacing or removing a recording sends its files to the Recycle
+  Bin unless another beat — a duplicate — still uses them (`recordingInUse`).
+- **Every recording starts with a second of silence, and the cleaning depends on it.** `afftdn`
+  guessing the noise took off about 3 dB of pink noise; learning it from the lead-in
+  (`asendcmd … afftdn sn start/stop`) is what makes it work. The lead-in is trimmed from the
+  sound; a take's picture keeps it (a copy cannot cut between keyframes) and the export skips
+  it with `-ss lead`, so picture and sound agree.
+- **Never normalise a voice with single-pass `loudnorm`.** In its dynamic mode it lifts the
+  pauses, and brought the noise back up by as much as the denoiser had taken out. Loudness is
+  measured once (`ebur128`) and applied as one fixed gain; the expander's threshold is then set
+  relative to the known speech level. The real-encode test in `recording.test.ts` pins the
+  result: pauses more than 35 dB under speech at Strong, loudness within 1 LU of −16.
+- **Upload recordings as `application/octet-stream`.** MediaRecorder's type,
+  `video/webm;codecs=vp9,opus`, has a comma the body parser rejects, so `express.raw` skipped
+  the body and the take arrived as `{}`.
+- **A take records the page, not the window.** `record:self` makes the next `getDisplayMedia`
+  resolve to `win.webContents.mainFrame` (tab capture): no frame, title bar or taskbar, and it
+  records the emulated viewport. `record:view` renders it the way an export does — output
+  pixels, page zoom to the export layout — plus `scale: 1/zoom` in the emulation, so the window
+  shows the whole beat while the capture gets 1920 × 1080. `getDisplayMedia` needs the click's
+  user activation, so it is requested straight after the click, before the countdown.
+- **Chromium's fake media devices fake the screen too.** `--use-fake-device-for-media-stream`
+  gives a test microphone, and also replaces tab capture with a test pattern — test voice with
+  it, and takes without it, muted.
 - **The element being dragged must keep its identity.** Moving a drawing is a pointer capture
   on the shape; rendering the drag as a *different* element (a preview with another key) takes
   the captured node out of the document and the drag dies on the first move. The same element

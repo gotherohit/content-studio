@@ -35,8 +35,11 @@ export function cropBox(frame, picture) {
 /**
  * The filter graph and inputs for one video.
  *
- * `beats`: [{ still, width, height, seconds, transition, crop?, videos: [{ file, start, x, y, w, h, audio }] }]
- * where `width`/`height` are the still's pixels and a video's box is in those pixels too.
+ * `beats`: [{ still, width, height, seconds, transition, crop?, take?, voice?, videos: [{ file, start, x, y, w, h, audio }] }]
+ * where `width`/`height` are the still's pixels (or the take's) and a video's box is in those pixels too.
+ * `take`: { file, lead, sound? } — a recording of the beat on screen, played instead of the still, with
+ * its cleaned sound unless it was muted. `voice`: { file, delay } — narration recorded for the
+ * beat, starting `delay` seconds in so an incoming transition does not fade its first words.
  * `out`: { width, height, fps }.
  */
 export function videoGraph(beats, out, transitionSeconds) {
@@ -49,12 +52,31 @@ export function videoGraph(beats, out, transitionSeconds) {
   beats.forEach((beat, k) => {
     const frames = Math.max(1, Math.round(beat.seconds * fps));
     const length = frames / fps;
-    // A still is read once and repeated in memory: looping the file would decode it every frame.
-    const still = input(["-i", beat.still]);
     let layer = `b${k}_0`;
-    lines.push(`[${still}:v]loop=loop=${frames - 1}:size=1:start=0,setpts=N/(${fps}*TB),format=rgb24[${layer}]`);
-
     const sounds = [];
+    if (beat.take) {
+      // A take that ends before its beat holds its last frame; one that runs on is cut.
+      // Its sound was cleaned with the lead-in cut off; the picture skips it here, so they agree.
+      const take = input([...(beat.take.lead ? ["-ss", num(beat.take.lead)] : []), "-t", num(length), "-i", beat.take.file]);
+      lines.push(`[${take}:v]setpts=PTS-STARTPTS,fps=${fps},tpad=stop_mode=clone:stop_duration=${num(length)},trim=duration=${num(length)},format=rgb24[${layer}]`);
+      if (beat.take.sound) {
+        const sound = input(["-t", num(length), "-i", beat.take.sound]);
+        lines.push(`[${sound}:a]asetpts=PTS-STARTPTS,aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo[t${k}]`);
+        sounds.push(`[t${k}]`);
+      }
+    } else {
+      // A still is read once and repeated in memory: looping the file would decode it every frame.
+      const still = input(["-i", beat.still]);
+      lines.push(`[${still}:v]loop=loop=${frames - 1}:size=1:start=0,setpts=N/(${fps}*TB),format=rgb24[${layer}]`);
+    }
+    if (beat.voice) {
+      const voice = input(["-i", beat.voice.file]);
+      const ms = Math.round(beat.voice.delay * 1000);
+      lines.push(`[${voice}:a]asetpts=PTS-STARTPTS,aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo${ms ? `,adelay=${ms}:all=1` : ""}[n${k}]`);
+      sounds.push(`[n${k}]`);
+    }
+    // Under a voice, a video's own sound is turned down rather than talked over.
+    const under = beat.voice || beat.take?.sound ? ",volume=0.3" : "";
     beat.videos.forEach((video, j) => {
       const clip = input(["-ss", num(video.start), "-t", num(length), "-i", video.file]);
       const next = `b${k}_${j + 1}`;
@@ -63,7 +85,7 @@ export function videoGraph(beats, out, transitionSeconds) {
       lines.push(`[${layer}][m${k}_${j}]overlay=x=${Math.round(video.x)}:y=${Math.round(video.y)}:eof_action=repeat:format=rgb[${next}]`);
       layer = next;
       if (video.audio) {
-        lines.push(`[${clip}:a]asetpts=PTS-STARTPTS,aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo[s${k}_${j}]`);
+        lines.push(`[${clip}:a]asetpts=PTS-STARTPTS,aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo${under}[s${k}_${j}]`);
         sounds.push(`[s${k}_${j}]`);
       }
     });
@@ -75,7 +97,7 @@ export function videoGraph(beats, out, transitionSeconds) {
     if (!sounds.length) {
       lines.push(`anullsrc=r=48000:cl=stereo,atrim=duration=${num(length)},aformat=sample_fmts=fltp:channel_layouts=stereo[a${k}]`);
     } else {
-      // Two videos on one beat both play, so both are heard.
+      // Everything a beat plays is heard: its voice, its take, and any videos on it.
       const mixed = sounds.length > 1 ? `${sounds.join("")}amix=inputs=${sounds.length}:normalize=0:duration=longest,` : sounds[0];
       lines.push(`${mixed}apad=whole_dur=${num(length)},atrim=duration=${num(length)},asetpts=PTS-STARTPTS[a${k}]`);
     }
@@ -122,9 +144,11 @@ export function encoderArgs(out) {
 /** Length and whether there is sound, from what `ffmpeg -i` prints about a file. */
 export function parseProbe(text) {
   const d = /Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/.exec(text);
+  const v = /Stream #\d+:\d+[^\n]*: Video:[^\n]*?, (\d{2,5})x(\d{2,5})/.exec(text);
   return {
     duration: d ? Number(d[1]) * 3600 + Number(d[2]) * 60 + Number(d[3]) : null,
     audio: /Stream #\d+:\d+(?:\[[^\]]*\])?(?:\([^)]*\))?: Audio:/.test(text),
+    ...(v ? { width: Number(v[1]), height: Number(v[2]) } : {}),
   };
 }
 

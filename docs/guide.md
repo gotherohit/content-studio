@@ -499,6 +499,61 @@ Chapters and an edit map, from the take you just did. Start the clock when you s
 
 The log lives in the presenter window and is not saved — copy it before closing.
 
+### Recording a beat
+
+The **microphone** button on a beat applies it and opens its recorder in the corner, so the
+beat stays on screen while you talk about it. The button is highlighted once the beat has a
+recording.
+
+**The microphone.** Choose it from the list; the bar underneath is its live level. Talk as you
+will on camera and keep the bar well short of the end — the recorder warns when the level hits
+the top (clipping, which nothing can repair afterwards) or when your voice is very quiet. It
+also warns when the microphone is a Bluetooth headset: while recording, those fall back to
+telephone quality, and a USB or built-in microphone will sound far better.
+
+**Check the room** listens for three seconds while you stay quiet and says how noisy the room
+is, then picks the noise reduction to match.
+
+**Background noise reduction** is **Off**, **Light** or **Strong**:
+
+| | What it does |
+|---|---|
+| Off | Rumble below the voice removed, loudness evened out. Nothing else touched. |
+| Light | Also takes out steady noise — a fan, hum, hiss — and turns the pauses down gently. Right for most rooms. |
+| Strong | Takes out more and makes the pauses nearly silent. For noisy rooms; the voice can sound slightly processed. |
+
+Every recording is cleaned the same way: rumble filtered out, the steady noise learnt from the
+room and subtracted, the whole recording lifted or lowered to **−16 LUFS** (what YouTube plays
+at) by one fixed amount so the pauses are never pumped up, the pauses quietened, and the peaks
+kept below −1.5 dB. The browser's own call processing — echo cancelling, noise suppression,
+automatic gain — is off, because it smears a voice. Change the setting after recording and
+the recording is cleaned again from its original; there is no need to record again.
+
+**Record voice** starts with *Stay quiet* for one second — the app is listening to the room,
+which is what makes the noise reduction work — then *Speak now*. **Stop** when you are done;
+the cleaned recording appears with a player. **Record again** replaces it; **Remove** takes it
+away. In an export the beat plays its voice and lasts as long as it: the voice starts after
+the transition into the beat and the beat carries on long enough for the transition out, so
+no word is said during a cross-fade.
+
+**A take** records the beat on screen — you scroll, point, play a video, talk — and an export
+plays it instead of the beat's picture. Tick **Record my voice with it** for sound, or leave
+it unticked for a silent take (a recorded voice then plays under it). **Record a take** lays
+the screen out exactly as an export does, counts down from three while the beat settles, asks
+for one second of quiet, then records until you press **Esc**. The page is drawn at the
+export's resolution while you record — shrunk to fit your window, so you see the whole beat —
+and the take is recorded from the page itself: 1920 × 1080 at 1080p, sharp, with no window
+frame, title bar or taskbar in it. The beat lasts exactly as long as the take. **Mute it** or
+**Use its sound** switch its sound without recording again; **New take** replaces it.
+
+While a take records, the beats do not change. Scroll with the mouse wheel or **↑**/**↓**: in a
+live web page **←**, **→**, Page Down, Space, Home and End are kept for moving between beats,
+so during a take they do nothing.
+
+Recordings live in the project's `recordings` folder, next to `sources`. The original of each
+is kept, so it can be cleaned again; what the app plays is made from it. A recording you
+replace or remove goes to the Recycle Bin, unless a duplicated beat still uses it.
+
 ### Exporting beats as a video or a PDF
 
 The **download** button next to **+ Beat** exports the running order without recording
@@ -528,7 +583,10 @@ so does the presenter window if it is open. Everything goes back when it is done
 then runs by itself with a progress bar and **Cancel**; the studio is yours again.
 
 **The video** is H.264 (High profile) with AAC sound at 48 kHz in an MP4, with the index at the
-front — the format YouTube recommends for uploads. Beats without a video are silent.
+front — the format YouTube recommends for uploads. A beat is heard if it has a recorded voice,
+a take with sound, or a video playing; otherwise it is silent. Under a voice, a video's own
+sound is turned down rather than talked over. A beat with a take plays the take; its picture
+is not used. See [Recording a beat](#recording-a-beat).
 
 **Vertical exports** show a 9:16 part of each beat. **Frame the beats on screen…** lays the
 studio out exactly as it will be exported, with the first beat on it and a 9:16 box: drag the

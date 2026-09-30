@@ -14,6 +14,7 @@ import { attachTerminal } from "./terminal.js";
 import { createJupyter } from "./jupyter.js";
 import { createInput } from "./input.js";
 import { TYPES, viewerFor, safeName, uniqueName, removeAsset } from "./assets.js";
+import { derived, processRecording } from "./recordings.js";
 import { renderDeck, openSlideshow, hasPowerPoint, findSoffice } from "./slides.js";
 import { pickFolder } from "./picker.js";
 import { FilesError, MAX_BYTES, createEntry, deleteEntry, listDir, readText, renameEntry, statFile, writeText } from "./files.js";
@@ -72,6 +73,22 @@ app.put("/api/projects/:id/sources/:name", express.raw({ type: "*/*", limit: "1g
   const name = await uniqueName(dir, safeName(req.params.name));
   await fs.writeFile(path.join(dir, name), req.body);
   res.json(await describeSource(req.params.id, name));
+});
+
+// A beat's voice or take, as the recorder made it. Also before the JSON parser.
+const recordingsDir = (id) => path.join(config.dirOf(id) ?? "", "recordings");
+app.put("/api/projects/:id/recordings/:name", express.raw({ type: "*/*", limit: "4gb" }), async (req, res) => {
+  if (!safeId(req.params.id) || !config.dirOf(req.params.id)) return res.status(400).json({ error: "bad id" });
+  if (!Buffer.isBuffer(req.body) || !req.body.length) return res.status(400).json({ error: "The recording arrived empty." });
+  try {
+    const dir = recordingsDir(req.params.id);
+    await fs.mkdir(dir, { recursive: true });
+    const name = await uniqueName(dir, safeName(req.params.name));
+    await fs.writeFile(path.join(dir, name), req.body);
+    res.json(await processRecording(dir, name, String(req.query.noise || "light"), Number(req.query.lead) || 0));
+  } catch (e) {
+    res.status(500).json({ error: `The recording could not be saved: ${e.message}` });
+  }
 });
 
 // ---------- files pane ----------
@@ -378,6 +395,38 @@ app.delete("/api/projects/:id/sources/:name", async (req, res) => {
     await removeAsset(sourcesDir(req.params.id), name);
     // What was rendered from it is a cache and is rebuilt on demand, so it just goes.
     await fs.rm(derivedDir(req.params.id, name), { recursive: true, force: true });
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ---------- beat recordings ----------
+/** Clean an original again with a different amount of noise reduction. */
+app.post("/api/projects/:id/recordings/:name/clean", async (req, res) => {
+  if (!safeId(req.params.id) || !config.dirOf(req.params.id)) return res.status(400).json({ error: "bad id" });
+  try {
+    res.json(await processRecording(recordingsDir(req.params.id), safeName(req.params.name), String(req.body?.noise || "light"), Number(req.body?.lead) || 0));
+  } catch (e) {
+    res.status(500).json({ error: `The recording could not be cleaned: ${e.message}` });
+  }
+});
+
+app.get("/api/projects/:id/recordings/:name", (req, res) => {
+  if (!safeId(req.params.id) || !config.dirOf(req.params.id)) return res.status(400).end();
+  const name = safeName(req.params.name);
+  const ext = path.extname(name).toLowerCase();
+  res.type(ext === ".flac" ? "audio/flac" : ext === ".webm" ? "video/webm" : "application/octet-stream");
+  res.sendFile(path.join(recordingsDir(req.params.id), name), (err) => { if (err && !res.headersSent) res.status(404).end(); });
+});
+
+/** A recording and everything made from it go to the Recycle Bin together. */
+app.delete("/api/projects/:id/recordings/:name", async (req, res) => {
+  if (!safeId(req.params.id) || !config.dirOf(req.params.id)) return res.status(400).end();
+  const name = safeName(req.params.name);
+  const dir = recordingsDir(req.params.id);
+  try {
+    for (const file of [name, derived(name).clean, derived(name).video]) await removeAsset(dir, file);
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: e.message });

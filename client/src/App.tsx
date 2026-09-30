@@ -40,9 +40,11 @@ import { FilesPane } from "./components/FilesPane";
 import { NewProjectDialog } from "./components/NewProjectDialog";
 import { ExportDialog, defaultExportFolder, type ExportRun } from "./components/ExportDialog";
 import { ExportFramer } from "./components/ExportFramer";
-import { beatTiming, captureZoom, centredFrame, clampFrame, containedBox, exportSettings, exportViewport } from "./exportPlan";
+import { beatTimings, captureZoom, centredFrame, clampFrame, containedBox, exportSettings, exportViewport, outputSize } from "./exportPlan";
+import { BeatRecorder } from "./components/BeatRecorder";
+import { LEAD_SECONDS, micConstraints, recordingInUse, recordingName } from "./recording";
 import type { ExportPlanBeat, ExportVideo } from "./desktop";
-import type { BeatExport, ExportSettings, VerticalFrame } from "./types";
+import type { BeatExport, BeatTake, BeatVoice, ExportSettings, VerticalFrame } from "./types";
 
 const KINDS: { id: PaneKind; label: string }[] = [
   { id: "source", label: "Source" },
@@ -156,6 +158,13 @@ export default function App() {
   const [framing, setFraming] = useState<{ index: number; viewport: { width: number; height: number } } | null>(null);
   const framingRef = useRef(false);
   const framingBefore = useRef<{ stage: Stage; beat: string | null; present: boolean } | null>(null);
+  /** The beat whose recorder panel is open. */
+  const [recorderFor, setRecorderFor] = useState<string | null>(null);
+  /** A take being recorded: the window belongs to it until Esc. */
+  const [take, setTake] = useState<{ index: number; phase: "countdown" | "quiet" | "recording" | "saving"; count: number } | null>(null);
+  const takingRef = useRef(false);
+  const takeStop = useRef<(() => void) | null>(null);
+  const takeCancelled = useRef(false);
   /** Where the canvas is looking now, and where a beat wants it pointed. */
   const canvasViewRef = useRef<CanvasView | null>(null);
   const [canvasTarget, setCanvasTarget] = useState<CanvasView | null>(null);
@@ -209,6 +218,12 @@ export default function App() {
   beatsRef.current = beats;
   beatIndexRef.current = beatIndex;
   presentationKeyRef.current = (key) => {
+    // During a take the beats stay put; Esc — which a focused article forwards here — stops it.
+    if (takingRef.current) {
+      if (key !== "Escape") return false;
+      if (takeStop.current) takeStop.current(); else takeCancelled.current = true;
+      return true;
+    }
     if (!present || capturingRef.current || framingRef.current) return false;
     const last = beatsRef.current.length - 1;
     if (key === "Escape") { setPresent(false); return true; }
@@ -330,6 +345,11 @@ export default function App() {
       const typing = ["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName) || t.isContentEditable;
       // While the beats are photographed the only key is Esc, which stops it; the framer has its own.
       if (capturingRef.current) { if (e.key === "Escape") exportCancel.current = true; e.preventDefault(); e.stopImmediatePropagation(); return; }
+      // A take keeps the keyboard for the page — scrolling is part of it — except Esc, which stops it.
+      if (takingRef.current) {
+        if (e.key === "Escape") { presentationKeyRef.current("Escape"); e.preventDefault(); e.stopImmediatePropagation(); }
+        return;
+      }
       if (framingRef.current) return;
       if (navigation) { if (e.key === "Escape") { setNavigation(null); e.preventDefault(); } return; }
       if (e.altKey && !typing) {
@@ -934,7 +954,7 @@ export default function App() {
     const viewport = exportViewport(window.innerWidth, window.innerHeight);
     const frames = list.map((b) => clampFrame(b.export?.frame ?? centredFrame(viewport), viewport));
     const zoom = captureZoom(s, viewport, frames);
-    const timings = list.map((b) => beatTiming(b, s, project.sources, lengths));
+    const timings = beatTimings(list, s, project.sources, lengths);
     const before = { stage: captureStage(), beat: activeBeatId, present };
     const problems: string[] = [];
     const planned: ExportPlanBeat[] = [];
@@ -964,7 +984,12 @@ export default function App() {
         if (exportCancel.current) break;
         const videos = measureVideos();
         await desktop.exportFrame(i);
-        planned.push({ seconds: timings[i].seconds, transition: timings[i].transition, frame: frames[i], videos });
+        const beat = list[i];
+        planned.push({
+          seconds: timings[i].seconds, transition: timings[i].transition, frame: frames[i], videos,
+          voice: beat.voice ? { name: beat.voice.clean, delay: timings[i].voiceDelay } : undefined,
+          take: beat.take ? { name: beat.take.video, clean: beat.take.clean, muted: beat.take.muted, lead: beat.take.lead } : undefined,
+        });
       }
     } catch (e) {
       failure = (e as Error).message;
@@ -1004,6 +1029,114 @@ export default function App() {
       }
     } catch (e) {
       setExportRun({ phase: "error", message: (e as Error).message, problems });
+    }
+  }
+
+  // ---- recording for a beat
+  //
+  // Narration is recorded in the recorder panel with the beat on screen. A take is recorded
+  // here, because it takes over the window: the beat is laid out and drawn exactly as an export
+  // draws it, and the page records itself.
+
+  function openRecorder(id: string) {
+    const index = beats.findIndex((b) => b.id === id);
+    if (index < 0) return;
+    goToBeat(index);
+    setRecorderFor(id);
+  }
+
+  /** A beat's voice or take replaced or removed; the old files go unless another beat plays them. */
+  function setBeatRecording(id: string, kind: "voice" | "take", next: BeatVoice | BeatTake | undefined) {
+    const old = project?.beats.find((b) => b.id === id)?.[kind];
+    editBeat(id, (b) => ({ ...b, [kind]: next }));
+    if (project && old && old.file !== next?.file && !recordingInUse(project.beats, old.file, id)) {
+      api.deleteRecording(project.id, old.file).catch((e) => setError(`The old recording could not be removed: ${(e as Error).message}`));
+    }
+  }
+
+  async function startTake(index: number, options: { deviceId?: string; sound: boolean }) {
+    if (!desktop || !project) return;
+    const beat = project.beats[index];
+    if (!beat) return;
+    const s = exportSettings(project.settings.export);
+    const viewport = exportViewport(window.innerWidth, window.innerHeight);
+    const out = outputSize("landscape", s.quality);
+    const zoom = Math.min(4, Math.max(1, out.width / viewport.width));
+    const noise = project.settings.noise ?? "light";
+    const before = { stage: captureStage(), beat: activeBeatId, present };
+    const title = document.title;
+    let screen: MediaStream | null = null;
+    let mic: MediaStream | null = null;
+    let blob: Blob | null = null;
+    let lead = 0;
+    setRecorderFor(null);
+    takingRef.current = true;
+    takeCancelled.current = false;
+    takeStop.current = null;
+    setTake({ index, phase: "countdown", count: 3 });
+    setPresent(true);
+    try {
+      await desktop.recordView({ css: viewport, zoom });
+      // Asked for straight after the click, while the browser still counts it as the person's.
+      await desktop.recordSelf();
+      screen = await navigator.mediaDevices.getDisplayMedia({ video: { width: { ideal: out.width }, height: { ideal: out.height }, frameRate: { ideal: 30, max: 30 } }, audio: false });
+      if (options.sound) mic = await navigator.mediaDevices.getUserMedia({ audio: micConstraints(options.deviceId) });
+      goToBeat(index);
+      // The countdown doubles as the beat's time to load and settle; none of it is recorded.
+      for (let n = 3; n >= 1 && !takeCancelled.current; n--) {
+        setTake((t) => (t ? { ...t, count: n } : t));
+        await sleep(1000);
+      }
+      if (takeCancelled.current) throw new Error("cancelled");
+      const tracks = [...screen.getVideoTracks(), ...(mic?.getAudioTracks() ?? [])];
+      const mime = ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"].find((m) => MediaRecorder.isTypeSupported(m)) ?? "video/webm";
+      const rate = out.width >= 3840 ? 40e6 : out.width >= 2560 ? 24e6 : 16e6;
+      const rec = new MediaRecorder(new MediaStream(tracks), { mimeType: mime, videoBitsPerSecond: rate, audioBitsPerSecond: 256000 });
+      const chunks: Blob[] = [];
+      rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+      const stopped = new Promise((resolve) => { rec.onstop = resolve; });
+      rec.start(1000);
+      const started = performance.now();
+      // A second of the room for the cleaning to learn. It is recorded, and never played.
+      setTake((t) => (t ? { ...t, phase: "quiet" } : t));
+      await sleep(LEAD_SECONDS * 1000);
+      setTake((t) => (t ? { ...t, phase: "recording" } : t));
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      lead = Math.round((performance.now() - started)) / 1000;
+      document.title = `● Recording beat ${index + 1} — Esc stops`;
+      if (!takeCancelled.current) await new Promise<void>((resolve) => { takeStop.current = resolve; });
+      takeStop.current = null;
+      rec.stop();
+      await stopped;
+      blob = new Blob(chunks, { type: mime });
+    } catch (e) {
+      if ((e as Error).message !== "cancelled") setError(`The take could not be recorded: ${(e as Error).message}`);
+    } finally {
+      screen?.getTracks().forEach((t) => t.stop());
+      mic?.getTracks().forEach((t) => t.stop());
+      await desktop.recordView(null).catch(() => {});
+      document.title = title;
+      takingRef.current = false;
+      setPresent(before.present);
+      applyStage(before.stage);
+      setActiveBeatId(before.beat);
+    }
+    if (!blob) { setTake(null); if (takeCancelled.current) setNotice({ kind: "warn", text: "Take cancelled — nothing was recorded." }); return; }
+    setTake({ index, phase: "saving", count: 0 });
+    try {
+      const made = await api.uploadRecording(project.id, recordingName("take", beat.id), blob, noise, lead);
+      if (!made.video || !made.width || !made.height) throw new Error("The recording has no picture.");
+      setBeatRecording(beat.id, "take", {
+        file: made.file, video: made.video, clean: made.clean, seconds: made.seconds, noise: made.noise, lead: made.lead,
+        loudness: made.loudness, width: made.width, height: made.height, muted: !options.sound || !made.clean,
+        recordedAt: new Date().toISOString(),
+      });
+      setNotice({ kind: "ok", text: `Take saved for beat ${index + 1} — ${Math.round(made.seconds)} s at ${made.width} × ${made.height}` });
+    } catch (e) {
+      setError(`The take could not be saved: ${(e as Error).message}`);
+    } finally {
+      setTake(null);
+      setRecorderFor(beat.id);
     }
   }
 
@@ -1259,7 +1392,7 @@ export default function App() {
 
   return (
     <div className={`app ${present ? "present" : ""} ${collapsed ? "collapsed" : ""} ${capturing ? "exporting" : ""}`}>
-      {!capturing && <UpdateBanner onOpenSettings={() => setShowSettings(true)} />}
+      {!capturing && !take && <UpdateBanner onOpenSettings={() => setShowSettings(true)} />}
       {!present && !collapsed && (
         <Sidebar
           projects={projects}
@@ -1301,6 +1434,7 @@ export default function App() {
           onDuplicateBeat={copyBeat}
           undoLabel={beatUndo?.projectId === project?.id ? beatUndo?.label ?? null : null}
           onUndoBeat={undoBeatEdit}
+          onRecord={openRecorder}
           onRevealFolder={() => project?.dir && api.reveal(project.dir).catch((e) => setError(e.message))}
           onExport={() => { setExportRun(null); setExportOpen(true); }}
         />
@@ -1356,7 +1490,7 @@ export default function App() {
           </header>
         )}
 
-        {error && !capturing && <div className="error-bar" onClick={() => setError(null)}>{error}<X size={14} /></div>}
+        {error && !capturing && !take && <div className="error-bar" onClick={() => setError(null)}>{error}<X size={14} /></div>}
         {pendingLink && !present && (
           <div className="pick-bar" role="status">
             <Crosshair size={14} />
@@ -1393,7 +1527,7 @@ export default function App() {
           {dragging && <div className="drag-shield" />}
         </main>
 
-        {present && showHud && !capturing && !framing && beats.length > 0 && (
+        {present && showHud && !capturing && !framing && !take && beats.length > 0 && (
           <div className="beat-hud">
             <button className="icon-btn" title="Previous beat (←)" disabled={beatIndex <= 0} onClick={() => goToBeat(beatIndex - 1)}><ChevronLeft size={15} /></button>
             <span className="beat-hud-no">{beatIndex < 0 ? "—" : beatIndex + 1}/{beats.length}</span>
@@ -1403,12 +1537,35 @@ export default function App() {
           </div>
         )}
 
-        {present && !capturing && !framing && (
+        {present && !capturing && !framing && !take && (
           <button className="exit-present" onClick={() => setPresent(false)} title="Exit present mode (Esc)">
             <Maximize2 size={13} /> Exit
           </button>
         )}
       </div>
+
+      {take && take.phase !== "recording" && take.phase !== "saving" && (
+        <div className="take-overlay" role="status">
+          {take.phase === "countdown" ? <span className="take-count">{take.count}</span> : <span className="take-quiet">Stay quiet…</span>}
+          <span className="take-hint">{take.phase === "countdown" ? `Beat ${take.index + 1} — recording starts after the count. Esc stops.` : "Listening to the room for a second"}</span>
+        </div>
+      )}
+      {take?.phase === "saving" && <div className="capture-notice ok" role="status">Saving the take and cleaning its sound…</div>}
+
+      {recorderFor && project && !take && !capturing && !framing && beats.some((b) => b.id === recorderFor) && (
+        <BeatRecorder
+          key={recorderFor}
+          projectId={project.id}
+          beat={beats.find((b) => b.id === recorderFor)!}
+          index={beats.findIndex((b) => b.id === recorderFor)}
+          noise={project.settings.noise ?? "light"}
+          onNoise={(noise) => mutate((p) => ({ ...p, settings: { ...p.settings, noise } }))}
+          onVoice={(voice) => setBeatRecording(recorderFor, "voice", voice)}
+          onTake={(next) => setBeatRecording(recorderFor, "take", next)}
+          onStartTake={(options) => void startTake(beats.findIndex((b) => b.id === recorderFor), options)}
+          onClose={() => setRecorderFor(null)}
+        />
+      )}
 
       {/* Transparent, so it is not in the picture, but nothing can be clicked while it is taken. */}
       {capturing && <div className="export-shield" />}

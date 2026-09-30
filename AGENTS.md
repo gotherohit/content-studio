@@ -71,6 +71,11 @@ committing.
   it gets its own profile and single-instance lock instead of refusing to start. It is not
   isolated from the real project index — the scratch-project rules above still apply — and it
   must be closed when you finish, like any other test copy.
+- **Never record the real microphone in a test.** Launch the verification copy with
+  `--use-fake-device-for-media-stream --use-fake-ui-for-media-stream` to test voice recording
+  with Chromium's test tone. That switch also fakes screen capture, so test takes in a copy
+  without it, with the take's sound turned off. Opening the recorder panel opens the
+  microphone for its level meter even when nothing is recorded — say so if you do it.
 - **Exports write real files.** Export only from a scratch project, to its own `exports`
   folder, and remove what you made when finished.
 - **Deleting in a Files test puts a real file in the Recycle Bin.** Only delete scratch files

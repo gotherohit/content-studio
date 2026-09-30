@@ -2,6 +2,26 @@
 
 What changed in each release, newest first. Versions are the ones the app updates itself to.
 
+## 0.34.0
+
+- **Record your voice over a beat.** The microphone button on a beat opens its recorder: pick
+  the microphone, watch its level, and press **Record voice**. Each recording starts with a
+  second of silence while the app listens to the room; the sound is then cleaned — rumble and
+  steady background noise (fans, hum, hiss) taken out, pauses quietened, and the voice brought
+  to a steady −16 LUFS for YouTube. Background noise reduction is Off, Light or Strong, and can
+  be changed afterwards without recording again. An exported beat plays its voice and lasts as
+  long as it, with room for the transitions either side.
+- **Check the room.** Three seconds of silence tell you how noisy the room is and which noise
+  reduction to use. The recorder also warns when the level is clipping or too quiet, and when a
+  Bluetooth headset — telephone quality — is the microphone.
+- **Record a take of a beat.** A take records the beat on screen while you scroll, point, play
+  videos and talk, with your voice or muted. The screen is laid out and drawn exactly as an
+  export draws it, so the take is 1920 × 1080 (or the export's resolution) and sharp, while
+  your window shows the whole beat. An export plays the take instead of the beat's picture, and
+  the beat lasts as long as the take. A muted take can have a recorded voice under it.
+- Recordings are kept in the project's `recordings` folder, with the originals, so they can be
+  cleaned again; a replaced or removed recording goes to the Recycle Bin.
+
 ## 0.33.0
 
 - **Export the beats as a video.** The download button in the Beats section renders every
