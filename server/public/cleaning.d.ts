@@ -1,6 +1,8 @@
 export interface CleanTuning {
   /** Hz below which rumble is filtered out; 0 turns the filter off. */
   rumble: number;
+  /** How far steady noise is turned down, by its spectrum, in dB; 0 is not at all. */
+  staticDb: number;
   /** Share of the voice that may be the speech model's, 0–1. */
   speech: number;
   /** The same share between words. */

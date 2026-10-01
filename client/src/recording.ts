@@ -4,17 +4,23 @@ import type { Beat, NoiseReduction } from "./types";
 export const LEAD_SECONDS = 1;
 
 /**
- * What the microphone is asked for. The browser's own echo cancelling, noise suppression and
- * automatic gain are all off: they are built for calls, pump the level and smear the voice,
- * and the cleaning afterwards does a better job with the room sample in hand.
+ * What the microphone is asked for. Echo cancelling and automatic gain are off: they are built
+ * for calls, and pump the level and smear the voice.
+ *
+ * Noise suppression is on unless `suppress` is false. Chromium opens a Windows microphone in
+ * raw mode — it bypasses the sound driver's own clean-up, which every native recorder gets —
+ * so with all of its own processing off as well, the recording was the bare microphone: a
+ * laptop's built-in one gave static at -35 dB in a silent room, where the same microphone read
+ * -40 dB through the driver and -53 dB with Chromium's suppression. Static that loud cannot
+ * be taken out afterwards without taking the voice with it; it has to be kept out here.
  */
-export function micConstraints(deviceId?: string): MediaTrackConstraints {
+export function micConstraints(deviceId?: string, suppress = true): MediaTrackConstraints {
   return {
     ...(deviceId ? { deviceId: { exact: deviceId } } : {}),
     channelCount: 1,
     sampleRate: 48000,
     echoCancellation: false,
-    noiseSuppression: false,
+    noiseSuppression: suppress,
     autoGainControl: false,
   };
 }

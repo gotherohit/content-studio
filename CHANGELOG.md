@@ -2,6 +2,25 @@
 
 What changed in each release, newest first. Versions are the ones the app updates itself to.
 
+## 0.40.0
+
+- **Much less static in a recording.** The app was recording the bare microphone. Chromium
+  opens a Windows microphone in "raw" mode, past the sound driver's own clean-up that OBS and
+  every other native recorder gets, and the app had Chromium's own clean-up switched off as
+  well. On a laptop's built-in microphone, in a silent room, that was static at −35 dB; the
+  same microphone reads −40 dB through the driver and −53 dB with Chromium's noise suppression.
+  **Reduce microphone noise while recording**, on by default, turns that suppression on, so the
+  static is kept out as the sound is recorded — 18 dB less of it. Turn it off for a good USB or
+  studio microphone, to record exactly what it hears.
+- **Static and hiss removal**, a new step in the cleaning with its own slider. It learns the
+  steady noise from your pauses — which the app finds for itself — and subtracts it frequency by
+  frequency everywhere, including under your voice, leaving alone the frequencies where the
+  voice is louder than the noise. It is what an editor's "reduce noise" effect does. On real
+  takes it took 14–17 dB of static out of the pauses. It works on a recording's original, so
+  takes already recorded can be cleaned again with it.
+- The speech model's gate now follows the recording as it was, not the sound it is handed after
+  the static has been taken out, which it did not recognise as speech.
+
 ## 0.39.0
 
 - **Your voice is left alone.** Noise reduction used to run the speech model at full strength

@@ -78,6 +78,9 @@ committing.
   microphone for its level meter even when nothing is recorded — say so if you do it.
   The fake microphone is a beep, not a voice, and Light and Strong's speech model removes it:
   check a recording's sound path on the original's level, not the cleaned file's.
+  Reading the real microphone's *level* — a noise floor, through ffmpeg to `-f null` or a Web
+  Audio analyser — is not recording it, as long as nothing is written anywhere; say that you
+  did it and what you read.
 - **Tune the cleaning on copies.** When a real recording of the creator's is the best test of
   the noise removal, copy it into the scratchpad and work on the copy; never process, restore
   or rewrite it where it is, including in the Recycle Bin.

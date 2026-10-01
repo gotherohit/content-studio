@@ -23,7 +23,7 @@ interface Props {
   framing: TakeFraming;
   onFraming: (framing: TakeFraming) => void;
   /** A take takes over the window, so the app runs it; this panel closes for it. */
-  onStartTake: (options: { deviceId?: string; sound: boolean; gainDb: number }) => void;
+  onStartTake: (options: { deviceId?: string; sound: boolean; gainDb: number; suppress: boolean }) => void;
   /** Write the take as an MP4 with its sound into the export folder; resolves to the file. */
   onSaveTake?: () => Promise<string | null>;
   onReveal?: (file: string) => void;
@@ -34,10 +34,14 @@ const lsGet = (k: string) => { try { return localStorage.getItem(k) ?? ""; } cat
 const lsSet = (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* ignore */ } };
 const NOISE_LABEL: Record<NoiseReduction, string> = { off: "Off", light: "Light", strong: "Strong", custom: "Custom" };
 
+const SUPPRESS_INFO = "Takes the microphone's own hiss and static out as it is recorded, the way a video call does. Leave it on for a laptop's built-in microphone, which is very noisy without it. Turn it off for a good USB or studio microphone, to record exactly what it hears — the cleaning below still applies. It cannot be undone on a recording once made.";
+
 /** The settings behind the cleaning, in the order the sound goes through them. */
 const TUNING: { key: keyof CleanTuning; label: string; min: number; max: number; step: number; show: (v: number) => string; scale?: number; info: string }[] = [
   { key: "rumble", label: "Rumble filter", min: 0, max: 150, step: 5, show: (v) => (v > 0 ? `${v} Hz` : "Off"),
     info: "Cuts everything below this pitch: desk bumps, traffic rumble, a fan's hum. A voice has almost nothing down there. Higher removes more rumble; above about 120 Hz a deep voice starts to sound thin." },
+  { key: "staticDb", label: "Static and hiss removal", min: 0, max: 30, step: 1, show: (v) => (v > 0 ? `${v} dB` : "Off"),
+    info: "Takes out steady noise — a microphone's hiss, static, a constant hum — by learning its sound in your pauses and subtracting it everywhere, even under your voice. It leaves the voice alone where the voice is louder than the noise. Very high settings can make what is left sound watery." },
   { key: "speech", label: "Clean-up while you speak", min: 0, max: 100, step: 5, scale: 100, show: (v) => `${v}%`,
     info: "How much noise is taken out from under your voice. Higher is cleaner, but in a noisy room it makes some words dull or cuts into them. At 50% it can never take more than 6 dB off a word; at 100% nothing protects your voice." },
   { key: "pauseMix", label: "Clean-up in pauses", min: 0, max: 100, step: 5, scale: 100, show: (v) => `${v}%`,
@@ -70,6 +74,8 @@ export function BeatRecorder(p: Props) {
   const [sound, setSound] = useState(true);
   const [gainDb, setGainDb] = useState(() => clampGain(Number(lsGet(gainKey(lsGet("micDevice")))) || 0));
   const [auto, setAuto] = useState(false);
+  // On unless it has been turned off: the bare microphone is far noisier than any other recorder hears it.
+  const [suppress, setSuppress] = useState(lsGet("micSuppress") !== "0");
   const [micLabel, setMicLabel] = useState({ label: "", rate: 0 });
   const [saved, setSaved] = useState<{ state: "saving" } | { state: "done"; file: string } | null>(null);
   const [info, setInfo] = useState<string | null>(null);
@@ -90,7 +96,7 @@ export function BeatRecorder(p: Props) {
     let boosted: ReturnType<typeof boostedMic> | null = null;
     (async () => {
       try {
-        opened = await navigator.mediaDevices.getUserMedia({ audio: micConstraints(deviceId || undefined) });
+        opened = await navigator.mediaDevices.getUserMedia({ audio: micConstraints(deviceId || undefined, suppress) });
         if (!live) { opened.getTracks().forEach((t) => t.stop()); return; }
         const track = opened.getAudioTracks()[0];
         setMicLabel({ label: track?.label ?? "", rate: track?.getSettings().sampleRate ?? 0 });
@@ -132,7 +138,7 @@ export function BeatRecorder(p: Props) {
       opened?.getTracks().forEach((t) => t.stop());
       setStream(null);
     };
-  }, [deviceId]);
+  }, [deviceId, suppress]);
 
   function changeGain(db: number) {
     const next = clampGain(db);
@@ -297,6 +303,13 @@ export function BeatRecorder(p: Props) {
           </button>
         </div>
       </label>
+      <div className="rec-suppress">
+        <label className="check"><input type="checkbox" checked={suppress} disabled={busy || auto}
+          onChange={(e) => { setSuppress(e.target.checked); lsSet("micSuppress", e.target.checked ? "1" : "0"); setRoom(null); clippedAt.current = 0; }} /> Reduce microphone noise while recording</label>
+        <button className={`icon-btn rec-info ${info === "suppress" ? "active" : ""}`} aria-label="What reducing microphone noise does" aria-expanded={info === "suppress"}
+          title={SUPPRESS_INFO} onClick={() => setInfo(info === "suppress" ? null : "suppress")}><Info size={12} /></button>
+      </div>
+      {info === "suppress" && <p className="muted small rec-info-text">{SUPPRESS_INFO}</p>}
       <div className="muted small rec-facts">
         {label && <span className="ellipsis">{label}</span>}
         {rate && <span>{rate / 1000} kHz</span>}
@@ -401,7 +414,7 @@ export function BeatRecorder(p: Props) {
         <div className="row">
           <label className="check"><input type="checkbox" checked={sound} disabled={busy} onChange={(e) => setSound(e.target.checked)} /> Record my voice with it</label>
           <span className="grow" />
-          <button className="primary small" disabled={busy || auto || !!error && !stream} onClick={() => p.onStartTake({ deviceId: deviceId || undefined, sound, gainDb })}>
+          <button className="primary small" disabled={busy || auto || !!error && !stream} onClick={() => p.onStartTake({ deviceId: deviceId || undefined, sound, gainDb, suppress })}>
             <Circle size={12} /> {p.beat.take ? "New take" : "Record a take"}
           </button>
         </div>

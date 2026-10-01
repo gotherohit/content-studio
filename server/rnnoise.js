@@ -8,6 +8,7 @@
 // frames late; the stream here takes float PCM in and gives float PCM out, the same length and
 // back in time with the input. It also reports how likely each frame is to hold a voice, which
 // is what lets the voice be left alone and only the pauses be scrubbed.
+import fs from "node:fs";
 import { Transform } from "node:stream";
 
 /** Samples RNNoise's output lags its input by: two frames, 20 ms, measured against a real voice. */
@@ -55,9 +56,11 @@ export const HANGOVER = 30;
  * - in a pause, the output is RNNoise's alone (`pauseMix`), turned down to `pause`.
  *
  * "Speaking" starts LOOKAHEAD before the first frame RNNoise is sure of and lasts HANGOVER
- * after the last, and the change between the two is a ramp, never a step.
+ * after the last, and the change between the two is a ramp, never a step. `activity` is
+ * `voiceActivity` of the untouched recording, for when what is streamed in has been cleaned
+ * already.
  */
-export function rnnoiseStream(rn, { speech = 1, pause = 1, pauseMix = 1 } = {}) {
+export function rnnoiseStream(rn, { speech = 1, pause = 1, pauseMix = 1, activity = null } = {}) {
   const n = rn.frameSize;
   const lag = DELAY / n;
   const state = rn.createDenoiseState();
@@ -88,7 +91,11 @@ export function rnnoiseStream(rn, { speech = 1, pause = 1, pauseMix = 1 } = {}) 
   const process = (stream, input) => {
     frame.set(input);
     for (let i = 0; i < n; i++) frame[i] *= 32768;
-    if (state.processFrame(frame) >= SPEECH) lastSpeech = calls;
+    // Where the words are is judged on the recording as it was (`activity`, when given): sound
+    // that has already had its static taken out no longer looks like speech to the model, and
+    // it would shut the gate on the voice.
+    const heard = state.processFrame(frame);
+    if ((activity ? activity[calls] ?? 0 : heard) >= SPEECH) lastSpeech = calls;
     inputs.push(Float32Array.from(input));
     // RNNoise's output is `lag` frames late: this is the sound of the frame given `lag` calls ago.
     if (calls >= lag) {
@@ -147,4 +154,43 @@ export function rnnoiseStream(rn, { speech = 1, pause = 1, pauseMix = 1 } = {}) 
       }
     },
   });
+}
+
+/**
+ * How likely each 10 ms of a recording is to hold a voice: RNNoise's own judgement, for a file
+ * of 32-bit float mono PCM. One number per frame.
+ */
+export async function voiceActivity(rn, file) {
+  const n = rn.frameSize;
+  const state = rn.createDenoiseState();
+  const frame = new Float32Array(n);
+  const activity = [];
+  let filled = 0;
+  let spare = Buffer.alloc(0);
+  try {
+    for await (const chunk of fs.createReadStream(file)) {
+      const bytes = spare.length ? Buffer.concat([spare, chunk]) : chunk;
+      const whole = bytes.length - (bytes.length % 4);
+      spare = Buffer.from(bytes.subarray(whole));
+      for (let at = 0; at < whole; at += 4) {
+        frame[filled++] = bytes.readFloatLE(at) * 32768;
+        if (filled === n) { activity.push(state.processFrame(frame)); filled = 0; }
+      }
+    }
+  } finally {
+    state.destroy();
+  }
+  return Float32Array.from(activity);
+}
+
+/**
+ * Whether the samples from `from` to `to` are clear of speech: nothing RNNoise half-believes
+ * is a voice within them, or within a fifth of a second either side — a word's start and tail
+ * are quiet enough to be missed, and must not be learnt as noise.
+ */
+export function isPause(activity, from, to, frameSize = 480) {
+  const first = Math.max(0, Math.floor(from / frameSize) - 20), last = Math.min(activity.length - 1, Math.ceil(to / frameSize) + 20);
+  if (last < first) return false;
+  for (let i = first; i <= last; i++) if (activity[i] >= 0.3) return false;
+  return true;
 }

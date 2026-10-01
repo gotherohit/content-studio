@@ -82,6 +82,7 @@ than `file://`. That is why websockets, cookies and the `<sub>.localhost` proxy 
 | `server/recordings.js` | a beat's voice and takes: stored in `recordings/`, cleaned and remuxed with ffmpeg |
 | `server/rnnoise.js` | RNNoise as WebAssembly: a stream of float PCM in, denoised and back in time out, gated by its own voice detection |
 | `server/public/cleaning.js` | the cleaning presets and the tuning behind them — shared by the server and the recorder panel |
+| `server/spectral.js` | steady noise learnt from the pauses and subtracted by its spectrum: a streamed STFT, pure and tested |
 | `client/src/components/BeatRecorder.tsx` | the recorder panel: microphone, level, room check, voice, take controls |
 | `client/src/App.tsx` | project state, layout, beats, the presenter bridge |
 | `client/src/Presenter.tsx` | the second window; holds no project state |
@@ -388,6 +389,26 @@ wait. The AI request aborts when the pane closes. Assume a recording is in progr
   keeps its full lead — its picture shows the "stay quiet" card until then — and its picture
   file keeps the lead in it (a copy cannot cut between keyframes); the export and Save as MP4
   skip it with `-ss lead`, so picture and sound agree.
+- **Chromium records a Windows microphone raw.** It opens it with `AUDCLNT_STREAMOPTIONS_RAW`,
+  which bypasses the sound driver's processing — what OBS and every native recorder gets — and
+  Electron 44 has no switch for it. With `noiseSuppression` off as well (it was, to keep the
+  voice natural) the recording is the bare microphone. Measured in a silent room on a laptop's
+  Realtek microphone: -35 dB raw, -40 dB through DirectShow (the driver's mode), -53 dB with
+  Chromium's suppression on. A voice 8 dB over its static cannot be cleaned afterwards. So
+  `micConstraints` suppresses unless told not to; echo cancelling and automatic gain stay off.
+  "It sounds worse than OBS" is a capture problem before it is a cleaning problem — measure
+  the floor each way before touching the chain.
+- **Static is taken out by its spectrum, ahead of the speech model** (`server/spectral.js`):
+  learnt from the pauses RNNoise finds (`voiceActivity`, `isPause`), subtracted everywhere. Two
+  things it took to work. The level a frequency is judged by must be an average over frames and
+  neighbours, following only a clear onset at once — a peak-follower over-read static by
+  several dB and let it through as signal. And the speech model's gate must then be driven by
+  `activity` measured on the untouched sound: sound with its static removed no longer looks
+  like speech to RNNoise, and its gate shut on the voice.
+- **A level measured during speech stops meaning "the voice" when the noise is as loud as the
+  voice.** On takes with static 4–9 dB under the voice, removing the static alone made "voice
+  down more than 6 dB" read 60–90 %. Do not tune by it there; say that it cannot be judged
+  without listening, and give the creator samples of their own recording to compare.
 - **The speech model must never have the whole voice.** RNNoise at full strength, on real takes
   in a noisy room (room -27 dB, voice -19), pulled the voice's 3–8 kHz down by more than 6 dB in
   40–69 % of speaking moments — words went dull — and `afftdn` and a level-driven `agate` after

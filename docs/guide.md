@@ -511,6 +511,15 @@ the top (clipping, which nothing can repair afterwards) or when your voice is ve
 also warns when the microphone is a Bluetooth headset: while recording, those fall back to
 telephone quality, and a USB or built-in microphone will sound far better.
 
+**Reduce microphone noise while recording** is on unless you turn it off, and it matters more
+than any setting further down. Without it the app records the bare microphone: its own hiss
+and static, with none of the clean-up a sound driver or a video call applies. A laptop's
+built-in microphone is very noisy that way — static only a few dB under a quiet voice — and
+noise that close to the voice cannot be taken out afterwards without taking some of the voice
+with it. With it on, the static is kept out as the sound is recorded. Turn it off for a good
+USB or studio microphone, to record exactly what it hears. It is part of the recording: it
+cannot be changed on a recording once made, only for the next one.
+
 **Microphone boost** turns the microphone up or down, from −12 to +24 dB, before anything is
 recorded; the level bar shows the boosted sound, so what you see is what is recorded. Press
 **Auto** and talk for five seconds as you will on camera: the boost is set so your loud moments
@@ -531,7 +540,8 @@ is, then picks the noise reduction to match.
 | Strong | The model gets 70 % while you speak — cleaner under the voice, at most about 10 dB off a word — and the pauses are made silent. For noisy rooms; a word can still sound a little dull. |
 | Custom | Your own settings, below. |
 
-The cleaning uses RNNoise, a small speech model from Xiph that runs inside the app. It takes
+The cleaning has two parts. Steady noise is taken out by its spectrum, learnt from your
+pauses. Then comes RNNoise, a small speech model from Xiph that runs inside the app. It takes
 out what is not a voice — fans, hum, keyboards, traffic, hiss — and it says where the words
 are. That second part is what protects your voice: the model is only allowed part of the sound
 while you are speaking, and works at full strength in the gaps, which open a little before each
@@ -545,6 +555,7 @@ if you can, get the microphone closer or the room quieter — nothing done after
 | Setting | What it does |
 |---|---|
 | Rumble filter | Cuts everything below this pitch: bumps, traffic, a fan's hum. Above about 120 Hz a deep voice starts to sound thin. |
+| Static and hiss removal | Takes out steady noise — a microphone's hiss, static, a constant hum — by learning its sound in your pauses and subtracting it everywhere, even under your voice, where the voice is not louder than it. What an editor's "reduce noise" does. Very high settings can make what is left sound watery. |
 | Clean-up while you speak | How much noise is taken from under your voice. Higher is cleaner but can dull words; at 50 % it can never take more than 6 dB off one. |
 | Clean-up in pauses | How much noise is taken out between words, where there is no voice to harm. |
 | Pause volume | How far the gaps are turned down on top of that; −30 dB is silence. Very quiet pauses beside a noisy voice make the background come and go with your words. |

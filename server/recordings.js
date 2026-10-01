@@ -10,13 +10,14 @@
 // start talking early, so it is not taken on trust: the recording is measured first, the room's
 // level is read from its quietest stretch, and a voice's lead-in is only cut up to the first word.
 import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
+import { createReadStream, existsSync } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { pipeline } from "node:stream/promises";
 import ffmpegPath from "ffmpeg-static";
 import { parseProbe } from "../electron/export-video.js";
-import { loadRnnoise, rnnoiseStream } from "./rnnoise.js";
+import { isPause, loadRnnoise, rnnoiseStream, voiceActivity } from "./rnnoise.js";
+import { noiseProfile, spectralStream } from "./spectral.js";
 import { LEVELS, PRESETS, tuningFor } from "./public/cleaning.js";
 
 const n3 = (n) => String(Math.round(n * 1000) / 1000);
@@ -211,29 +212,42 @@ async function analyse(file) {
 }
 
 /**
- * The recording's sound, decoded and high-passed, through RNNoise (unless noise reduction is
- * off), into a float WAV that every later pass reads. RNNoise runs once, streamed, so a long
- * take is never held in memory.
+ * The recording's sound, decoded and high-passed, with its static subtracted and then through
+ * RNNoise — whichever of those the tuning asks for — into a float WAV that every later pass
+ * reads. Each stage is streamed, so a long take is never held in memory; the decoded sound is
+ * kept in a file for the length of this, because learning the static means reading it twice.
  */
 async function denoiseToFile(file, dest, tuning) {
-  const decode = spawn(ffmpegPath, ["-hide_banner", "-loglevel", "error", "-i", file, "-map", "0:a:0", "-af", decodeFilter(tuning), "-f", "f32le", "-"], { windowsHide: true });
-  const encode = spawn(ffmpegPath, ["-hide_banner", "-loglevel", "error", "-y", "-f", "f32le", "-ar", "48000", "-ac", "1", "-i", "-", "-c:a", "pcm_f32le", dest], { windowsHide: true });
-  let log = "";
-  for (const child of [decode, encode]) child.stderr.on("data", (b) => { log = (log + b).slice(-4000); });
-  const exited = (child) => new Promise((resolve, reject) => { child.on("error", reject); child.on("close", resolve); });
-  const done = Promise.all([exited(decode), exited(encode)]);
-  const use = modelUse(tuning);
-  const stages = use ? [decode.stdout, rnnoiseStream(await loadRnnoise(), use), encode.stdin] : [decode.stdout, encode.stdin];
+  const raw = `${dest}.raw`;
   try {
-    await pipeline(...stages);
-  } catch (e) {
-    decode.kill();
-    encode.kill();
-    await done.catch(() => {});
-    throw new Error(`The noise could not be removed: ${log.trim() || e.message}`);
+    await run(["-i", file, "-map", "0:a:0", "-af", decodeFilter(tuning), "-f", "f32le", raw]);
+    const stages = [createReadStream(raw)];
+    const use = modelUse(tuning);
+    const rn = use || tuning.staticDb > 0 ? await loadRnnoise() : null;
+    // Where the words are, judged once on the sound as it was recorded: the static is learnt
+    // from the pauses between them, and the speech model's gate follows them.
+    const activity = rn ? await voiceActivity(rn, raw) : null;
+    if (tuning.staticDb > 0) {
+      const profile = await noiseProfile(raw, (from, to) => isPause(activity, from, to));
+      if (profile) stages.push(spectralStream(profile, tuning.staticDb));
+    }
+    if (use) stages.push(rnnoiseStream(rn, { ...use, activity }));
+    const encode = spawn(ffmpegPath, ["-hide_banner", "-loglevel", "error", "-y", "-f", "f32le", "-ar", "48000", "-ac", "1", "-i", "-", "-c:a", "pcm_f32le", dest], { windowsHide: true });
+    let log = "";
+    encode.stderr.on("data", (b) => { log = (log + b).slice(-4000); });
+    const done = new Promise((resolve, reject) => { encode.on("error", reject); encode.on("close", resolve); });
+    try {
+      await pipeline(...stages, encode.stdin);
+    } catch (e) {
+      encode.kill();
+      await done.catch(() => {});
+      throw new Error(`The noise could not be removed: ${log.trim() || e.message}`);
+    }
+    const code = await done;
+    if (code !== 0) throw new Error(`The cleaned sound could not be written: ${log.trim() || `ffmpeg stopped (${code})`}`);
+  } finally {
+    await fs.rm(raw, { force: true });
   }
-  const [a, b] = await done;
-  if (a !== 0 || b !== 0) throw new Error(`The sound could not be decoded: ${log.trim() || `ffmpeg stopped (${a}, ${b})`}`);
 }
 
 /**

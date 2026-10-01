@@ -23,14 +23,19 @@ const voice = (seconds: number, file = "voice-a.webm"): BeatVoice => ({ file, cl
 const take = (seconds: number, file = "take-a.webm"): BeatTake => ({ file, video: "take-a.video.webm", seconds, noise: "light", lead: 1, width: 1920, height: 1080, muted: false, recordedAt: "" });
 const beat = (extra: Partial<Beat> = {}): Beat => ({ id: Math.random().toString(36).slice(2), point: "", stage, createdAt: "", ...extra });
 
-test("the microphone is recorded as it is: the browser's call processing is all off", () => {
+// Chromium opens a Windows microphone raw, past the driver's clean-up; with its own suppression
+// off too, a laptop microphone recorded static at -35 dB in a silent room.
+test("the microphone's static is kept out as it is recorded, unless asked for raw; nothing pumps the level", () => {
   const c = micConstraints("usb-mic");
   assert.deepEqual(c.deviceId, { exact: "usb-mic" });
+  assert.equal(c.noiseSuppression, true);
   assert.equal(c.echoCancellation, false);
-  assert.equal(c.noiseSuppression, false);
   assert.equal(c.autoGainControl, false);
   assert.equal(c.sampleRate, 48000);
   assert.equal(micConstraints().deviceId, undefined);
+  const raw = micConstraints("usb-mic", false);
+  assert.equal(raw.noiseSuppression, false);
+  assert.equal(raw.autoGainControl, false);
 });
 
 test("levels are measured in dB below full scale", () => {
@@ -137,11 +142,12 @@ test("every cleaning setting can be tuned, is kept in range, and falls back to t
   assert.deepEqual(tuningFor("custom"), PRESETS.light);
   assert.deepEqual(tuningFor("custom", { speech: 0.3 } as never), { ...PRESETS.light, speech: 0.3 });
   // Out of range, wrong and empty values are put right, never passed to ffmpeg.
-  assert.deepEqual(cleanTuning({ rumble: 9999, speech: -1, pauseMix: "abc", pauseDb: -500, compress: 0, loudness: "" }),
-    { rumble: LIMITS.rumble[1], speech: 0, pauseMix: PRESETS.light.pauseMix, pauseDb: LIMITS.pauseDb[0], compress: 1, loudness: PRESETS.light.loudness });
+  assert.deepEqual(cleanTuning({ rumble: 9999, staticDb: 99, speech: -1, pauseMix: "abc", pauseDb: -500, compress: 0, loudness: "" }),
+    { rumble: LIMITS.rumble[1], staticDb: LIMITS.staticDb[1], speech: 0, pauseMix: PRESETS.light.pauseMix, pauseDb: LIMITS.pauseDb[0], compress: 1, loudness: PRESETS.light.loudness });
   assert.equal(cleanTuning({ rumble: 10 }).rumble, 0, "a filter too low to matter is off");
   // An upload carries the tuning as text; it comes back the same, and junk comes back as nothing.
-  const mine = { rumble: 100, speech: 0.35, pauseMix: 0.9, pauseDb: -14, compress: 3, loudness: -18 };
+  const mine = { rumble: 100, staticDb: 15, speech: 0.35, pauseMix: 0.9, pauseDb: -14, compress: 3, loudness: -18 };
+  assert.ok(PRESETS.off.staticDb === 0 && PRESETS.light.staticDb > 0 && PRESETS.strong.staticDb > PRESETS.light.staticDb);
   assert.deepEqual(parseTuning(tuningText(mine)), mine);
   assert.equal(parseTuning("1,2,3"), null);
   assert.equal(parseTuning(undefined), null);
@@ -462,4 +468,91 @@ test("the recorder's level message keeps its place, and every cleaning setting h
   assert.match(css, /\.rec-status \{[^}]*min-height:/);
   for (const key of Object.keys(LIMITS)) assert.match(panel, new RegExp(`key: "${key}"[^\\n]*\\n\\s*info: "[^"]{40,}"`), `${key} has a slider and an explanation`);
   assert.match(panel, /Reset to defaults/);
+});
+
+// Static is steady: it sounds the same in a pause as under a word, so it is learnt in the
+// pauses and subtracted everywhere.
+test("steady static is learnt from the pauses and taken out, leaving a tone above it alone", async () => {
+  const { fft, noiseProfile, spectralStream, SIZE } = await import("../server/spectral.js");
+  // The transform undoes itself.
+  const re = Float32Array.from({ length: SIZE }, (_, i) => Math.sin(i / 3) + 0.2 * Math.cos(i / 17)), im = new Float32Array(SIZE), was = Float32Array.from(re);
+  fft(re, im); fft(re, im, true);
+  assert.ok(re.every((v, i) => Math.abs(v - was[i]) < 1e-4), "forward then inverse gives the signal back");
+
+  const rate = 48000, len = rate * 4;
+  const noise = new Float32Array(len), tone = new Float32Array(len);
+  let seed = 4321;
+  for (let i = 0; i < len; i++) {
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+    noise[i] = (seed / 0x7fffffff - 0.5) * 0.06;
+    // A steady 1 kHz tone from 2 s on: the "voice", far above the static at its frequency.
+    if (i >= rate * 2) tone[i] = 0.2 * Math.sin((2 * Math.PI * 1000 * i) / rate);
+  }
+  const x = Float32Array.from(noise, (v, i) => v + tone[i]);
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cs-static-"));
+  try {
+    const file = path.join(dir, "x.raw");
+    fs.writeFileSync(file, Buffer.from(x.buffer));
+    // The first two seconds are the pause.
+    const profile = await noiseProfile(file, (_from: number, to: number) => to <= rate * 2);
+    assert.ok(profile && profile.length === SIZE / 2 + 1);
+    const run = async (input: Float32Array, amount: number, chunk: number, using = profile) => {
+      const stream = spectralStream(using, amount);
+      const out: Buffer[] = [];
+      stream.on("data", (b: Buffer) => out.push(b));
+      const bytes = Buffer.from(input.buffer);
+      for (let at = 0; at < bytes.length; at += chunk) stream.write(bytes.subarray(at, at + chunk));
+      await new Promise((resolve) => stream.end(resolve));
+      const all = Buffer.concat(out);
+      return new Float32Array(all.buffer.slice(all.byteOffset, all.byteOffset + all.length));
+    };
+    const rms = (a: Float32Array, from: number, to: number) => { let e = 0; for (let i = from; i < to; i++) e += a[i] ** 2; return 10 * Math.log10(e / (to - from) + 1e-15); };
+    // Nothing to remove: what comes out is what went in, sample for sample, the same length.
+    const same = await run(x, 20, 4001, new Float32Array(SIZE / 2 + 1));
+    assert.equal(same.length, len);
+    assert.ok(same.every((v, i) => Math.abs(v - x[i]) < 1e-5), "transparent with an empty profile");
+    const y = await run(x, 20, 7777);
+    assert.equal(y.length, len);
+    // The static in the pause comes down by most of what was asked for…
+    const pause = rms(y, rate * 0.5, rate * 1.8) - rms(x, rate * 0.5, rate * 1.8);
+    assert.ok(pause < -15, `static in the pause is down ${pause.toFixed(1)} dB`);
+    // …and so does the static under the tone, while the tone itself is left where it was.
+    const under = await run(noise, 20, 7777);
+    assert.ok(rms(under, rate * 2.5, rate * 3.8) - rms(noise, rate * 2.5, rate * 3.8) < -15, "static alone is taken out throughout");
+    const kept = rms(y, rate * 2.5, rate * 3.8) - rms(tone, rate * 2.5, rate * 3.8);
+    assert.ok(Math.abs(kept) < 0.6, `the tone is kept: ${kept.toFixed(2)} dB`);
+    // The same sound gives the same result, whatever sizes it arrives in.
+    assert.ok(Buffer.from((await run(x, 20, 65536)).buffer).equals(Buffer.from(y.buffer)), "deterministic");
+    // With too little pause to learn from, the quietest each frequency gets stands in.
+    assert.ok((await noiseProfile(file, () => false))!.some((v: number) => v > 0));
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// Sound with its static already taken out no longer looks like speech to the model, which then
+// shut its gate on the voice.
+test("the speech gate follows the recording as it was, not the cleaned sound it is given", async () => {
+  const { rnnoiseStream, isPause } = await import("../server/rnnoise.js");
+  const n = 480, frames = 300;
+  const x = new Float32Array(frames * n).fill(0.25);
+  // A model that hears no voice at all in what it is given, and removes everything.
+  const deaf = { frameSize: n, createDenoiseState: () => ({ processFrame(frame: Float32Array) { frame.fill(0); return 0; }, destroy() {} }) };
+  const activity = Float32Array.from({ length: frames }, (_, i) => (i >= 100 && i < 200 ? 0.95 : 0.02));
+  const run = async (given: Float32Array | null) => {
+    const stream = rnnoiseStream(deaf as never, { speech: 0.5, pause: 0.03, activity: given });
+    const out: Buffer[] = [];
+    stream.on("data", (b: Buffer) => out.push(b));
+    stream.write(Buffer.from(x.buffer));
+    await new Promise((resolve) => stream.end(resolve));
+    const all = Buffer.concat(out);
+    return new Float32Array(all.buffer.slice(all.byteOffset, all.byteOffset + all.length));
+  };
+  const at = (y: Float32Array, frame: number) => 20 * Math.log10(Math.max(1e-9, Math.abs(y[frame * n + n - 1]) / 0.25));
+  assert.ok(Math.abs(at(await run(activity), 150) + 6.02) < 0.05, "open where the recording had speech");
+  assert.ok(at(await run(null), 150) < -100, "left to itself the deaf model shuts the gate");
+  // A pause is only a pause well clear of any speech.
+  assert.equal(isPause(activity, 10 * n, 60 * n), true);
+  assert.equal(isPause(activity, 70 * n, 85 * n), false, "within a fifth of a second of a word");
+  assert.equal(isPause(activity, 120 * n, 140 * n), false);
 });

@@ -1055,7 +1055,7 @@ export default function App() {
     }
   }
 
-  async function startTake(index: number, options: { deviceId?: string; sound: boolean; gainDb: number }) {
+  async function startTake(index: number, options: { deviceId?: string; sound: boolean; gainDb: number; suppress: boolean }) {
     if (!desktop || !project) return;
     const beat = project.beats[index];
     if (!beat) return;
@@ -1087,7 +1087,7 @@ export default function App() {
       // beat is cut away afterwards. Asking for 1920 × 1080 padded a smaller window with black.
       screen = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: { ideal: 30, max: 30 } }, audio: false });
       if (options.sound) {
-        mic = await navigator.mediaDevices.getUserMedia({ audio: micConstraints(options.deviceId) });
+        mic = await navigator.mediaDevices.getUserMedia({ audio: micConstraints(options.deviceId, options.suppress) });
         // The same boost the recorder's meter was set with.
         boosted = boostedMic(mic, options.gainDb);
         await boosted.ctx.resume();

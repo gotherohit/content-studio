@@ -5,6 +5,7 @@
 //
 // A tuning is every choice in the chain:
 //   rumble    Hz below which rumble is filtered out (0 turns the filter off)
+//   staticDb  how far steady noise — hiss, static — is turned down, by its spectrum, in dB
 //   speech    share of the voice that may be the speech model's, 0–1: the model can take at
 //             most that share of the level off a word, the rest is the recording as it was
 //   pauseMix  the same share between words
@@ -22,16 +23,16 @@ export const LEVELS = ["off", "light", "strong", "custom"];
  * with the words; Strong gives the model 70 % and makes the pauses silent.
  */
 export const PRESETS = {
-  off: { rumble: 85, speech: 0, pauseMix: 0, pauseDb: 0, compress: 1, loudness: -16 },
-  light: { rumble: 85, speech: 0.5, pauseMix: 0.8, pauseDb: -6, compress: 2.5, loudness: -16 },
-  strong: { rumble: 85, speech: 0.7, pauseMix: 1, pauseDb: -30, compress: 2.5, loudness: -16 },
+  off: { rumble: 85, staticDb: 0, speech: 0, pauseMix: 0, pauseDb: 0, compress: 1, loudness: -16 },
+  light: { rumble: 85, staticDb: 10, speech: 0.5, pauseMix: 0.8, pauseDb: -6, compress: 2.5, loudness: -16 },
+  strong: { rumble: 85, staticDb: 18, speech: 0.7, pauseMix: 1, pauseDb: -30, compress: 2.5, loudness: -16 },
 };
 
 /** What a new custom tuning starts from, and what anything missing falls back to. */
 export const DEFAULT_TUNING = PRESETS.light;
 
 export const LIMITS = {
-  rumble: [0, 200], speech: [0, 1], pauseMix: [0, 1], pauseDb: [-60, 0], compress: [1, 6], loudness: [-24, -12],
+  rumble: [0, 200], staticDb: [0, 30], speech: [0, 1], pauseMix: [0, 1], pauseDb: [-60, 0], compress: [1, 6], loudness: [-24, -12],
 };
 
 /** A saved tuning with anything missing, wrong or out of range put right. */

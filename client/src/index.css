@@ -1426,6 +1426,7 @@ mark.hl:hover { filter: brightness(0.94); }
 /* Always two lines tall, whatever it says, so nothing under it ever moves. */
 .rec-status { margin: 0; padding: 6px 9px; min-height: calc(2 * 1.45em + 12px); box-sizing: border-box; border-radius: var(--r-md); font-size: 12px; line-height: 1.45; color: var(--muted); background: var(--panel-2, var(--panel-3)); }
 .rec-status.warn { background: color-mix(in srgb, var(--warn) 14%, var(--panel)); color: var(--warn); }
+.rec-suppress { display: flex; align-items: center; gap: 4px; }
 .rec-tune { border: 1px solid var(--border); border-radius: var(--r-md); padding: 6px 9px; }
 .rec-tune summary { cursor: pointer; display: flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; list-style: none; }
 .rec-tune[open] summary { margin-bottom: 6px; }
