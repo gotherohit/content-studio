@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { Circle, Clapperboard, Download, Ear, FolderOpen, Mic, Square, Trash2, Volume2, VolumeX, Wand2, X } from "lucide-react";
+import { Circle, Clapperboard, Download, Ear, FolderOpen, Info, Mic, RotateCcw, SlidersHorizontal, Square, Trash2, Volume2, VolumeX, Wand2, X } from "lucide-react";
+import { sameTuning, tuningFor, type CleanTuning } from "../../../server/public/cleaning.js";
 import type { Beat, BeatTake, BeatVoice, NoiseReduction, TakeFraming } from "../types";
 import { api } from "../api";
 import {
@@ -13,6 +14,9 @@ interface Props {
   index: number;
   noise: NoiseReduction;
   onNoise: (noise: NoiseReduction) => void;
+  /** The project's custom cleaning settings, used when `noise` is `custom`; undefined puts the defaults back. */
+  tuning?: CleanTuning;
+  onTuning: (tuning: CleanTuning | undefined) => void;
   onVoice: (voice: BeatVoice | undefined) => void;
   onTake: (take: BeatTake | undefined) => void;
   /** How a take becomes 16:9 — the project's export setting, shared with the export dialog. */
@@ -28,7 +32,23 @@ interface Props {
 
 const lsGet = (k: string) => { try { return localStorage.getItem(k) ?? ""; } catch { return ""; } };
 const lsSet = (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* ignore */ } };
-const NOISE_LABEL: Record<NoiseReduction, string> = { off: "Off", light: "Light", strong: "Strong" };
+const NOISE_LABEL: Record<NoiseReduction, string> = { off: "Off", light: "Light", strong: "Strong", custom: "Custom" };
+
+/** The settings behind the cleaning, in the order the sound goes through them. */
+const TUNING: { key: keyof CleanTuning; label: string; min: number; max: number; step: number; show: (v: number) => string; scale?: number; info: string }[] = [
+  { key: "rumble", label: "Rumble filter", min: 0, max: 150, step: 5, show: (v) => (v > 0 ? `${v} Hz` : "Off"),
+    info: "Cuts everything below this pitch: desk bumps, traffic rumble, a fan's hum. A voice has almost nothing down there. Higher removes more rumble; above about 120 Hz a deep voice starts to sound thin." },
+  { key: "speech", label: "Clean-up while you speak", min: 0, max: 100, step: 5, scale: 100, show: (v) => `${v}%`,
+    info: "How much noise is taken out from under your voice. Higher is cleaner, but in a noisy room it makes some words dull or cuts into them. At 50% it can never take more than 6 dB off a word; at 100% nothing protects your voice." },
+  { key: "pauseMix", label: "Clean-up in pauses", min: 0, max: 100, step: 5, scale: 100, show: (v) => `${v}%`,
+    info: "How much noise is taken out between words, where there is no voice to harm. 100% leaves only what sounds like a voice." },
+  { key: "pauseDb", label: "Pause volume", min: -40, max: 0, step: 1, show: (v) => (v < 0 ? `${v} dB` : "Unchanged"),
+    info: "How far the gaps between words are turned down on top of that. 0 leaves them alone; −30 dB is silence. Very quiet pauses beside a noisy voice make the background come and go with your words — keep this closer to 0 if you hear that." },
+  { key: "compress", label: "Even out loudness", min: 1, max: 5, step: 0.5, show: (v) => (v > 1 ? `${v}:1` : "Off"),
+    info: "Brings loud and quiet words closer together so the whole recording sits at a steady level. Higher is steadier but less natural, and it lifts the noise under quiet words." },
+  { key: "loudness", label: "Loudness", min: -23, max: -12, step: 1, show: (v) => `${v} LUFS`,
+    info: "How loud the finished voice is. −16 LUFS is what YouTube plays at; louder than about −14 gains nothing, as YouTube turns it down." },
+];
 
 /**
  * Recording for one beat: narration spoken over it, or a take of it on screen.
@@ -52,6 +72,8 @@ export function BeatRecorder(p: Props) {
   const [auto, setAuto] = useState(false);
   const [micLabel, setMicLabel] = useState({ label: "", rate: 0 });
   const [saved, setSaved] = useState<{ state: "saving" } | { state: "done"; file: string } | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
+  const clippedAt = useRef(0);
   const samples = useRef<Float32Array<ArrayBuffer> | null>(null);
   const analyser = useRef<AnalyserNode | null>(null);
   const recorder = useRef<MediaRecorder | null>(null);
@@ -89,6 +111,7 @@ export function BeatRecorder(p: Props) {
           const rms = levelDb(samples.current!), peak = peakDb(samples.current!);
           setLevel({ rms, peak });
           setLoudest((was) => Math.max(was - 0.15, peak));
+          if (peak > CLIP_DB) clippedAt.current = performance.now();
           frame = requestAnimationFrame(tick);
         };
         tick();
@@ -118,6 +141,7 @@ export function BeatRecorder(p: Props) {
     lsSet(gainKey(deviceId || undefined), String(next));
     // A clip heard at the old boost says nothing about the new one.
     setLoudest(-100);
+    clippedAt.current = 0;
   }
 
   /** Listen while the person talks as they will on camera, and set the boost from it. */
@@ -186,9 +210,9 @@ export function BeatRecorder(p: Props) {
 
   async function saveVoice(blob: Blob) {
     try {
-      const made = await api.uploadRecording(p.projectId, recordingName("voice", p.beat.id), blob, p.noise, LEAD_SECONDS);
+      const made = await api.uploadRecording(p.projectId, recordingName("voice", p.beat.id), blob, p.noise, LEAD_SECONDS, undefined, p.noise === "custom" ? current : undefined);
       if (!made.clean) throw new Error("No sound was recorded. Check the microphone's level.");
-      p.onVoice({ file: made.file, clean: made.clean, seconds: made.seconds, noise: made.noise, lead: made.lead, loudness: made.loudness, recordedAt: new Date().toISOString() });
+      p.onVoice({ file: made.file, clean: made.clean, seconds: made.seconds, noise: made.noise, tuning: made.tuning, lead: made.lead, loudness: made.loudness, recordedAt: new Date().toISOString() });
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -196,20 +220,27 @@ export function BeatRecorder(p: Props) {
     }
   }
 
-  /** Try a different amount of noise reduction on what is already recorded. */
-  async function reclean(noise: NoiseReduction) {
+  // What the chosen level does, setting by setting; for `custom`, the project's own.
+  const current = tuningFor(p.noise, p.tuning);
+  /** Whether a recording was cleaned with something other than what is chosen now. */
+  const stale = (rec: { noise: NoiseReduction; tuning?: CleanTuning } | undefined, noise = p.noise, tune = current) =>
+    Boolean(rec) && (rec!.noise !== noise || (noise === "custom" && !sameTuning(rec!.tuning, tune)));
+
+  /** Clean what is already recorded again, from its original, with a different level or tuning. */
+  async function reclean(noise: NoiseReduction, tune: CleanTuning = tuningFor(noise, p.tuning)) {
     p.onNoise(noise);
     setError(null);
+    const custom = noise === "custom" ? tune : undefined;
     try {
-      if (p.beat.voice && p.beat.voice.noise !== noise) {
+      if (p.beat.voice && stale(p.beat.voice, noise, tune)) {
         setPhase("saving");
-        const made = await api.recleanRecording(p.projectId, p.beat.voice.file, noise, p.beat.voice.lead);
-        p.onVoice({ ...p.beat.voice, clean: made.clean ?? p.beat.voice.clean, noise: made.noise, seconds: made.seconds, loudness: made.loudness });
+        const made = await api.recleanRecording(p.projectId, p.beat.voice.file, noise, p.beat.voice.lead, custom);
+        p.onVoice({ ...p.beat.voice, clean: made.clean ?? p.beat.voice.clean, noise: made.noise, tuning: made.tuning, seconds: made.seconds, loudness: made.loudness });
       }
-      if (p.beat.take?.clean && p.beat.take.noise !== noise) {
+      if (p.beat.take?.clean && stale(p.beat.take, noise, tune)) {
         setPhase("saving");
-        const made = await api.recleanRecording(p.projectId, p.beat.take.file, noise, p.beat.take.lead);
-        p.onTake({ ...p.beat.take, clean: made.clean, noise: made.noise });
+        const made = await api.recleanRecording(p.projectId, p.beat.take.file, noise, p.beat.take.lead, custom);
+        p.onTake({ ...p.beat.take, clean: made.clean, noise: made.noise, tuning: made.tuning });
       }
     } catch (e) {
       setError((e as Error).message);
@@ -221,7 +252,16 @@ export function BeatRecorder(p: Props) {
   const busy = phase !== "idle";
   const verdict = typeof room === "number" ? roomVerdict(room) : null;
   const meter = Math.max(0, Math.min(100, ((level.rms + 70) / 70) * 100));
-  const clipping = loudest > CLIP_DB;
+  // Held for a few seconds, and shown in a space that is always there: a warning that came and
+  // went with every loud word moved everything under it, and the buttons slid out from under
+  // the pointer.
+  const clipping = clippedAt.current > 0 && performance.now() - clippedAt.current < 4000;
+  const tooQuiet = !clipping && phase === "recording" && loudest < QUIET_DB && elapsed > 3;
+  const waiting = Boolean((p.beat.voice && stale(p.beat.voice)) || (p.beat.take?.clean && stale(p.beat.take)));
+  const setTune = (key: keyof CleanTuning, value: number) => {
+    p.onTuning({ ...current, [key]: value });
+    if (p.noise !== "custom") p.onNoise("custom");
+  };
 
   return (
     <div className="beat-recorder" role="dialog" aria-label={`Record for beat ${p.index + 1}`}>
@@ -262,8 +302,11 @@ export function BeatRecorder(p: Props) {
         {rate && <span>{rate / 1000} kHz</span>}
       </div>
       {isBluetoothMic(label) && <p className="rec-warn">This looks like a Bluetooth headset. Its microphone records at telephone quality — a USB or built-in microphone will sound far better.</p>}
-      {clipping && <p className="rec-warn">Too loud: the level is hitting the top. {gainDb > 0 ? "Turn the boost down, or press Auto." : "Turn the microphone's level down in Windows sound settings, or move back a little."}</p>}
-      {!clipping && phase === "recording" && loudest < QUIET_DB && elapsed > 3 && <p className="rec-warn">Very quiet: move closer to the microphone, or turn the boost up.</p>}
+      <p className={`rec-status ${clipping || tooQuiet ? "warn" : ""}`} role="status">
+        {clipping ? `Too loud: the level is hitting the top. ${gainDb > GAIN_MIN ? "Turn the boost down, or press Auto." : "Turn the microphone's level down in Windows sound settings, or move back a little."}`
+          : tooQuiet ? "Very quiet: move closer to the microphone, or turn the boost up."
+          : "Talk as you will on camera. The bar should stay short of the end."}
+      </p>
 
       <div className="row rec-room">
         <button className="ghost small" disabled={!stream || busy || room === "measuring"} onClick={checkRoom} title="Stay quiet for three seconds while the microphone listens to the room">
@@ -277,8 +320,41 @@ export function BeatRecorder(p: Props) {
           {(["off", "light", "strong"] as NoiseReduction[]).map((n) => (
             <button key={n} className={p.noise === n ? "active" : ""} disabled={busy} onClick={() => void reclean(n)}>{NOISE_LABEL[n]}</button>
           ))}
+          <button className={p.noise === "custom" ? "active" : ""} disabled={busy} title="Your own settings, below"
+            onClick={() => { if (!p.tuning) p.onTuning({ ...current }); p.onNoise("custom"); }}>{NOISE_LABEL.custom}</button>
         </div>
       </label>
+      <details className="rec-tune">
+        <summary><SlidersHorizontal size={12} /> Fine-tune the cleaning</summary>
+        <p className="muted small">These are what {p.noise === "custom" ? "your custom setting" : NOISE_LABEL[p.noise]} does. Move one and the setting becomes Custom.</p>
+        {TUNING.map((t) => {
+          const value = Math.round(current[t.key] * (t.scale ?? 1) * 100) / 100;
+          return (
+            <div className="rec-tune-row" key={t.key}>
+              <div className="row">
+                <span className="rec-tune-label">{t.label}</span>
+                <button className={`icon-btn rec-info ${info === t.key ? "active" : ""}`} title={t.info} aria-label={`What ${t.label} does`} aria-expanded={info === t.key}
+                  onClick={() => setInfo(info === t.key ? null : t.key)}><Info size={12} /></button>
+                <span className="grow" />
+                <span className="rec-gain-value">{t.show(value)}</span>
+              </div>
+              <input type="range" min={t.min} max={t.max} step={t.step} value={value} disabled={busy} aria-label={t.label}
+                onChange={(e) => setTune(t.key, Number(e.target.value) / (t.scale ?? 1))} />
+              {info === t.key && <p className="muted small rec-info-text">{t.info}</p>}
+            </div>
+          );
+        })}
+        <div className="row">
+          {waiting && (
+            <button className="primary small" disabled={busy} onClick={() => void reclean("custom", current)} title="Clean this beat's recording again, from its original, with these settings">
+              Clean again with these settings
+            </button>
+          )}
+          <span className="grow" />
+          <button className="ghost small" disabled={busy || (p.noise === "light" && !p.tuning)} title="Back to Light, the default, and forget the custom settings"
+            onClick={() => { p.onTuning(undefined); void reclean("light"); }}><RotateCcw size={12} /> Reset to defaults</button>
+        </div>
+      </details>
 
       <div className="rec-block">
         <div className="rec-title"><Mic size={13} /> Voice over this beat</div>

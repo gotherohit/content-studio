@@ -11,8 +11,10 @@ import {
 } from "../client/src/recording.ts";
 import { beatTimings, exportSettings, VOICE_TAIL } from "../client/src/exportPlan.ts";
 import {
-  cleanFilter, DECODE, denoiseFilter, derived, finishFilter, frameLevels, parseLoudness, parsePicture, pictureFilter, RNN_MIX, processRecording, quietSpan, roomLevel, TARGET_LUFS, voiceStart,
+  cleanFilter, compressFilter, DECODE, decodeFilter, derived, finishFilter, frameLevels, modelUse, NOISE, parseLoudness, parsePicture, pictureFilter, processRecording, quietSpan,
+  roomLevel, TARGET_LUFS, trimFilter, voiceStart,
 } from "../server/recordings.js";
+import { cleanTuning, DEFAULT_TUNING, LIMITS, parseTuning, PRESETS, sameTuning, tuningFor, tuningText } from "../server/public/cleaning.js";
 import { framingFilter, parseProbe, takeGraph, videoGraph } from "../electron/export-video.js";
 import type { Beat, BeatTake, BeatVoice, Stage } from "../client/src/types.ts";
 
@@ -105,25 +107,51 @@ test("a voice's lead-in is cut only up to the first word said in it", () => {
   assert.equal(voiceStart(early, f, 0), 0);
 });
 
-test("cleaning tells the spectral pass the room's level, and never normalises dynamically", () => {
+test("cleaning favours the voice: the model is capped while speaking, and nothing else touches it", () => {
+  // While someone speaks the model gets at most this share, so it can never take more than
+  // 6 dB (light) or about 10 dB (strong) off a word.
+  assert.ok(PRESETS.light.speech <= 0.5 && PRESETS.strong.speech <= 0.7, JSON.stringify(PRESETS));
+  assert.ok(PRESETS.strong.pauseDb <= -25 && PRESETS.light.pauseDb >= -12, "strong silences pauses, light only lowers them");
+  assert.equal(TARGET_LUFS, -16);
+  assert.deepEqual(NOISE, ["off", "light", "strong", "custom"]);
+  assert.equal(decodeFilter(PRESETS.light), DECODE);
   assert.match(DECODE, /channel_layouts=mono,highpass=f=85,highpass=f=85$/);
-  assert.deepEqual(RNN_MIX, { off: 0, light: 0.9, strong: 1 });
-  const strong = denoiseFilter("strong", 1, -35);
-  // A -35 dB room: afftdn told a floor of -55 instead of assuming -50.
-  assert.match(strong, /afftdn=nr=18:nf=-55/);
-  assert.match(strong, /atrim=start=1,asetpts=PTS-STARTPTS$/);
-  assert.doesNotMatch(strong, /arnndn/, "ffmpeg's RNNoise gives a different result on every other run");
-  assert.match(denoiseFilter("light", 0, -35), /afftdn=nr=10:nf=-45$/);
-  assert.doesNotMatch(denoiseFilter("off", 1, -35), /afftdn/);
-  const whole = cleanFilter("light", 1, -40, 10, 3);
-  // The expander works at the known level, before the compressor can lift the pauses.
-  assert.match(whole, /volume=10dB,agate=threshold=0\.025:range=0\.25[^,]*,acompressor=[^,]*,volume=3dB,alimiter/);
-  assert.doesNotMatch(whole, /loudnorm|dynaudnorm/);
-  assert.match(whole, /alimiter=limit=0\.84/);
-  assert.match(cleanFilter("strong", 1, -40, 0, 0), /agate=threshold=0\.03:range=0\.06/);
+  assert.match(trimFilter(1), /atrim=start=1,asetpts=PTS-STARTPTS$/);
+  assert.doesNotMatch(trimFilter(0), /atrim/);
+  const whole = cleanFilter(PRESETS.strong, 1, 10, 3);
+  assert.match(whole, /volume=10dB,acompressor=threshold=0\.1:ratio=2\.5[^,]*,volume=3dB,alimiter=limit=0\.84/);
+  // Each of these dulled or clipped a real voice, or was not repeatable.
+  assert.doesNotMatch(whole, /arnndn|afftdn|agate|loudnorm|dynaudnorm/);
   assert.match(finishFilter(2), /^volume=2dB,alimiter/);
-  assert.doesNotMatch(cleanFilter("off", 1, -40, 0, 0), /agate|acompressor/);
+  assert.doesNotMatch(cleanFilter(PRESETS.off, 1, 0, 0), /acompressor/);
+  assert.equal(modelUse(PRESETS.off), null, "Off never runs the speech model");
+  assert.deepEqual(modelUse(PRESETS.light), { speech: 0.5, pauseMix: 0.8, pause: 10 ** (-6 / 20) });
   assert.equal(parseLoudness("Summary:\n  Integrated loudness:\n    I:         -23.4 LUFS\n"), -23.4);
+});
+
+test("every cleaning setting can be tuned, is kept in range, and falls back to the defaults", () => {
+  assert.deepEqual(DEFAULT_TUNING, PRESETS.light);
+  assert.deepEqual(tuningFor("light"), PRESETS.light);
+  assert.deepEqual(tuningFor("nonsense"), PRESETS.light);
+  // Custom with nothing saved is the default; a saved one is used, with anything missing filled in.
+  assert.deepEqual(tuningFor("custom"), PRESETS.light);
+  assert.deepEqual(tuningFor("custom", { speech: 0.3 } as never), { ...PRESETS.light, speech: 0.3 });
+  // Out of range, wrong and empty values are put right, never passed to ffmpeg.
+  assert.deepEqual(cleanTuning({ rumble: 9999, speech: -1, pauseMix: "abc", pauseDb: -500, compress: 0, loudness: "" }),
+    { rumble: LIMITS.rumble[1], speech: 0, pauseMix: PRESETS.light.pauseMix, pauseDb: LIMITS.pauseDb[0], compress: 1, loudness: PRESETS.light.loudness });
+  assert.equal(cleanTuning({ rumble: 10 }).rumble, 0, "a filter too low to matter is off");
+  // An upload carries the tuning as text; it comes back the same, and junk comes back as nothing.
+  const mine = { rumble: 100, speech: 0.35, pauseMix: 0.9, pauseDb: -14, compress: 3, loudness: -18 };
+  assert.deepEqual(parseTuning(tuningText(mine)), mine);
+  assert.equal(parseTuning("1,2,3"), null);
+  assert.equal(parseTuning(undefined), null);
+  assert.ok(sameTuning(mine, { ...mine }) && !sameTuning(mine, { ...mine, pauseDb: -15 }) && !sameTuning(mine, undefined));
+  // Each setting reaches the chain.
+  assert.doesNotMatch(decodeFilter({ ...mine, rumble: 0 }), /highpass/);
+  assert.match(decodeFilter(mine), /highpass=f=100,highpass=f=100$/);
+  assert.match(compressFilter(mine, 0), /acompressor=threshold=0\.079:ratio=3:/);
+  assert.doesNotMatch(compressFilter({ ...mine, compress: 1 }, 0), /acompressor/);
+  assert.deepEqual(modelUse(mine), { speech: 0.35, pauseMix: 0.9, pause: 10 ** (-14 / 20) });
 });
 
 test("a take plays instead of the still, from after its lead-in, and narration sits under the beat", () => {
@@ -242,8 +270,8 @@ test("RNNoise keeps the sound in time and the same length, and gives the same re
   const len = 48000 + 123;
   const input = new Float32Array(len);
   for (let i = 0; i < len; i++) input[i] = 0.3 * Math.sin(i / 7) * Math.sin(i / 900) + 0.01 * Math.sin(i * 1.7);
-  const run = async (mix: number, chunk: number) => {
-    const stream = rnnoiseStream(rn, mix);
+  const run = async (options: { speech?: number; pause?: number; pauseMix?: number }, chunk: number) => {
+    const stream = rnnoiseStream(rn, options);
     const out: Buffer[] = [];
     stream.on("data", (b: Buffer) => out.push(b));
     const bytes = Buffer.from(input.buffer);
@@ -254,11 +282,11 @@ test("RNNoise keeps the sound in time and the same length, and gives the same re
     return new Float32Array(all.buffer.slice(all.byteOffset, all.byteOffset + all.length));
   };
   // With none of the model mixed in, what comes out is exactly what went in: the delay is undone.
-  const dry = await run(0, 4001);
+  const dry = await run({ speech: 0, pause: 1, pauseMix: 0 }, 4001);
   assert.equal(dry.length, len);
   assert.deepEqual(Array.from(dry.subarray(0, 2000)), Array.from(input.subarray(0, 2000)));
   assert.deepEqual(Array.from(dry.subarray(len - 2000)), Array.from(input.subarray(len - 2000)));
-  const a = await run(1, 777), b = await run(1, 65536);
+  const a = await run({ speech: 0.7, pause: 0.03 }, 777), b = await run({ speech: 0.7, pause: 0.03 }, 65536);
   assert.equal(a.length, len);
   assert.deepEqual(Buffer.from(a.buffer), Buffer.from(b.buffer));
 });
@@ -376,4 +404,62 @@ test("fit and fill work for any window shape: laptop, ultrawide, portrait and 16
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
+});
+
+// At full strength the model took bites out of a real voice: one speaking moment in five came
+// out more than 6 dB down, and words went dull. The cap is what stops that. A stand-in for the
+// model is used here — it says exactly when there is speech, and removes everything, the worst
+// it could do — so the cap and the gate's timing are checked to the frame.
+test("the voice is never pulled down by more than its cap, and the gate opens before a word and closes after it", async () => {
+  const { rnnoiseStream, LOOKAHEAD, HANGOVER } = await import("../server/rnnoise.js");
+  const n = 480, frames = 500, speechFrom = 100, speechTo = 300;
+  const x = new Float32Array(frames * n).fill(0.25);
+  const fake = (delay = 2) => ({
+    frameSize: n,
+    createDenoiseState() {
+      let call = 0;
+      return {
+        // The real model's output is two frames late, so its verdict on a frame comes as that frame goes in.
+        processFrame(frame: Float32Array) { const speaking = call >= speechFrom && call < speechTo; call++; void delay; frame.fill(0); return speaking ? 0.95 : 0.02; },
+        destroy() {},
+      };
+    },
+  });
+  const run = async (options: { speech: number; pause: number; pauseMix?: number }) => {
+    const stream = rnnoiseStream(fake() as never, options);
+    const out: Buffer[] = [];
+    stream.on("data", (b: Buffer) => out.push(b));
+    stream.write(Buffer.from(x.buffer));
+    await new Promise((resolve) => stream.end(resolve));
+    const all = Buffer.concat(out);
+    return new Float32Array(all.buffer.slice(all.byteOffset, all.byteOffset + all.length));
+  };
+  // Level of a frame against the input, in dB.
+  const at = (y: Float32Array, frame: number) => 20 * Math.log10(Math.max(1e-9, Math.abs(y[frame * n + n - 1]) / 0.25));
+  const light = await run({ speech: 0.5, pauseMix: 0.8, pause: 10 ** (-6 / 20) });
+  assert.equal(light.length, x.length);
+  // Half the output is the recording as it was: the model, removing everything, takes 6 dB and no more.
+  for (const f of [speechFrom, 150, 299]) assert.ok(Math.abs(at(light, f) + 6.02) < 0.05, `light at frame ${f}: ${at(light, f).toFixed(2)} dB`);
+  // In a pause: a fifth of the recording, 6 dB down — about -20 dB.
+  assert.ok(Math.abs(at(light, 450) + 20) < 0.1, `light in a pause: ${at(light, 450).toFixed(2)} dB`);
+  const strong = await run({ speech: 0.7, pause: 0.03 });
+  assert.ok(Math.abs(at(strong, 200) + 10.46) < 0.05, `strong while speaking: ${at(strong, 200).toFixed(2)} dB`);
+  assert.ok(at(strong, 450) < -100, `strong in a pause: ${at(strong, 450).toFixed(1)} dB`);
+  // Fully open before the first word and still open after the last: soft edges are not clipped.
+  assert.ok(Math.abs(at(strong, speechFrom - 3) + 10.46) < 0.05, `open before the word: ${at(strong, speechFrom - 3).toFixed(2)} dB`);
+  assert.ok(at(strong, speechFrom - LOOKAHEAD - 2) < -100, "but not long before it");
+  assert.ok(Math.abs(at(strong, speechTo + HANGOVER - 2) + 10.46) < 0.05, `still open after the word: ${at(strong, speechTo + HANGOVER - 2).toFixed(2)} dB`);
+  assert.ok(at(strong, speechTo + HANGOVER + 30) < -25, `closed again after the hangover: ${at(strong, speechTo + HANGOVER + 30).toFixed(1)} dB`);
+});
+
+// A warning that came and went with every loud word moved everything under it, and the buttons
+// slid out from under the pointer.
+test("the recorder's level message keeps its place, and every cleaning setting has its explanation", () => {
+  const panel = fs.readFileSync(new URL("../client/src/components/BeatRecorder.tsx", import.meta.url), "utf8");
+  assert.match(panel, /<p className=\{`rec-status /);
+  assert.doesNotMatch(panel, /\{clipping && <p/, "the clipping warning is not mounted and unmounted");
+  const css = fs.readFileSync(new URL("../client/src/index.css", import.meta.url), "utf8");
+  assert.match(css, /\.rec-status \{[^}]*min-height:/);
+  for (const key of Object.keys(LIMITS)) assert.match(panel, new RegExp(`key: "${key}"[^\\n]*\\n\\s*info: "[^"]{40,}"`), `${key} has a slider and an explanation`);
+  assert.match(panel, /Reset to defaults/);
 });

@@ -80,7 +80,8 @@ than `file://`. That is why websockets, cookies and the `<sub>.localhost` proxy 
 | `electron/export-video.js` | the ffmpeg graph, crops and file naming — pure, and tested with a real encode |
 | `client/src/exportPlan.ts` | export choices, lengths, vertical frames and capture zoom — pure and tested |
 | `server/recordings.js` | a beat's voice and takes: stored in `recordings/`, cleaned and remuxed with ffmpeg |
-| `server/rnnoise.js` | RNNoise as WebAssembly: a stream of float PCM in, denoised and back in time out |
+| `server/rnnoise.js` | RNNoise as WebAssembly: a stream of float PCM in, denoised and back in time out, gated by its own voice detection |
+| `server/public/cleaning.js` | the cleaning presets and the tuning behind them — shared by the server and the recorder panel |
 | `client/src/components/BeatRecorder.tsx` | the recorder panel: microphone, level, room check, voice, take controls |
 | `client/src/App.tsx` | project state, layout, beats, the presenter bridge |
 | `client/src/Presenter.tsx` | the second window; holds no project state |
@@ -387,9 +388,25 @@ wait. The AI request aborts when the pane closes. Assume a recording is in progr
   keeps its full lead — its picture shows the "stay quiet" card until then — and its picture
   file keeps the lead in it (a copy cannot cut between keyframes); the export and Save as MP4
   skip it with `-ss lead`, so picture and sound agree.
-- **`afftdn` only removes noise near its `nf` floor**, which defaults to -50 dB. Neither that nor
-  a learnt profile (`sn start/stop`) touched a real -35 dB room: it took 0.6 dB off. Tell it the
-  measured room level. The real work is RNNoise, which took 23 dB off the same room.
+- **The speech model must never have the whole voice.** RNNoise at full strength, on real takes
+  in a noisy room (room -27 dB, voice -19), pulled the voice's 3–8 kHz down by more than 6 dB in
+  40–69 % of speaking moments — words went dull — and `afftdn` and a level-driven `agate` after
+  it made it worse; both are gone. Its voice-activity output is reliable, so `rnnoiseStream`
+  uses it: while speech is detected (from LOOKAHEAD before to HANGOVER after) only `speech` of
+  the output is the model's and the rest is the dry recording, lined up; in a pause it is the
+  model's (`pauseMix`) turned down (`pause`). A cap of 0.5 is exactly 6 dB off a word at worst.
+  Judge any change to the cleaning on real recordings, measured during speech only — averages
+  over the whole file hide this — and say plainly that it cannot be judged by ear here.
+- **A cleaning setting is a tuning, and a level is a named tuning.** `server/public/cleaning.js`
+  holds `PRESETS`, `LIMITS`, `cleanTuning` and `tuningFor`; the server builds every stage from
+  the tuning and the panel's sliders show it, so a preset's sliders cannot drift from what the
+  preset does. `custom` uses `settings.cleaning`; a recording stores the tuning it was cleaned
+  with, which is how the panel knows to offer cleaning it again. Anything from a request goes
+  through `cleanTuning` before it reaches a filter string.
+- **Anything in the recorder that can appear and disappear needs a place of its own.** The
+  clipping warning was mounted and unmounted as the level moved, and every button under it
+  slid up and down under the pointer. It is now one element of fixed height whose text changes,
+  and a warning is held for four seconds.
 - **Never use ffmpeg's `arnndn`.** In every ffmpeg before its July 2026 fix it reads past the
   end of a buffer, and the same recording comes out one of two ways — 5 LU apart on a real
   voice, from run to run, even on one thread with SIMD off. RNNoise runs as WebAssembly instead
@@ -400,8 +417,7 @@ wait. The AI request aborts when the pane closes. Assume a recording is in progr
 - **Loudness is corrected on the written file, not by running the chain again.** An expander on
   a voice that hovers at its threshold does not decide identically from run to run, so
   "measure, then run it all again with the gain" landed 3 LU off. The shaped sound is written
-  to a temporary WAV, measured, and the correction and limiter applied to that file. The
-  expander goes before the compressor, or the compressor lifts the pauses back over it.
+  to a temporary WAV, measured, and the correction and limiter applied to that file.
 - **A take's picture file has no sound.** Anything that plays or saves a take must pair
   `take.video` with `take.clean` (`TakePlayer`, `takeGraph`); a bare `<video>` of it looked like
   the take had not recorded the voice, and its download menu saved a silent WebM.

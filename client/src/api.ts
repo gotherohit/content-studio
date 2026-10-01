@@ -1,4 +1,5 @@
 import type { DeckRender, NoiseReduction, Project, ProjectSummary, Snippet, SourceFile } from "./types";
+import { tuningText, type CleanTuning } from "../../server/public/cleaning.js";
 
 /** Parse a JSON response, turning a down or non-JSON API into a readable error. */
 async function j<T>(r: Response): Promise<T> {
@@ -14,7 +15,7 @@ export interface FsEntry { name: string; path: string; dir: boolean }
 /** What the server made from a recording: see `processRecording` in server/recordings.js. */
 export interface RecordingResult {
   file: string; clean?: string; video?: string; width?: number; height?: number;
-  seconds: number; noise: NoiseReduction; lead: number; loudness?: number; room?: number;
+  seconds: number; noise: NoiseReduction; lead: number; loudness?: number; room?: number; tuning?: CleanTuning;
 }
 export interface FsText { content: string; mtime: number; size: number; eol: string; bom: boolean }
 
@@ -152,12 +153,12 @@ export const api = {
    * plain bytes: a recorder's own type, "video/webm;codecs=vp9,opus", is not one the server's
    * body parser accepts, and the take arrived empty.
    */
-  /** `picture`, for a take: where the window is in the recorded frame. */
-  uploadRecording: (projectId: string, name: string, blob: Blob, noise: NoiseReduction, lead: number, picture?: { w: number; h: number }) =>
-    fetch(`/api/projects/${projectId}/recordings/${encodeURIComponent(name)}?noise=${noise}&lead=${lead}${picture ? `&picture=${picture.w},${picture.h}` : ""}`, { method: "PUT", headers: { "content-type": "application/octet-stream" }, body: blob })
+  /** `picture`, for a take: where the window is in the recorded frame. `tune`: the settings, when `noise` is custom. */
+  uploadRecording: (projectId: string, name: string, blob: Blob, noise: NoiseReduction, lead: number, picture?: { w: number; h: number }, tune?: CleanTuning) =>
+    fetch(`/api/projects/${projectId}/recordings/${encodeURIComponent(name)}?noise=${noise}&lead=${lead}${picture ? `&picture=${picture.w},${picture.h}` : ""}${tune ? `&tune=${tuningText(tune)}` : ""}`, { method: "PUT", headers: { "content-type": "application/octet-stream" }, body: blob })
       .then((r) => j<RecordingResult>(r)),
-  recleanRecording: (projectId: string, name: string, noise: NoiseReduction, lead: number) =>
-    fetch(`/api/projects/${projectId}/recordings/${encodeURIComponent(name)}/clean`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ noise, lead }) })
+  recleanRecording: (projectId: string, name: string, noise: NoiseReduction, lead: number, tune?: CleanTuning) =>
+    fetch(`/api/projects/${projectId}/recordings/${encodeURIComponent(name)}/clean`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ noise, lead, tune }) })
       .then((r) => j<RecordingResult>(r)),
   deleteRecording: (projectId: string, name: string) =>
     fetch(`/api/projects/${projectId}/recordings/${encodeURIComponent(name)}`, { method: "DELETE" }).then((r) => j<{ ok: true }>(r)),

@@ -522,24 +522,44 @@ Windows sound settings.
 **Check the room** listens for three seconds while you stay quiet and says how noisy the room
 is, then picks the noise reduction to match.
 
-**Background noise reduction** is **Off**, **Light** or **Strong**:
+**Background noise reduction** is **Off**, **Light**, **Strong** or **Custom**:
 
 | | What it does |
 |---|---|
-| Off | Rumble below the voice removed, loudness evened out. Nothing else touched. |
-| Light | A speech model takes out what is not your voice — fans, hum, keyboards, traffic, hiss — and keeps a tenth of the original so the voice keeps its air. The pauses are turned down gently. Right for most rooms. |
-| Strong | The speech model alone, and the pauses made silent. For noisy rooms; the voice can sound slightly processed. |
+| Off | Rumble below the voice removed and the loudness set. Nothing else touched. |
+| Light | While you speak, at most half the sound is the speech model's, so it can never take more than 6 dB off a word and your voice keeps its own sound. Between words the noise is taken down, but not to silence, so the background does not come and go with your words. The default. |
+| Strong | The model gets 70 % while you speak — cleaner under the voice, at most about 10 dB off a word — and the pauses are made silent. For noisy rooms; a word can still sound a little dull. |
+| Custom | Your own settings, below. |
 
-Every recording is cleaned the same way: rumble filtered out, the noise removed by RNNoise (a
-small speech model from Xiph, run inside the app), steady noise taken down further using the
-room's level, measured from the quietest stretch of the recording, the whole recording lifted
-or lowered to **−16 LUFS** (what YouTube plays at) by one fixed amount so the pauses are never
-pumped up, the pauses quietened, the voice evened out by a gentle compressor, and the peaks kept
-below −1.5 dB. The finished sound is measured once more, so it lands on −16 LUFS exactly. The
-browser's own call processing — echo cancelling, noise suppression, automatic gain — is off,
-because it smears a voice. Cleaning takes about a second for every two seconds recorded. Change
-the setting after recording and the recording is cleaned again from its original; there is no
-need to record again.
+The cleaning uses RNNoise, a small speech model from Xiph that runs inside the app. It takes
+out what is not a voice — fans, hum, keyboards, traffic, hiss — and it says where the words
+are. That second part is what protects your voice: the model is only allowed part of the sound
+while you are speaking, and works at full strength in the gaps, which open a little before each
+word and close a little after it. The more noise there is under your voice, the more any
+cleaning costs the voice itself; if words sound dull, lower **Clean-up while you speak**, and
+if you can, get the microphone closer or the room quieter — nothing done afterwards is as good.
+
+**Fine-tune the cleaning** opens the settings behind the preset you have chosen. Each has an
+**ⓘ** that says what it does. Moving one makes the setting **Custom**:
+
+| Setting | What it does |
+|---|---|
+| Rumble filter | Cuts everything below this pitch: bumps, traffic, a fan's hum. Above about 120 Hz a deep voice starts to sound thin. |
+| Clean-up while you speak | How much noise is taken from under your voice. Higher is cleaner but can dull words; at 50 % it can never take more than 6 dB off one. |
+| Clean-up in pauses | How much noise is taken out between words, where there is no voice to harm. |
+| Pause volume | How far the gaps are turned down on top of that; −30 dB is silence. Very quiet pauses beside a noisy voice make the background come and go with your words. |
+| Even out loudness | Brings loud and quiet words closer together. Higher is steadier but less natural. |
+| Loudness | How loud the finished voice is. −16 LUFS is what YouTube plays at. |
+
+The settings are the project's, so every beat uses them. A recording made before you changed
+them shows **Clean again with these settings**, which cleans it again from its original — there
+is never a need to record again. **Reset to defaults** goes back to Light and forgets the
+custom settings.
+
+Whatever the settings, the recording is lifted or lowered to its loudness by one fixed amount,
+so pauses are never pumped up; the finished sound is measured once more so it lands exactly;
+and peaks are kept below −1.5 dB. The browser's own call processing — echo cancelling, noise
+suppression, automatic gain — is off, because it smears a voice.
 
 **Record voice** starts with *Stay quiet* for one second, then *Speak now*. The quiet second is
 cut off afterwards; if you started talking during it, only the part before your first word is. **Stop** when you are done;

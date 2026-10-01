@@ -2,6 +2,29 @@
 
 What changed in each release, newest first. Versions are the ones the app updates itself to.
 
+## 0.39.0
+
+- **Your voice is left alone.** Noise reduction used to run the speech model at full strength
+  over everything, and in a noisy room it took bites out of the voice: on real takes it pulled
+  the crisp part of the voice down by more than 6 dB in about half of all speaking moments, so
+  some words came out dull. The model now also tells the app where the words are. While you
+  speak, only part of the sound is the model's — half with Light, 70 % with Strong — so it can
+  never take more than 6 dB (Light) or about 10 dB (Strong) off a word; between words it works
+  at full strength and the pause is turned down. The gate opens a little before each word and
+  closes a little after, so soft beginnings and endings are kept. A second denoiser and a
+  level-driven expander, which dulled and clipped the voice further, are gone.
+- **Fine-tune the cleaning.** Under the noise-reduction buttons, **Fine-tune the cleaning** shows
+  every setting behind a preset, each with an explanation behind its ⓘ: the rumble filter,
+  clean-up while you speak, clean-up in pauses, pause volume, how firmly loudness is evened
+  out, and the finished loudness. Move one and the setting becomes **Custom**; **Clean again
+  with these settings** applies it to what is already recorded, from its original; **Reset to
+  defaults** goes back to Light.
+- **The recorder no longer jumps.** The "too loud" warning appeared and disappeared with every
+  loud word and pushed everything under it down and up, so buttons such as Save as MP4 slid
+  out from under the pointer. The level message now has a place of its own that never changes
+  size, and a warning stays for a few seconds.
+- Cleaning is faster: about three seconds for a twenty-second take.
+
 ## 0.38.0
 
 - **Fit or Fill for takes.** A take is kept as your whole window at its own size and shape,

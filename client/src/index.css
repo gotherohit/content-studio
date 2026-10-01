@@ -1423,6 +1423,19 @@ mark.hl:hover { filter: brightness(0.94); }
 .beat-recorder .take-frame video { width: 100%; height: 100%; max-height: none; border-radius: 0; object-fit: contain; }
 .beat-recorder .take-frame.fill video { object-fit: cover; }
 .rec-framing { gap: 8px; align-items: center; flex-wrap: wrap; }
+/* Always two lines tall, whatever it says, so nothing under it ever moves. */
+.rec-status { margin: 0; padding: 6px 9px; min-height: calc(2 * 1.45em + 12px); box-sizing: border-box; border-radius: var(--r-md); font-size: 12px; line-height: 1.45; color: var(--muted); background: var(--panel-2, var(--panel-3)); }
+.rec-status.warn { background: color-mix(in srgb, var(--warn) 14%, var(--panel)); color: var(--warn); }
+.rec-tune { border: 1px solid var(--border); border-radius: var(--r-md); padding: 6px 9px; }
+.rec-tune summary { cursor: pointer; display: flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; list-style: none; }
+.rec-tune[open] summary { margin-bottom: 6px; }
+.rec-tune-row { padding: 5px 0; }
+.rec-tune-row .row { gap: 4px; align-items: center; }
+.rec-tune-row input[type="range"] { width: 100%; }
+.rec-tune-label { font-size: 12px; }
+.rec-info { padding: 2px; opacity: 0.7; }
+.rec-info.active, .rec-info:hover { opacity: 1; color: var(--accent); }
+.rec-info-text { margin: 2px 0 0; line-height: 1.45; }
 .rec-gain input[type="range"] { flex: 1; min-width: 0; }
 .rec-gain-value { min-width: 48px; text-align: right; font-variant-numeric: tabular-nums; font-size: 12px; }
 .rec-saved { display: flex; gap: 8px; align-items: center; margin: 0; }

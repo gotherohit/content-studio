@@ -1,3 +1,4 @@
+import type { CleanTuning } from "../../server/public/cleaning.js";
 import type { SourceLink } from "./links";
 /**
  * The first four are the passage colours a text highlight is offered. The rest are for
@@ -238,7 +239,9 @@ export interface Beat {
 }
 
 /** How much steady background noise is taken out of a recording. */
-export type NoiseReduction = "off" | "light" | "strong";
+/** A preset, or `custom`: the project's own tuning (`settings.cleaning`). */
+export type NoiseReduction = "off" | "light" | "strong" | "custom";
+export type { CleanTuning } from "../../server/public/cleaning.js";
 
 /**
  * A recording kept in the project's recordings folder. `file` is the original, kept so it can
@@ -250,6 +253,8 @@ export interface BeatRecording {
   clean?: string;
   seconds: number;
   noise: NoiseReduction;
+  /** The tuning a `custom` recording was cleaned with, to tell when the settings have moved on. */
+  tuning?: CleanTuning;
   lead: number;
   /** Loudness of the voice before it was brought to the target, in LUFS. */
   loudness?: number;
@@ -350,6 +355,8 @@ export interface Project {
     export?: Partial<ExportSettings>;
     /** How much background noise recordings for this project's beats have taken out. */
     noise?: NoiseReduction;
+    /** The custom cleaning settings, used when `noise` is `custom`. */
+    cleaning?: CleanTuning;
   };
 }
 

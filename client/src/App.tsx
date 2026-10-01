@@ -43,6 +43,7 @@ import { ExportFramer } from "./components/ExportFramer";
 import { beatTimings, captureZoom, capturedVideoTime, takeCrop, centredFrame, clampFrame, containedBox, exportSettings, exportViewport, outputSize } from "./exportPlan";
 import { BeatRecorder } from "./components/BeatRecorder";
 import { LEAD_SECONDS, boostedMic, micConstraints, recordingInUse, recordingName } from "./recording";
+import { tuningFor } from "../../server/public/cleaning.js";
 import type { ExportPlanBeat, ExportVideo } from "./desktop";
 import type { BeatExport, BeatTake, BeatVoice, ExportSettings, VerticalFrame } from "./types";
 
@@ -1137,10 +1138,11 @@ export default function App() {
     if (!blob) { setTake(null); if (takeCancelled.current) setNotice({ kind: "warn", text: "Take cancelled — nothing was recorded." }); return; }
     setTake({ index, phase: "saving", count: 0 });
     try {
-      const made = await api.uploadRecording(project.id, recordingName("take", beat.id), blob, noise, lead, crop ?? undefined);
+      const made = await api.uploadRecording(project.id, recordingName("take", beat.id), blob, noise, lead, crop ?? undefined,
+        noise === "custom" ? tuningFor("custom", project.settings.cleaning) : undefined);
       if (!made.video || !made.width || !made.height) throw new Error("The recording has no picture.");
       setBeatRecording(beat.id, "take", {
-        file: made.file, video: made.video, clean: made.clean, seconds: made.seconds, noise: made.noise, lead: made.lead,
+        file: made.file, video: made.video, clean: made.clean, seconds: made.seconds, noise: made.noise, tuning: made.tuning, lead: made.lead,
         loudness: made.loudness, width: made.width, height: made.height, muted: !options.sound || !made.clean,
         recordedAt: new Date().toISOString(),
       });
@@ -1587,6 +1589,8 @@ export default function App() {
           beat={beats.find((b) => b.id === recorderFor)!}
           index={beats.findIndex((b) => b.id === recorderFor)}
           noise={project.settings.noise ?? "light"}
+          tuning={project.settings.cleaning}
+          onTuning={(cleaning) => mutate((p) => ({ ...p, settings: { ...p.settings, cleaning } }))}
           framing={exportSettings(project.settings.export).takeFraming}
           onFraming={(takeFraming) => setExportSettings({ takeFraming })}
           onNoise={(noise) => mutate((p) => ({ ...p, settings: { ...p.settings, noise } }))}

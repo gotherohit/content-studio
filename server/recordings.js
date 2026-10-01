@@ -17,21 +17,27 @@ import { pipeline } from "node:stream/promises";
 import ffmpegPath from "ffmpeg-static";
 import { parseProbe } from "../electron/export-video.js";
 import { loadRnnoise, rnnoiseStream } from "./rnnoise.js";
+import { LEVELS, PRESETS, tuningFor } from "./public/cleaning.js";
 
-export const NOISE = ["off", "light", "strong"];
-/** Integrated loudness a finished voice is brought to: what YouTube and most players expect. */
-export const TARGET_LUFS = -16;
-/** How much of RNNoise's output is used: Strong is the model alone, Light keeps a tenth of the original. */
-export const RNN_MIX = { off: 0, light: 0.9, strong: 1 };
+const n3 = (n) => String(Math.round(n * 1000) / 1000);
+
+export const NOISE = LEVELS;
+/** Integrated loudness a finished voice is brought to unless a tuning says otherwise: what YouTube expects. */
+export const TARGET_LUFS = PRESETS.light.loudness;
+
 /**
  * Before anything else: mono at 48 kHz, which RNNoise needs, and a fourth-order high-pass —
  * rumble and desk thumps sit under the voice, and a gentle slope left them in.
  */
+export function decodeFilter(tuning) {
+  const parts = ["aformat=sample_fmts=flt:sample_rates=48000:channel_layouts=mono"];
+  if (tuning.rumble > 0) parts.push(`highpass=f=${n3(tuning.rumble)}`, `highpass=f=${n3(tuning.rumble)}`);
+  return parts.join(",");
+}
 export const DECODE = "aformat=sample_fmts=flt:sample_rates=48000:channel_layouts=mono,highpass=f=85,highpass=f=85";
 /** Length of one analysis frame, in seconds. */
 export const FRAME = 0.03;
 
-const n3 = (n) => String(Math.round(n * 1000) / 1000);
 const safeLevel = (level) => (NOISE.includes(level) ? level : "light");
 
 /** Per-frame RMS levels (dB) from ffmpeg's `astats` + `ametadata=print`. Silence is -100. */
@@ -94,39 +100,29 @@ export function roomLevel(levels, frame = FRAME, span = null) {
 }
 
 /**
- * The spectral part of the noise removal, on what RNNoise has already cleaned (`rnnoise.js`).
- * RNNoise is a speech model: it takes out what is not a voice — fans, hum, keyboards, traffic,
- * a room's hiss — steady or not. `afftdn` then takes steady noise down further, told the room's
- * measured level: without it, it assumes a floor of -50 dB and leaves a louder room almost
- * alone (it took 0.6 dB off a creator's -35 dB room, where RNNoise took 23).
+ * What ffmpeg does to the sound RNNoise has cleaned (`rnnoise.js`) before its loudness is
+ * measured: nothing but cutting off the lead-in. A spectral denoiser used to follow the model
+ * here; it dulled the voice further for very little noise, and is gone.
  */
-export function denoiseFilter(level, start, roomDb = null) {
-  const safe = safeLevel(level);
+export function trimFilter(start) {
   const parts = ["aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=mono"];
-  if (safe !== "off") {
-    const floor = Number.isFinite(roomDb) ? Math.max(-70, Math.min(-25, roomDb - (safe === "strong" ? 20 : 10))) : -50;
-    parts.push(`afftdn=nr=${safe === "strong" ? 18 : 10}:nf=${Math.round(floor)}`);
-  }
   if (start > 0) parts.push(`atrim=start=${n3(start)}`, "asetpts=PTS-STARTPTS");
   return parts.join(",");
 }
 
 /**
- * What follows the denoiser. One fixed gain brings the voice to the target — never a dynamic
- * normaliser, which lifts the pauses. With the voice at a known level, a downward expander can
- * quieten what is left between words; it comes before the compressor, which evens the voice out
- * and would otherwise lift the pauses back over the expander's threshold. The compressor's
- * effect on loudness is measured and put back with a second fixed gain (`correctDb`), and a
- * limiter keeps peaks below -1.5 dB.
+ * What follows. One fixed gain brings the voice to the target — never a dynamic normaliser,
+ * which lifts the pauses — and a compressor evens the voice out, as firmly as the tuning asks.
+ * Its effect on loudness is measured and put back with a second fixed gain (`correctDb`), and a
+ * limiter keeps peaks below -1.5 dB. The pauses are quietened by the speech-aware gate in
+ * `rnnoiseStream`, which knows where the words are; an expander driven by level alone clipped
+ * their soft edges.
  */
-export function compressFilter(level, gainDb) {
-  const safe = safeLevel(level);
+export function compressFilter(tuning, gainDb) {
   const parts = [`volume=${n3(Math.max(-20, Math.min(36, gainDb)))}dB`];
-  // About 20 dB under normal speech, where only the pauses and the room are.
-  if (safe === "light") parts.push("agate=threshold=0.025:range=0.25:ratio=3:attack=10:release=300");
-  if (safe === "strong") parts.push("agate=threshold=0.03:range=0.06:ratio=4:attack=8:release=250");
-  // With the voice near -16 LUFS its loud syllables reach about -10 dBFS: compress above -20.
-  if (safe !== "off") parts.push("acompressor=threshold=0.1:ratio=2.5:attack=8:release=160:knee=4");
+  // With the voice near its target its loud syllables sit about 6 dB over it: compress from 4 dB under.
+  const threshold = 10 ** ((tuning.loudness - 4) / 20);
+  if (tuning.compress > 1) parts.push(`acompressor=threshold=${n3(threshold)}:ratio=${n3(tuning.compress)}:attack=8:release=160:knee=4`);
   return parts.join(",");
 }
 
@@ -135,8 +131,17 @@ export function finishFilter(correctDb) {
 }
 
 /** The ffmpeg part of the chain, after RNNoise, once the two gains are known — as the three passes run it. */
-export const cleanFilter = (level, start, roomDb, gainDb, correctDb) =>
-  [denoiseFilter(level, start, roomDb), compressFilter(level, gainDb), finishFilter(correctDb)].join(",");
+export const cleanFilter = (tuning, start, gainDb, correctDb) =>
+  [trimFilter(start), compressFilter(tuning, gainDb), finishFilter(correctDb)].join(",");
+
+/**
+ * How the speech model is used for a tuning (see `rnnoiseStream`), or null when the tuning
+ * asks for none of it and the model need not run.
+ */
+export function modelUse(tuning) {
+  if (!(tuning.speech > 0 || tuning.pauseMix > 0 || tuning.pauseDb < 0)) return null;
+  return { speech: tuning.speech, pauseMix: tuning.pauseMix, pause: 10 ** (tuning.pauseDb / 20) };
+}
 
 /** Names for what is made from an original: `take-x.webm` → `take-x.clean.flac`, `take-x.video.webm`. */
 export function derived(name) {
@@ -210,15 +215,15 @@ async function analyse(file) {
  * off), into a float WAV that every later pass reads. RNNoise runs once, streamed, so a long
  * take is never held in memory.
  */
-async function denoiseToFile(file, dest, level) {
-  const decode = spawn(ffmpegPath, ["-hide_banner", "-loglevel", "error", "-i", file, "-map", "0:a:0", "-af", DECODE, "-f", "f32le", "-"], { windowsHide: true });
+async function denoiseToFile(file, dest, tuning) {
+  const decode = spawn(ffmpegPath, ["-hide_banner", "-loglevel", "error", "-i", file, "-map", "0:a:0", "-af", decodeFilter(tuning), "-f", "f32le", "-"], { windowsHide: true });
   const encode = spawn(ffmpegPath, ["-hide_banner", "-loglevel", "error", "-y", "-f", "f32le", "-ar", "48000", "-ac", "1", "-i", "-", "-c:a", "pcm_f32le", dest], { windowsHide: true });
   let log = "";
   for (const child of [decode, encode]) child.stderr.on("data", (b) => { log = (log + b).slice(-4000); });
   const exited = (child) => new Promise((resolve, reject) => { child.on("error", reject); child.on("close", resolve); });
   const done = Promise.all([exited(decode), exited(encode)]);
-  const mix = RNN_MIX[safeLevel(level)];
-  const stages = mix > 0 ? [decode.stdout, rnnoiseStream(await loadRnnoise(), mix), encode.stdin] : [decode.stdout, encode.stdin];
+  const use = modelUse(tuning);
+  const stages = use ? [decode.stdout, rnnoiseStream(await loadRnnoise(), use), encode.stdin] : [decode.stdout, encode.stdin];
   try {
     await pipeline(...stages);
   } catch (e) {
@@ -236,13 +241,16 @@ async function denoiseToFile(file, dest, level) {
  * picture with a proper length. `lead` is the silent second the recorder asked for. Returns
  * what the beat stores; its `lead` is what was actually cut from the sound.
  */
-export async function processRecording(dir, name, level, lead = 0, picture = null) {
+export async function processRecording(dir, name, level, lead = 0, picture = null, custom = null) {
   const file = path.join(dir, name);
   const out = derived(name);
   const original = await probe(file);
   const asked = Math.max(0, Math.min(5, Number(lead) || 0));
   const safe = safeLevel(level);
+  const tuning = tuningFor(safe, custom);
   const result = { file: name, noise: safe, lead: asked };
+  // What a custom recording was cleaned with, so the panel can tell when the settings have moved on.
+  if (safe === "custom") result.tuning = tuning;
   if (original.width) {
     // The lead-in stays in the picture and the export starts that far in, so a picture made
     // before is still right when only the sound is cleaned again — it is kept, not remade.
@@ -270,20 +278,19 @@ export async function processRecording(dir, name, level, lead = 0, picture = nul
     // A take's picture is cut by the same amount, and shows the "stay quiet" card until then.
     const start = original.width ? asked : voiceStart(levels, FRAME, asked);
     const loudness = async (input, filter) => parseLoudness((await ffmpeg(["-i", input, "-map", "0:a:0", "-af", `${filter},ebur128`, "-f", "null", "-"])).log);
-    // Measure the denoised voice and bring it to the target. The expander and compressor then
-    // move the loudness, and not always identically from run to run — an expander on a voice
-    // hovering at its threshold can go either way — so what they make is written once and
-    // measured, and the correction is applied to that file rather than to a fresh run.
+    // Measure the denoised voice and bring it to the target. The compressor then moves the
+    // loudness, so what it makes is written once and measured, and the correction is applied
+    // to that file rather than to a fresh run — a second run need not come out the same.
     const denoised = path.join(dir, `${out.clean}.rnn.wav`);
     const shaped = path.join(dir, `${out.clean}.part.wav`);
     let measured = null;
     try {
-      await denoiseToFile(file, denoised, safe);
-      measured = await loudness(denoised, denoiseFilter(safe, start, room));
-      const gain = Number.isFinite(measured) ? TARGET_LUFS - measured : 0;
-      await run(["-i", denoised, "-af", `${denoiseFilter(safe, start, room)},${compressFilter(safe, gain)}`, "-c:a", "pcm_f32le", shaped]);
+      await denoiseToFile(file, denoised, tuning);
+      measured = await loudness(denoised, trimFilter(start));
+      const gain = Number.isFinite(measured) ? tuning.loudness - measured : 0;
+      await run(["-i", denoised, "-af", `${trimFilter(start)},${compressFilter(tuning, gain)}`, "-c:a", "pcm_f32le", shaped]);
       const compressed = await loudness(shaped, "anull");
-      const correct = Number.isFinite(compressed) ? TARGET_LUFS - compressed : 0;
+      const correct = Number.isFinite(compressed) ? tuning.loudness - compressed : 0;
       await run(["-i", shaped, "-af", finishFilter(correct), "-ac", "1", "-c:a", "flac", path.join(dir, out.clean)]);
     } finally {
       await fs.rm(denoised, { force: true });

@@ -6,7 +6,8 @@
 //
 // It works on 48 kHz mono in frames of 480 samples, at 16-bit scale, and its output is two
 // frames late; the stream here takes float PCM in and gives float PCM out, the same length and
-// back in time with the input.
+// back in time with the input. It also reports how likely each frame is to hold a voice, which
+// is what lets the voice be left alone and only the pauses be scrubbed.
 import { Transform } from "node:stream";
 
 /** Samples RNNoise's output lags its input by: two frames, 20 ms, measured against a real voice. */
@@ -34,43 +35,82 @@ export function loadRnnoise() {
   return loading;
 }
 
+/** How sure RNNoise must be that a frame holds a voice for it to count as speech. */
+export const SPEECH = 0.5;
+/** The voice is let through from this long before a word (frames of 10 ms)… */
+export const LOOKAHEAD = 12;
+/** …until this long after the last one, so soft word endings and short gaps are never clipped. */
+export const HANGOVER = 30;
+
 /**
- * Denoise a stream of 32-bit float mono PCM. `mix` is how much of the denoised sound is used:
- * 1 is RNNoise alone, 0.9 keeps a tenth of the original — lined up with the output, so the
- * two add rather than comb.
+ * Denoise a stream of 32-bit float mono PCM, treating the voice and the pauses differently.
+ *
+ * RNNoise alone, at full strength, takes bites out of the voice: on real takes it pulled one
+ * speaking moment in five down by more than 6 dB, which is heard as words going dull. But it
+ * also says, frame by frame, how likely a voice is, and that is reliable. So:
+ *
+ * - while someone is speaking, only `speech` of the output is RNNoise's and the rest is the
+ *   recording as it was (lined up, so the two add rather than comb) — the model can take at
+ *   most `1 - speech` of the level away, and the voice keeps its own sound;
+ * - in a pause, the output is RNNoise's alone (`pauseMix`), turned down to `pause`.
+ *
+ * "Speaking" starts LOOKAHEAD before the first frame RNNoise is sure of and lasts HANGOVER
+ * after the last, and the change between the two is a ramp, never a step.
  */
-export function rnnoiseStream(rn, mix = 1) {
+export function rnnoiseStream(rn, { speech = 1, pause = 1, pauseMix = 1 } = {}) {
   const n = rn.frameSize;
+  const lag = DELAY / n;
   const state = rn.createDenoiseState();
   const frame = new Float32Array(n);
-  const wet = Math.max(0, Math.min(1, mix));
-  // The input, delayed to meet the output, for the dry part of the mix.
-  const dry = new Float32Array(n + DELAY);
+  const unit = (v) => Math.max(0, Math.min(1, v));
+  const speechMix = unit(speech), quietMix = unit(pauseMix), quietGain = unit(pause);
+  // Opening takes 60 ms, well inside the look-ahead; closing takes 200 ms.
+  const rise = 1 / (0.06 * 48000), fall = 1 / (0.2 * 48000);
+  const inputs = [];   // dry frames not yet matched with their output
+  const waiting = [];  // frames in time with the input, waiting for the look-ahead
+  let calls = 0;       // frames given to RNNoise so far
+  let first = 0;       // index of waiting[0]
+  let lastSpeech = -Infinity;
+  let open = 0;
   let held = new Float32Array(0);
   let spare = Buffer.alloc(0);
   let written = 0;
   let received = 0;
-  let skip = DELAY;
-
-  const process = (input) => {
-    frame.set(input);
-    for (let i = 0; i < n; i++) frame[i] *= 32768;
-    state.processFrame(frame);
-    dry.copyWithin(0, n);
-    dry.set(input, DELAY);
-    const out = new Float32Array(n);
-    for (let i = 0; i < n; i++) out[i] = (frame[i] / 32768) * wet + dry[i] * (1 - wet);
-    // The first frame's worth of output is the delay; after that the output is in time.
-    const from = Math.min(skip, n);
-    skip -= from;
-    return out.subarray(from);
-  };
 
   const emit = (stream, samples) => {
     const keep = samples.subarray(0, Math.max(0, Math.min(samples.length, received - written)));
     if (!keep.length) return;
     written += keep.length;
     stream.push(Buffer.from(keep.buffer, keep.byteOffset, keep.byteLength));
+  };
+
+  /** Give RNNoise one frame, then send out every frame whose look-ahead is now known. */
+  const process = (stream, input) => {
+    frame.set(input);
+    for (let i = 0; i < n; i++) frame[i] *= 32768;
+    if (state.processFrame(frame) >= SPEECH) lastSpeech = calls;
+    inputs.push(Float32Array.from(input));
+    // RNNoise's output is `lag` frames late: this is the sound of the frame given `lag` calls ago.
+    if (calls >= lag) {
+      const wet = new Float32Array(n);
+      for (let i = 0; i < n; i++) wet[i] = frame[i] / 32768;
+      waiting.push({ wet, dry: inputs.shift() });
+    }
+    calls++;
+    while (waiting.length && first + LOOKAHEAD < calls) {
+      const { wet, dry } = waiting.shift();
+      const target = lastSpeech >= first - HANGOVER ? 1 : 0;
+      const out = new Float32Array(n);
+      for (let i = 0; i < n; i++) {
+        open += Math.max(-fall, Math.min(rise, target - open));
+        const mix = quietMix + open * (speechMix - quietMix);
+        // The gain moves evenly in dB, so a pause fades rather than drops.
+        const gain = quietGain > 0 ? quietGain ** (1 - open) : open;
+        out[i] = (wet[i] * mix + dry[i] * (1 - mix)) * gain;
+      }
+      first++;
+      emit(stream, out);
+    }
   };
 
   return new Transform({
@@ -86,7 +126,7 @@ export function rnnoiseStream(rn, mix = 1) {
         all.set(held);
         all.set(copy, held.length);
         let at = 0;
-        for (; at + n <= all.length; at += n) emit(this, process(all.subarray(at, at + n)));
+        for (; at + n <= all.length; at += n) process(this, all.subarray(at, at + n));
         held = all.slice(at);
         done();
       } catch (e) {
@@ -95,10 +135,10 @@ export function rnnoiseStream(rn, mix = 1) {
     },
     flush(done) {
       try {
-        // Push the last partial frame and the delayed tail out with silence.
-        const tail = new Float32Array(Math.ceil((held.length + DELAY) / n) * n);
+        // The last partial frame, then silence until the delay and the look-ahead have run out.
+        const tail = new Float32Array((Math.ceil(held.length / n) + lag + LOOKAHEAD + 1) * n);
         tail.set(held);
-        for (let at = 0; at < tail.length; at += n) emit(this, process(tail.subarray(at, at + n)));
+        for (let at = 0; at < tail.length; at += n) process(this, tail.subarray(at, at + n));
         done();
       } catch (e) {
         done(e);

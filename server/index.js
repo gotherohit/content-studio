@@ -15,6 +15,7 @@ import { createJupyter } from "./jupyter.js";
 import { createInput } from "./input.js";
 import { TYPES, viewerFor, safeName, uniqueName, removeAsset } from "./assets.js";
 import { derived, parsePicture, processRecording } from "./recordings.js";
+import { cleanTuning, parseTuning } from "./public/cleaning.js";
 import { renderDeck, openSlideshow, hasPowerPoint, findSoffice } from "./slides.js";
 import { pickFolder } from "./picker.js";
 import { FilesError, MAX_BYTES, createEntry, deleteEntry, listDir, readText, renameEntry, statFile, writeText } from "./files.js";
@@ -85,7 +86,7 @@ app.put("/api/projects/:id/recordings/:name", express.raw({ type: "*/*", limit: 
     await fs.mkdir(dir, { recursive: true });
     const name = await uniqueName(dir, safeName(req.params.name));
     await fs.writeFile(path.join(dir, name), req.body);
-    res.json(await processRecording(dir, name, String(req.query.noise || "light"), Number(req.query.lead) || 0, parsePicture(req.query.picture)));
+    res.json(await processRecording(dir, name, String(req.query.noise || "light"), Number(req.query.lead) || 0, parsePicture(req.query.picture), parseTuning(req.query.tune)));
   } catch (e) {
     res.status(500).json({ error: `The recording could not be saved: ${e.message}` });
   }
@@ -406,7 +407,8 @@ app.delete("/api/projects/:id/sources/:name", async (req, res) => {
 app.post("/api/projects/:id/recordings/:name/clean", async (req, res) => {
   if (!safeId(req.params.id) || !config.dirOf(req.params.id)) return res.status(400).json({ error: "bad id" });
   try {
-    res.json(await processRecording(recordingsDir(req.params.id), safeName(req.params.name), String(req.body?.noise || "light"), Number(req.body?.lead) || 0));
+    res.json(await processRecording(recordingsDir(req.params.id), safeName(req.params.name), String(req.body?.noise || "light"), Number(req.body?.lead) || 0, null,
+      req.body?.tune ? cleanTuning(req.body.tune) : null));
   } catch (e) {
     res.status(500).json({ error: `The recording could not be cleaned: ${e.message}` });
   }
