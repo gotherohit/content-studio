@@ -521,27 +521,36 @@ noisier. A microphone close to your mouth — a headset or a USB microphone — 
 built-in one.
 
 **Microphone boost** turns the microphone up or down, from −12 to +24 dB, before anything is
-recorded; the level bar shows the boosted sound, so what you see is what is recorded. Press
+recorded. The level bar is a browser preview; the Windows driver can change the actual sound. Press
 **Auto** and talk for five seconds as you will on camera: the boost is set so your loud moments
-land at −6 dB, clear of clipping. Double-click the slider to put it back to 0. The boost is
+land at −6 dB, clear of clipping. Auto measures through Windows, using the same device and
+boost as the recording. Double-click the slider to put it back to 0. The boost is
 remembered for each microphone, and a take uses the same boost as a voice. If the bar still hits
 the top at 0 dB or below, the microphone itself is set too high — turn its level down in
 Windows sound settings.
 
 **Check the room** listens for three seconds while you stay quiet and says how noisy the room
-is, then picks the noise reduction to match.
+is, then picks the noise reduction to match. Like Auto, it measures the Windows recording path,
+not the browser preview. The panel says which path the last check used. Neither check saves
+audio, and closing the panel cancels it. If Windows does not offer the selected microphone,
+the checks use the browser, as recording does; a failed Windows check is shown as an error.
 
-**Background noise reduction** is **Off**, **Light**, **Strong** or **Custom**:
+**Audio processing** offers **Original**, **Off**, **Light**, **Strong** or **Custom**:
 
 | | What it does |
 |---|---|
+| Original | Keeps the captured level and tone with no Studio filters, compressor, loudness boost or limiter. Only the lead-in is trimmed; audio is stored as lossless FLAC. Useful for comparison with an unfiltered recording in OBS, or for processing later. |
 | Off | Rumble below the voice removed and the loudness set. Nothing else touched. |
 | Light | A little steady noise taken out by its spectrum, the level evened slightly, and the loudness set. The voice is otherwise left as it was recorded. The default. |
 | Strong | More steady noise taken out, and a speech model takes out what is not a voice — at most half the sound while you speak, so never more than 6 dB off a word — and turns the pauses down. For noisy rooms; a word can still sound a little dull. |
 | Custom | Your own settings, below. |
 
 The cleaning has two parts. Steady noise is taken out by its spectrum, learnt from the
-stretches where the recording is at its quietest. Then, with Strong or your own settings, comes
+confirmed quiet stretches. It needs at least a quarter second of room sound and a clear
+difference between that sound and the louder parts. Without those, static removal is skipped
+and the speech gate stays open when there is no clear resting level: treating a continuous
+voice as noise can make it dull or cut words out. Leaving the requested quiet second at the
+start helps the cleaner. Then, with Strong or your own settings, comes
 RNNoise, a small speech model from Xiph that runs inside the app: it takes out what is not a
 voice — fans, hum, keyboards, traffic — but only part of the sound while you are speaking, and
 at full strength in the gaps, which open a little before each word and close a little after
@@ -564,13 +573,21 @@ or the room quieter — nothing done afterwards is as good.
 
 The settings are the project's, so every beat uses them. A recording made before you changed
 them shows **Clean again with these settings**, which cleans it again from its original — there
-is never a need to record again. **Reset to defaults** goes back to Light and forgets the
+is never a need to record again. **Re-clean from original** is also available when the preset
+has not changed, so an existing voice or take can use improvements in a newer app version.
+**Reset to defaults** goes back to Light and forgets the
 custom settings.
 
-Whatever the settings, the recording is lifted or lowered to its loudness by one fixed amount,
+Except in Original, the recording is lifted or lowered to its loudness by one fixed amount,
 so pauses are never pumped up; the finished sound is measured once more so it lands exactly;
 and peaks are kept below −1.5 dB. The browser's own call processing — echo cancelling, noise
 suppression, automatic gain — is off, because it smears a voice.
+
+Original still includes the microphone boost you selected and any Windows driver processing.
+Keep its capture peaks below full scale: this mode deliberately has no limiter. It can play
+quieter than a cleaned take because Studio is preserving the captured level, not boosting it.
+Windows recording uses DirectShow; OBS uses WASAPI. They are different Windows capture APIs,
+so identical settings are a comparison baseline, not a guarantee of identical driver behaviour.
 
 **Record voice** starts with *Stay quiet* for one second, then *Speak now*. The quiet second is
 cut off afterwards; if you started talking during it, only the part before your first word is. **Stop** when you are done;
@@ -589,6 +606,11 @@ taskbar — fitted whole into 1920 × 1080 (or the export's size): nothing is cr
 stretched, and if the window is not exactly 16:9 there are black bars at the sides or top and
 bottom, as OBS gives. A maximised window on a 16:9 screen is close to 16:9, so its bars are
 thin. The detail is your screen's. The beat lasts exactly as long as the take.
+
+The recording's bitrate follows its actual pixel dimensions, regardless of the export size:
+at least 16 Mbps for 1080p, 64 Mbps for 4K, and capped at 80 Mbps for larger captures. A later
+1080p export no longer restricts the quality budget of a take captured on a larger screen.
+These are requested encoder budgets; actual rates depend on the codec and picture content.
 
 **Fit or Fill.** Under the take's player, **In 16:9** chooses how the window becomes 16:9:
 

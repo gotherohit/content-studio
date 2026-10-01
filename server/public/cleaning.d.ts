@@ -14,7 +14,7 @@ export interface CleanTuning {
   /** The finished loudness, in LUFS. */
   loudness: number;
 }
-export type CleanLevel = "off" | "light" | "strong" | "custom";
+export type CleanLevel = "original" | "off" | "light" | "strong" | "custom";
 export const LEVELS: CleanLevel[];
 export const PRESETS: Record<"off" | "light" | "strong", CleanTuning>;
 export const DEFAULT_TUNING: CleanTuning;

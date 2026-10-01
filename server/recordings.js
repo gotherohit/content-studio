@@ -16,7 +16,7 @@ import path from "node:path";
 import { pipeline } from "node:stream/promises";
 import ffmpegPath from "ffmpeg-static";
 import { parseProbe } from "../electron/export-video.js";
-import { floorOf, isPause, listen, loadRnnoise, rnnoiseStream, speechActivity } from "./rnnoise.js";
+import { pauseFloor, isPause, listen, loadRnnoise, rnnoiseStream, speechActivity } from "./rnnoise.js";
 import { noiseProfile, spectralStream } from "./spectral.js";
 import { LEVELS, PRESETS, tuningFor } from "./public/cleaning.js";
 
@@ -229,7 +229,7 @@ async function denoiseToFile(file, dest, tuning) {
       // Where the words and the pauses are, judged once on the sound as it was recorded: the
       // static is learnt from the pauses, and the speech model's gate follows the words.
       const heard = await listen(rn, raw);
-      const floor = floorOf(heard.level);
+      const floor = pauseFloor(heard.level);
       if (tuning.staticDb > 0) {
         const profile = await noiseProfile(raw, (from, to) => isPause(heard.level, floor, from, to));
         if (profile) stages.push(spectralStream(profile, tuning.staticDb));
@@ -306,13 +306,19 @@ export async function processRecording(dir, name, level, lead = 0, picture = nul
     const shaped = path.join(dir, `${out.clean}.part.wav`);
     let measured = null;
     try {
-      await denoiseToFile(sound, denoised, tuning);
-      measured = await loudness(denoised, trimFilter(start));
-      const gain = Number.isFinite(measured) ? tuning.loudness - measured : 0;
-      await run(["-i", denoised, "-af", `${trimFilter(start)},${compressFilter(tuning, gain)}`, "-c:a", "pcm_f32le", shaped]);
-      const compressed = await loudness(shaped, "anull");
-      const correct = Number.isFinite(compressed) ? tuning.loudness - compressed : 0;
-      await run(["-i", shaped, "-af", finishFilter(correct), "-ac", "1", "-c:a", "flac", path.join(dir, out.clean)]);
+      if (safe === "original") {
+        // A direct comparison with the capture: no rumble filter, spectral subtraction,
+        // compressor, normalisation or limiter. FLAC keeps the PCM without a lossy encode.
+        await run(["-i", sound, "-map", "0:a:0", "-af", trimFilter(start), "-c:a", "flac", "-sample_fmt", "s32", path.join(dir, out.clean)]);
+      } else {
+        await denoiseToFile(sound, denoised, tuning);
+        measured = await loudness(denoised, trimFilter(start));
+        const gain = Number.isFinite(measured) ? tuning.loudness - measured : 0;
+        await run(["-i", denoised, "-af", `${trimFilter(start)},${compressFilter(tuning, gain)}`, "-c:a", "pcm_f32le", shaped]);
+        const compressed = await loudness(shaped, "anull");
+        const correct = Number.isFinite(compressed) ? tuning.loudness - compressed : 0;
+        await run(["-i", shaped, "-af", finishFilter(correct), "-ac", "1", "-c:a", "flac", path.join(dir, out.clean)]);
+      }
     } finally {
       await fs.rm(denoised, { force: true });
       await fs.rm(shaped, { force: true });

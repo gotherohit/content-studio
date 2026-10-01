@@ -195,6 +195,14 @@ export function floorOf(level) {
   return sorted[Math.floor(sorted.length * 0.1)];
 }
 
+/** A resting level is usable only when there is a clearly louder part to distinguish it from. */
+export function pauseFloor(level) {
+  if (!level.length) return null;
+  const sorted = Float32Array.from(level).sort();
+  const floor = sorted[Math.floor(sorted.length * 0.1)];
+  return sorted[Math.floor(sorted.length * 0.9)] - floor >= 6 ? floor : null;
+}
+
 /**
  * Where the words are, frame by frame, as a number the gate reads like RNNoise's own. The model
  * is not trusted alone: it reads a voice recorded through a sound driver's processing as
@@ -202,19 +210,23 @@ export function floorOf(level) {
  * shut on the words. So anything well above the level the recording rests at counts too.
  * Letting a loud noise through is a small fault; cutting a word is not.
  */
-export function speechActivity({ vad, level }, floor = floorOf(level)) {
-  return Float32Array.from(level, (l, i) => (l > floor + 12 ? 1 : vad[i] ?? 0));
+export function speechActivity({ vad, level }, floor = pauseFloor(level)) {
+  // A steady or very short voice can be the quietest part of its own recording. With no
+  // trustworthy resting level, favour speech rather than closing the gate on uncertain words.
+  if (floor == null) return new Float32Array(level.length).fill(1);
+  return Float32Array.from(level, (l, i) => (l > floor + 6 ? 1 : vad[i] ?? 0));
 }
 
 /**
  * Whether the samples from `from` to `to` are a pause: every frame in them, and for a tenth of
- * a second either side, within 6 dB of the level the recording rests at. Judged by level, not
+ * a second either side, within 3 dB of the level the recording rests at. Judged by level, not
  * by the model — what is learnt here is subtracted from the whole recording, and a voice the
  * model failed to recognise must never be learnt as noise.
  */
 export function isPause(level, floor, from, to, frameSize = 480) {
+  if (floor == null) return false;
   const first = Math.max(0, Math.floor(from / frameSize) - 10), last = Math.min(level.length - 1, Math.ceil(to / frameSize) + 10);
   if (last < first) return false;
-  for (let i = first; i <= last; i++) if (level[i] > floor + 6) return false;
+  for (let i = first; i <= last; i++) if (level[i] > floor + 3) return false;
   return true;
 }

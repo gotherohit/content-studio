@@ -3,6 +3,14 @@ import type { Beat, NoiseReduction } from "./types";
 /** The silent lead-in every recording starts with: the room, for the cleaning to learn. */
 export const LEAD_SECONDS = 1;
 
+/** Budget for the pixels actually captured, not the size chosen for a later export. */
+export function takeVideoBitrate(size?: { width?: number; height?: number }) {
+  const width = Number(size?.width), height = Number(size?.height);
+  if (!(width > 0 && height > 0 && Number.isFinite(width) && Number.isFinite(height))) return 16e6;
+  // Keep at least the existing 1080p budget; a 4K capture has four times as much detail.
+  return Math.round(Math.max(16e6, Math.min(80e6, 16e6 * width * height / (1920 * 1080))));
+}
+
 /**
  * What the page asks the microphone for. This stream is the level meter's, and the recording
  * itself only where Windows cannot make it (see `server/microphone.js`): Chromium opens a
@@ -94,8 +102,8 @@ export function autoGain(peaksDb: number[], currentDb: number): number | null {
 }
 
 /**
- * The microphone turned up or down before anything hears it: the level meter, a voice and a
- * take all record `stream`, so what the meter shows is what is recorded. Web Audio passes
+ * The browser preview and fallback recording, turned up or down. Native recording applies
+ * the same gain separately, after the Windows driver's processing. Web Audio passes
  * samples above full scale through, but the encoder clips them — the meter's clipping warning
  * is measured after the boost for that reason.
  */

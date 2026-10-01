@@ -16,7 +16,7 @@ import { createInput } from "./input.js";
 import { TYPES, viewerFor, safeName, uniqueName, removeAsset } from "./assets.js";
 import { derived, parsePicture, processRecording } from "./recordings.js";
 import { cleanTuning, parseTuning } from "./public/cleaning.js";
-import { alignCapture, listMicrophones, matchMicrophone, startCapture, stopAllCaptures, stopCapture } from "./microphone.js";
+import { alignCapture, listMicrophones, matchMicrophone, measureMicrophone, startCapture, stopAllCaptures, stopCapture } from "./microphone.js";
 import { renderDeck, openSlideshow, hasPowerPoint, findSoffice } from "./slides.js";
 import { pickFolder } from "./picker.js";
 import { FilesError, MAX_BYTES, createEntry, deleteEntry, listDir, readText, renameEntry, statFile, writeText } from "./files.js";
@@ -422,6 +422,22 @@ app.get("/api/projects/:id/recordings/:name", (req, res) => {
   const ext = path.extname(name).toLowerCase();
   res.type(ext === ".flac" ? "audio/flac" : ext === ".webm" ? "video/webm" : ext === ".mp4" ? "video/mp4" : "application/octet-stream");
   res.sendFile(path.join(recordingsDir(req.params.id), name), (err) => { if (err && !res.headersSent) res.status(404).end(); });
+});
+
+// Calibration must hear the same driver processing as the recording. No audio is saved.
+app.post("/api/microphone/measure", async (req, res) => {
+  const controller = new AbortController();
+  const cancel = () => controller.abort();
+  res.on("close", cancel);
+  try {
+    const device = matchMicrophone(req.body?.label, await listMicrophones());
+    if (controller.signal.aborted) return;
+    if (!device) return res.json({ native: false });
+    const measured = await measureMicrophone(device, req.body?.gainDb, req.body?.mode === "voice" ? 5 : 3, controller.signal);
+    res.json({ native: true, ...measured });
+  } catch (e) {
+    if (!controller.signal.aborted) res.status(500).json({ error: e.message });
+  } finally { res.off("close", cancel); }
 });
 
 // The microphone, recorded through Windows rather than by the page (see microphone.js). A

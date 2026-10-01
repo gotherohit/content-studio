@@ -7,7 +7,7 @@ import { spawnSync } from "node:child_process";
 import ffmpegPath from "ffmpeg-static";
 import {
   AUTO_PEAK_DB, CLIP_DB, GAIN_MAX, GAIN_MIN, LEAD_SECONDS, autoGain, clampGain, gainKey, isBluetoothMic, levelDb, micConstraints, peakDb,
-  recordingInUse, recordingName, roomVerdict,
+  recordingInUse, recordingName, roomVerdict, takeVideoBitrate,
 } from "../client/src/recording.ts";
 import { beatTimings, exportSettings, VOICE_TAIL } from "../client/src/exportPlan.ts";
 import {
@@ -117,7 +117,7 @@ test("cleaning favours the voice: Light never uses the speech model, and Strong 
   assert.ok(PRESETS.strong.speech <= 0.5, JSON.stringify(PRESETS));
   assert.ok(PRESETS.light.pauseDb === 0 && PRESETS.strong.pauseDb >= -15, "pauses are lowered, never silenced");
   assert.equal(TARGET_LUFS, -16);
-  assert.deepEqual(NOISE, ["off", "light", "strong", "custom"]);
+  assert.deepEqual(NOISE, ["original", "off", "light", "strong", "custom"]);
   assert.equal(decodeFilter(PRESETS.light), DECODE);
   assert.match(DECODE, /channel_layouts=mono,highpass=f=85,highpass=f=85$/);
   assert.match(trimFilter(1), /atrim=start=1,asetpts=PTS-STARTPTS$/);
@@ -522,11 +522,128 @@ test("steady static is learnt from the pauses and taken out, leaving a tone abov
     assert.ok(Math.abs(kept) < 0.6, `the tone is kept: ${kept.toFixed(2)} dB`);
     // The same sound gives the same result, whatever sizes it arrives in.
     assert.ok(Buffer.from((await run(x, 20, 65536)).buffer).equals(Buffer.from(y.buffer)), "deterministic");
-    // With too little pause to learn from, the quietest each frequency gets stands in.
-    assert.ok((await noiseProfile(file, () => false))!.some((v: number) => v > 0));
+    // No confirmed pause: never substitute frequencies from the voice itself.
+    assert.equal(await noiseProfile(file, () => false), null);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test("noise learning excludes padded silence and needs a real quarter second of room sound", async () => {
+  const { noiseProfile } = await import("../server/spectral.js");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cs-profile-"));
+  try {
+    const file = path.join(dir, "sound.raw");
+    for (const seconds of [0, 0.01, 0.24]) {
+      fs.writeFileSync(file, Buffer.from(new Float32Array(Math.round(48000 * seconds)).fill(0.1).buffer));
+      assert.equal(await noiseProfile(file, () => true), null, `${seconds}s is not enough`);
+    }
+    fs.writeFileSync(file, Buffer.from(new Float32Array(48000).fill(0.1).buffer));
+    const spans: number[][] = [];
+    assert.ok(await noiseProfile(file, (from: number, to: number) => { spans.push([from, to]); return true; }));
+    assert.ok(spans.every(([from, to]) => from >= 0 && to <= 48000), "synthetic padding is never learnt as room sound");
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("a continuous voice is not treated as room noise or gated away when the model misses it", async () => {
+  const { pauseFloor, speechActivity } = await import("../server/rnnoise.js");
+  const level = Float32Array.from({ length: 500 }, (_, i) => -25 + 2 * Math.sin(i / 11));
+  const vad = new Float32Array(level.length).fill(0.1);
+  assert.equal(pauseFloor(level), null);
+  assert.equal(pauseFloor(new Float32Array(500).fill(-50)), null, "a room-only sample also has no known voice/noise separation");
+  assert.ok(speechActivity({ level, vad }, null).every((v: number) => v === 1), "uncertain sound keeps the voice path open");
+  assert.ok(speechActivity({ level, vad }).every((v: number) => v === 1), "the default also requires a trustworthy resting level");
+  level.fill(-55, 0, 100);
+  assert.equal(pauseFloor(level), -55);
+  const noisy = Float32Array.from({ length: 500 }, (_, i) => i < 100 ? -40 : -32);
+  assert.equal(pauseFloor(noisy), -40, "a voice 8 dB over the room still has usable pauses");
+  assert.equal(speechActivity({ level: noisy, vad }, -40)[250], 1, "keep a low-contrast voice out of the pause gate");
+});
+
+test("cleaning a continuous sound without a noise sample preserves its spectrum end to end", { skip: !ffmpegPath || !fs.existsSync(ffmpegPath) }, async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cs-continuous-"));
+  try {
+    // Several voice-band harmonics, changing gently but never pausing. There is no room-only
+    // sample to learn here; choosing per-bin minima would remove part of these harmonics.
+    const pcm = Float32Array.from({ length: 48000 * 2 }, (_, i) => {
+      const t = i / 48000;
+      return (0.08 * Math.sin(2 * Math.PI * 180 * t) + 0.04 * Math.sin(2 * Math.PI * 540 * t)
+        + 0.02 * Math.sin(2 * Math.PI * 3600 * t)) * (1 + 0.1 * Math.sin(2 * Math.PI * 3 * t));
+    });
+    const input = path.join(dir, "input.raw");
+    fs.writeFileSync(input, Buffer.from(pcm.buffer));
+    const encoded = spawnSync(ffmpegPath as unknown as string, ["-y", "-f", "f32le", "-ar", "48000", "-ac", "1", "-i", input, "-c:a", "pcm_f32le", path.join(dir, "voice.wav")], { encoding: "utf8", windowsHide: true });
+    assert.equal(encoded.status, 0, encoded.stderr);
+    const plain = await processRecording(dir, "voice.wav", "custom", 0, null, { ...PRESETS.off, rumble: 0 });
+    const before = fs.readFileSync(path.join(dir, plain.clean!));
+    const cleaned = await processRecording(dir, "voice.wav", "custom", 0, null, { ...PRESETS.off, rumble: 0, staticDb: 20 });
+    assert.ok(before.equals(fs.readFileSync(path.join(dir, cleaned.clean!))), "without a trustworthy pause, static removal must leave every sample intact");
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("room and gain checks use the capture path, return actual levels, and never write audio", async () => {
+  const { captureArgs, measurementArgs, parseMeasurement, measureMicrophone } = await import("../server/microphone.js");
+  const args = measurementArgs("Test microphone", 6, 999);
+  assert.deepEqual(args.slice(1, args.indexOf("-t")), captureArgs("Test microphone", "unused", 6).slice(1, 9));
+  assert.equal(args[args.indexOf("-t") + 1], "3", "untrusted duration is bounded");
+  assert.equal(measurementArgs("mic", 0, 5)[args.indexOf("-t") + 1], "5");
+  assert.deepEqual(args.slice(-3), ["-f", "null", "-"]);
+  const filter = args[args.indexOf("-af") + 1];
+  assert.ok(filter.startsWith("volume=6dB,aformat="), "boost is measured as it is recorded");
+  assert.deepEqual(parseMeasurement("lavfi.astats.Overall.RMS_level=-inf\nlavfi.astats.Overall.Peak_level=-6.02"), { levels: [-120], peaks: [-6.02] });
+  await assert.rejects(measureMicrophone("never open", 0, 3, AbortSignal.abort()), /cancelled/);
+  if (ffmpegPath && fs.existsSync(ffmpegPath)) {
+    const result = spawnSync(ffmpegPath, ["-hide_banner", "-f", "lavfi", "-i", "sine=frequency=1000:duration=1:sample_rate=48000", "-af", filter, "-f", "null", "-"], { encoding: "utf8", windowsHide: true });
+    assert.equal(result.status, 0, result.stderr);
+    const { levels, peaks } = parseMeasurement(result.stderr);
+    assert.equal(levels.length, 20);
+    assert.equal(peaks.length, 20);
+    assert.ok(levels.every((v: number) => Math.abs(v - (-21.07 + 6)) < 0.1));
+    assert.ok(peaks.every((v: number) => Math.abs(v - (-18.06 + 6)) < 0.1));
+  }
+  const panel = fs.readFileSync(new URL("../client/src/components/BeatRecorder.tsx", import.meta.url), "utf8");
+  assert.match(panel, /api[.]measureMicrophone/);
+  assert.match(panel, /calibration[.]current[?][.]abort[(][)]/);
+  assert.match(panel, /reclean[(]p[.]noise, current, true[)]/, "existing recordings can use improved cleaning without changing preset");
+  assert.match(panel, /p[.]onTake[(][{][^\n]+loudness: made[.]loudness/, "reprocessing a take into Original clears its old processed loudness");
+  assert.match(panel, /phase !== "idle" \|\| auto \|\| room === "measuring"/, "recording and calibration cannot overlap");
+});
+
+test("Original audio keeps captured samples, level, bass and timing, with only the lead trimmed", { skip: !ffmpegPath || !fs.existsSync(ffmpegPath) }, async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cs-original-"));
+  try {
+    // Exact 16-bit samples represented as floats, including bass that the old Off mode removes.
+    const pcm = Float32Array.from({ length: 48000 * 3 }, (_, i) => i < 48000 ? 0 : Math.round(32768 *
+      (0.3 * Math.sin(2 * Math.PI * 50 * i / 48000) + 0.1 * Math.sin(2 * Math.PI * 4000 * i / 48000))) / 32768);
+    const input = path.join(dir, "input.raw"), wav = path.join(dir, "voice.wav");
+    fs.writeFileSync(input, Buffer.from(pcm.buffer));
+    const enc = spawnSync(ffmpegPath as unknown as string, ["-y", "-f", "f32le", "-ar", "48000", "-ac", "1", "-i", input, "-c:a", "pcm_f32le", wav], { encoding: "utf8", windowsHide: true });
+    assert.equal(enc.status, 0, enc.stderr);
+    const before = fs.readFileSync(wav);
+    const made = await processRecording(dir, "voice.wav", "original", 1);
+    assert.equal(made.noise, "original");
+    assert.ok(made.lead > 0 && made.lead <= 1, "the existing first-word protection still applies");
+    assert.ok(Math.abs(made.seconds - (3 - made.lead)) < 0.01);
+    const decoded = spawnSync(ffmpegPath as unknown as string, ["-v", "error", "-i", path.join(dir, made.clean!), "-f", "f32le", "-"], { windowsHide: true });
+    assert.equal(decoded.status, 0, decoded.stderr.toString());
+    const expected = pcm.subarray(Math.round(made.lead * 48000));
+    assert.equal(decoded.stdout.length, expected.length * 4, "no samples added or lost");
+    assert.ok(expected.every((v, i) => v === decoded.stdout.readFloatLE(i * 4)), "sample-identical, treating signed zeros alike, with no gain or limiter delay");
+    assert.ok(fs.readFileSync(wav).equals(before), "original capture remains untouched");
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("video recording budgets follow captured pixels rather than the later export resolution", () => {
+  assert.equal(takeVideoBitrate({ width: 1920, height: 1080 }), 16e6);
+  assert.equal(takeVideoBitrate({ width: 1080, height: 1920 }), 16e6);
+  assert.equal(takeVideoBitrate({ width: 3840, height: 2160 }), 64e6);
+  assert.ok(takeVideoBitrate({ width: 3440, height: 1440 }) > 32e6);
+  assert.equal(takeVideoBitrate({ width: 7680, height: 4320 }), 80e6, "bounded for very large screens");
+  assert.equal(takeVideoBitrate({ width: 320, height: 240 }), 16e6, "small captures keep the existing minimum");
+  assert.equal(takeVideoBitrate(), 16e6);
+  assert.equal(takeVideoBitrate({ width: Infinity, height: 2160 }), 16e6);
+  const app = fs.readFileSync(new URL("../client/src/App.tsx", import.meta.url), "utf8");
+  assert.match(app, /const rate = takeVideoBitrate[(]size[)]/);
 });
 
 // Sound with its static already taken out no longer looks like speech to the model, which then

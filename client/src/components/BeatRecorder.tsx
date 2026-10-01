@@ -32,7 +32,7 @@ interface Props {
 
 const lsGet = (k: string) => { try { return localStorage.getItem(k) ?? ""; } catch { return ""; } };
 const lsSet = (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* ignore */ } };
-const NOISE_LABEL: Record<NoiseReduction, string> = { off: "Off", light: "Light", strong: "Strong", custom: "Custom" };
+const NOISE_LABEL: Record<NoiseReduction, string> = { original: "Original", off: "Off", light: "Light", strong: "Strong", custom: "Custom" };
 
 /** The settings behind the cleaning, in the order the sound goes through them. */
 const TUNING: { key: keyof CleanTuning; label: string; min: number; max: number; step: number; show: (v: number) => string; scale?: number; info: string }[] = [
@@ -72,6 +72,8 @@ export function BeatRecorder(p: Props) {
   const [sound, setSound] = useState(true);
   const [gainDb, setGainDb] = useState(() => clampGain(Number(lsGet(gainKey(lsGet("micDevice")))) || 0));
   const [auto, setAuto] = useState(false);
+  const calibration = useRef<AbortController | null>(null);
+  const [measuredVia, setMeasuredVia] = useState<"Windows" | "Browser" | null>(null);
   // The voice being recorded through Windows, by name; null while the page records it itself.
   const capturing = useRef<string | null>(null);
   const [viaPage, setViaPage] = useState(false);
@@ -87,7 +89,7 @@ export function BeatRecorder(p: Props) {
   gainRef.current = gainDb;
 
   // Open the chosen microphone, boosted, and keep a level meter on it for as long as the panel
-  // is open. The meter listens after the boost: it shows what will be recorded.
+  // is open. This is a preview: Windows can process the actual recording differently.
   useEffect(() => {
     let live = true;
     let frame = 0;
@@ -130,6 +132,7 @@ export function BeatRecorder(p: Props) {
     })();
     return () => {
       live = false;
+      calibration.current?.abort();
       cancelAnimationFrame(frame);
       analyser.current = null;
       boost.current = null;
@@ -156,21 +159,42 @@ export function BeatRecorder(p: Props) {
 
   /** Listen while the person talks as they will on camera, and set the boost from it. */
   async function autoLevel() {
-    const node = analyser.current;
-    if (!node || !samples.current) return;
     setAuto(true);
     setError(null);
-    const peaks: number[] = [];
-    const until = Date.now() + 5000;
-    while (Date.now() < until) {
-      node.getFloatTimeDomainData(samples.current);
-      peaks.push(peakDb(samples.current));
-      await new Promise((r) => setTimeout(r, 50));
-    }
-    const next = autoGain(peaks, gainRef.current);
-    if (next == null) setError("No voice was heard. Press Auto and talk for five seconds, as you will when recording.");
-    else changeGain(next);
-    setAuto(false);
+    try {
+      const measured = await measure("voice");
+      if (!measured) return;
+      const next = autoGain(measured.peaks, gainRef.current);
+      if (next == null) setError("No voice was heard. Press Auto and talk for five seconds, as you will when recording.");
+      else changeGain(next);
+    } catch (e) { setError((e as Error).message); }
+    finally { setAuto(false); }
+  }
+
+  async function measure(mode: "room" | "voice") {
+    const controller = new AbortController();
+    calibration.current = controller;
+    try {
+      const result = await api.measureMicrophone(micLabel.label, gainRef.current, mode, controller.signal);
+      if (controller.signal.aborted) return null;
+      setMeasuredVia(result.native ? "Windows" : "Browser");
+      if (result.native) return result;
+      // Only a device unavailable to DirectShow uses the browser, just as recording does.
+      const node = analyser.current, data = samples.current;
+      if (!node || !data) throw new Error("The microphone is no longer available.");
+      const levels: number[] = [], peaks: number[] = [];
+      const until = Date.now() + (mode === "voice" ? 5000 : 3000);
+      while (Date.now() < until) {
+        if (controller.signal.aborted) return null;
+        node.getFloatTimeDomainData(data);
+        levels.push(levelDb(data)); peaks.push(peakDb(data));
+        await new Promise((r) => setTimeout(r, 50));
+      }
+      return { levels, peaks };
+    } catch (e) {
+      if (controller.signal.aborted) return null;
+      throw e;
+    } finally { if (calibration.current === controller) calibration.current = null; }
   }
 
   useEffect(() => {
@@ -184,21 +208,17 @@ export function BeatRecorder(p: Props) {
   const rate = stream ? micLabel.rate : 0;
 
   async function checkRoom() {
-    const node = analyser.current;
-    if (!node || !samples.current) return;
     setRoom("measuring");
-    const levels: number[] = [];
-    const until = Date.now() + 3000;
-    while (Date.now() < until) {
-      node.getFloatTimeDomainData(samples.current);
-      levels.push(levelDb(samples.current));
-      await new Promise((r) => setTimeout(r, 50));
-    }
-    // The quieter half: a cough or a click should not decide what the room sounds like.
-    levels.sort((a, b) => a - b);
-    const median = levels[Math.floor(levels.length / 4)] ?? -100;
-    setRoom(median);
-    p.onNoise(roomVerdict(median).noise);
+    setError(null);
+    try {
+      const measured = await measure("room");
+      if (!measured) { setRoom(null); return; }
+      // The quieter quarter: a cough or click should not decide the room's setting.
+      const levels = measured.levels.sort((a, b) => a - b);
+      const median = levels[Math.floor(levels.length / 4)] ?? -100;
+      setRoom(median);
+      p.onNoise(roomVerdict(median).noise);
+    } catch (e) { setRoom(null); setError((e as Error).message); }
   }
 
   /**
@@ -273,20 +293,20 @@ export function BeatRecorder(p: Props) {
     Boolean(rec) && (rec!.noise !== noise || (noise === "custom" && !sameTuning(rec!.tuning, tune)));
 
   /** Clean what is already recorded again, from its original, with a different level or tuning. */
-  async function reclean(noise: NoiseReduction, tune: CleanTuning = tuningFor(noise, p.tuning)) {
+  async function reclean(noise: NoiseReduction, tune: CleanTuning = tuningFor(noise, p.tuning), force = false) {
     p.onNoise(noise);
     setError(null);
     const custom = noise === "custom" ? tune : undefined;
     try {
-      if (p.beat.voice && stale(p.beat.voice, noise, tune)) {
+      if (p.beat.voice && (force || stale(p.beat.voice, noise, tune))) {
         setPhase("saving");
         const made = await api.recleanRecording(p.projectId, p.beat.voice.file, noise, p.beat.voice.lead, custom);
-        p.onVoice({ ...p.beat.voice, clean: made.clean ?? p.beat.voice.clean, noise: made.noise, tuning: made.tuning, seconds: made.seconds, loudness: made.loudness });
+        p.onVoice({ ...p.beat.voice, clean: made.clean ?? p.beat.voice.clean, noise: made.noise, tuning: made.tuning, seconds: made.seconds, lead: made.lead, loudness: made.loudness });
       }
-      if (p.beat.take?.clean && stale(p.beat.take, noise, tune)) {
+      if (p.beat.take?.clean && (force || stale(p.beat.take, noise, tune))) {
         setPhase("saving");
         const made = await api.recleanRecording(p.projectId, p.beat.take.file, noise, p.beat.take.lead, custom);
-        p.onTake({ ...p.beat.take, clean: made.clean, noise: made.noise, tuning: made.tuning });
+        p.onTake({ ...p.beat.take, clean: made.clean, noise: made.noise, tuning: made.tuning, loudness: made.loudness });
       }
     } catch (e) {
       setError((e as Error).message);
@@ -295,7 +315,7 @@ export function BeatRecorder(p: Props) {
     }
   }
 
-  const busy = phase !== "idle";
+  const busy = phase !== "idle" || auto || room === "measuring";
   const verdict = typeof room === "number" ? roomVerdict(room) : null;
   const meter = Math.max(0, Math.min(100, ((level.rms + 70) / 70) * 100));
   // Held for a few seconds, and shown in a space that is always there: a warning that came and
@@ -321,7 +341,7 @@ export function BeatRecorder(p: Props) {
 
       <label className="field"><span>Microphone</span>
         <select value={deviceId} disabled={busy || auto} onChange={(e) => {
-          setDeviceId(e.target.value); lsSet("micDevice", e.target.value); setRoom(null);
+          setDeviceId(e.target.value); lsSet("micDevice", e.target.value); setRoom(null); setMeasuredVia(null);
           setGainDb(clampGain(Number(lsGet(gainKey(e.target.value || undefined))) || 0));
         }}>
           <option value="">System default</option>
@@ -330,7 +350,7 @@ export function BeatRecorder(p: Props) {
           ))}
         </select>
       </label>
-      <div className="rec-meter" title={`${Math.round(level.rms)} dB`}>
+      <div className="rec-meter" title={`Browser preview: ${Math.round(level.rms)} dB. Auto and Check the room measure the Windows recording path when available.`}>
         <span style={{ width: `${meter}%` }} className={clipping ? "clip" : ""} />
       </div>
       <label className="field"><span>Microphone boost</span>
@@ -348,6 +368,7 @@ export function BeatRecorder(p: Props) {
         {label && <span className="ellipsis">{label}</span>}
         {rate && <span>{rate / 1000} kHz</span>}
       </div>
+      <p className="muted small">Browser preview meter · {measuredVia ? `Last calibration: ${measuredVia}` : "Auto and room checks use the recording path"}</p>
       {isBluetoothMic(label) && <p className="rec-warn">This looks like a Bluetooth headset. Its microphone records at telephone quality — a USB or built-in microphone will sound far better.</p>}
       <p className={`rec-status ${clipping || tooQuiet ? "warn" : ""}`} role="status">
         {clipping ? `Too loud: the level is hitting the top. ${gainDb > GAIN_MIN ? "Turn the boost down, or press Auto." : "Turn the microphone's level down in Windows sound settings, or move back a little."}`
@@ -356,15 +377,15 @@ export function BeatRecorder(p: Props) {
       </p>
 
       <div className="row rec-room">
-        <button className="ghost small" disabled={!stream || busy || room === "measuring"} onClick={checkRoom} title="Stay quiet for three seconds while the microphone listens to the room">
+        <button className="ghost small" disabled={!stream || busy} onClick={checkRoom} title="Stay quiet for three seconds while the microphone listens to the room">
           <Ear size={13} /> {room === "measuring" ? "Listening… stay quiet" : "Check the room"}
         </button>
         {verdict && <span className={`small rec-verdict ${verdict.tone}`}>{verdict.label} ({Math.round(room as number)} dB). {verdict.advice}</span>}
       </div>
 
-      <label className="field"><span>Background noise reduction</span>
+      <label className="field"><span>Audio processing</span>
         <div className="seg">
-          {(["off", "light", "strong"] as NoiseReduction[]).map((n) => (
+          {(["original", "off", "light", "strong"] as NoiseReduction[]).map((n) => (
             <button key={n} className={p.noise === n ? "active" : ""} disabled={busy} onClick={() => void reclean(n)}>{NOISE_LABEL[n]}</button>
           ))}
           <button className={p.noise === "custom" ? "active" : ""} disabled={busy} title="Your own settings, below"
@@ -373,8 +394,10 @@ export function BeatRecorder(p: Props) {
       </label>
       <details className="rec-tune">
         <summary><SlidersHorizontal size={12} /> Fine-tune the cleaning</summary>
-        <p className="muted small">These are what {p.noise === "custom" ? "your custom setting" : NOISE_LABEL[p.noise]} does. Move one and the setting becomes Custom.</p>
-        {TUNING.map((t) => {
+        <p className="muted small">{p.noise === "original"
+          ? "Original keeps the captured level and tone, with no Studio filters, compression or loudness boost. Only the lead-in is trimmed. Choose Custom to start processing it."
+          : `These are what ${p.noise === "custom" ? "your custom setting" : NOISE_LABEL[p.noise]} does. Move one and the setting becomes Custom.`}</p>
+        {p.noise !== "original" && TUNING.map((t) => {
           const value = Math.round(current[t.key] * (t.scale ?? 1) * 100) / 100;
           return (
             <div className="rec-tune-row" key={t.key}>
@@ -392,9 +415,9 @@ export function BeatRecorder(p: Props) {
           );
         })}
         <div className="row">
-          {waiting && (
-            <button className="primary small" disabled={busy} onClick={() => void reclean("custom", current)} title="Clean this beat's recording again, from its original, with these settings">
-              Clean again with these settings
+          {(p.beat.voice || p.beat.take?.clean) && (
+            <button className="primary small" disabled={busy} onClick={() => void reclean(p.noise, current, true)} title="Clean this beat's recording again, from its original, with these settings">
+              {waiting ? "Clean again with these settings" : "Re-clean from original"}
             </button>
           )}
           <span className="grow" />
@@ -412,7 +435,7 @@ export function BeatRecorder(p: Props) {
         {p.beat.voice && phase === "idle" && (
           <>
             <audio controls src={api.recordingUrl(p.projectId, p.beat.voice.clean)} />
-            <p className="muted small">{formatSeconds(p.beat.voice.seconds)} · noise reduction {NOISE_LABEL[p.beat.voice.noise].toLowerCase()} · the beat lasts as long as this</p>
+            <p className="muted small">{formatSeconds(p.beat.voice.seconds)} · audio {NOISE_LABEL[p.beat.voice.noise].toLowerCase()} · the beat lasts as long as this</p>
           </>
         )}
         <div className="row">

@@ -240,7 +240,7 @@ export interface Beat {
 
 /** How much steady background noise is taken out of a recording. */
 /** A preset, or `custom`: the project's own tuning (`settings.cleaning`). */
-export type NoiseReduction = "off" | "light" | "strong" | "custom";
+export type NoiseReduction = "original" | "off" | "light" | "strong" | "custom";
 export type { CleanTuning } from "../../server/public/cleaning.js";
 
 /**

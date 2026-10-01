@@ -86,6 +86,9 @@ committing.
   that records needs the creator's say-so first; keep it to a few seconds of room sound, in the
   scratch project, and delete it. The pure parts — device matching, lining up, cleaning — are
   tested with generated sound and need no microphone.
+  For a real take, omit `--use-fake-ui-for-media-stream` too: it can bypass Electron's capture
+  handler and select the whole desktop instead of Studio's page. Inspect an extracted frame,
+  not only the recorder's saved dimensions, before claiming the picture was verified.
 - **Tune the cleaning on copies.** When a real recording of the creator's is the best test of
   the noise removal, copy it into the scratchpad and work on the copy; never process, restore
   or rewrite it where it is, including in the Recycle Bin.

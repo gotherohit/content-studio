@@ -13,7 +13,7 @@
 //   compress  how firmly loud and quiet words are brought together: a ratio, 1 is not at all
 //   loudness  the finished loudness, in LUFS
 
-export const LEVELS = ["off", "light", "strong", "custom"];
+export const LEVELS = ["original", "off", "light", "strong", "custom"];
 
 /**
  * These favour the voice on purpose: the microphone is recorded through the sound driver, which
@@ -49,7 +49,7 @@ export function cleanTuning(saved) {
   return out;
 }
 
-/** The tuning a level stands for; `custom` is the saved one. An unknown level is Light. */
+/** Original bypasses the chain; choosing Custom from it starts from Light, as an unknown level does. */
 export function tuningFor(level, custom) {
   if (level === "custom") return cleanTuning(custom);
   return PRESETS[level] ?? PRESETS.light;

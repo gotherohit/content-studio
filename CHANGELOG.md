@@ -2,6 +2,28 @@
 
 What changed in each release, newest first. Versions are the ones the app updates itself to.
 
+## 0.42.0
+
+- **Original audio, for an unprocessed baseline.** Keeps the captured level and tone, with
+  no Studio noise removal, rumble filter, compressor, loudness boost or limiter. The lead-in
+  is still trimmed, and the sound is stored as lossless FLAC. It works for voices, takes and
+  reprocessing an existing recording; Light remains the default.
+- **Large-screen takes get a bitrate budget for their actual pixels.** Previously the export
+  size decided the capture bitrate, so choosing a 1080p export also limited a 4K capture.
+  The budget now scales from 16 Mbps at 1080p to 64 Mbps at 4K, capped at 80 Mbps.
+- **Room checks and Auto gain hear what Windows records.** They previously measured the
+  browser's raw microphone preview, which could be noisier than the actual capture and lead
+  to unnecessarily strong cleaning or the wrong boost. Both now use the same Windows device,
+  mono format and boost as voice and take recording. Checks save no audio, cancel when the
+  panel closes, and show which path was used. The bar is explicitly labelled as a preview.
+- **Protect continuous speech from the noise remover.** It no longer guesses a noise spectrum
+  from the quietest frequencies of a voice when no reliable pause was found. Learning excludes
+  padded silence, requires enough actual room sound, and uses stricter pause boundaries. The
+  speech gate stays open when there is no clear resting level and also recognises voices only
+  modestly above the room, instead of relying on the speech model alone.
+- **Re-clean from original** is available even with the same preset, for both voices and takes.
+  Existing recordings can use the improved cleaner without switching settings or recording again.
+
 ## 0.41.0
 
 - **The microphone is recorded through Windows, the way OBS records it.** The app recorded your

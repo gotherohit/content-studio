@@ -160,6 +160,9 @@ export const api = {
   recleanRecording: (projectId: string, name: string, noise: NoiseReduction, lead: number, tune?: CleanTuning) =>
     fetch(`/api/projects/${projectId}/recordings/${encodeURIComponent(name)}/clean`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ noise, lead, tune }) })
       .then((r) => j<RecordingResult>(r)),
+  measureMicrophone: (label: string, gainDb: number, mode: "room" | "voice", signal: AbortSignal) =>
+    fetch("/api/microphone/measure", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ label, gainDb, mode }), signal })
+      .then((r) => j<{ native: true; levels: number[]; peaks: number[] } | { native: false }>(r)),
   /** Record the microphone through Windows; rejects when Windows does not offer it, and the page records it itself. */
   startCapture: (projectId: string, name: string, label: string, gainDb: number) =>
     fetch(`/api/projects/${projectId}/recordings/${encodeURIComponent(name)}/capture`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ label, gainDb }) })

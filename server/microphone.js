@@ -70,6 +70,51 @@ export function captureArgs(device, file, gainDb = 0) {
   ];
 }
 
+/** Use the capture's input, format and boost for calibration too, without writing any sound. */
+export function measurementArgs(device, gainDb = 0, seconds = 3) {
+  const capture = captureArgs(device, "unused", gainDb);
+  const inputEnd = capture.indexOf("-i") + 2;
+  const gain = capture.includes("-af") ? `${capture[capture.indexOf("-af") + 1]},` : "";
+  return ["-nostats", ...capture.slice(1, inputEnd), "-t", String(seconds === 5 ? 5 : 3), "-af",
+    `${gain}aformat=sample_fmts=flt:sample_rates=48000:channel_layouts=mono,asetnsamples=n=2400:p=0,astats=metadata=1:reset=1,` +
+    "ametadata=print:key=lavfi.astats.Overall.RMS_level,ametadata=print:key=lavfi.astats.Overall.Peak_level",
+    "-f", "null", "-"];
+}
+
+export function parseMeasurement(log) {
+  const values = (key) => [...String(log).matchAll(new RegExp(`lavfi[.]astats[.]Overall[.]${key}=(-?[0-9.]+|-inf)`, "g"))]
+    .map((m) => m[1] === "-inf" ? -120 : Number(m[1])).filter(Number.isFinite);
+  return { levels: values("RMS_level"), peaks: values("Peak_level") };
+}
+
+const measuring = new Set();
+
+/** Bounded, cancellable measurement through the actual recording path; nothing is saved. */
+export function measureMicrophone(device, gainDb = 0, seconds = 3, signal) {
+  if (signal?.aborted) return Promise.reject(new Error("Microphone check cancelled."));
+  if (measuring.size || running.size) return Promise.reject(new Error("Finish the current microphone check or recording first."));
+  return new Promise((resolve, reject) => {
+    const child = spawn(ffmpegPath, ["-hide_banner", ...measurementArgs(device, gainDb, seconds)], { windowsHide: true });
+    measuring.add(child);
+    let log = "", failure = null;
+    const abort = () => { failure = new Error("Microphone check cancelled."); child.kill(); };
+    signal?.addEventListener("abort", abort, { once: true });
+    const timer = setTimeout(() => { failure = new Error("The microphone check timed out."); child.kill(); }, 15000);
+    child.stderr.on("data", (b) => { log = (log + b).slice(-200000); });
+    child.on("error", (e) => { failure = e; });
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      measuring.delete(child);
+      signal?.removeEventListener("abort", abort);
+      const result = parseMeasurement(log);
+      if (failure) reject(failure);
+      else if (code !== 0 || result.levels.length < 10 || result.peaks.length < 10)
+        reject(new Error("Windows could not measure that microphone. Check the device and try again."));
+      else resolve(result);
+    });
+  });
+}
+
 /** The wall-clock second a capture's first sample was heard, from what `ffmpeg -i` prints about it. */
 export function parseStart(text) {
   const m = /start:\s*(\d+(?:\.\d+)?)/.exec(String(text));
@@ -128,6 +173,7 @@ export async function stopCapture(file) {
 
 /** Stop everything still recording: the app is closing, or a project is being let go of. */
 export async function stopAllCaptures(under = null) {
+  if (!under) for (const child of measuring) child.kill();
   const files = [...running.keys()].filter((f) => !under || f.toLowerCase().startsWith(path.resolve(under).toLowerCase() + path.sep));
   await Promise.all(files.map((f) => stopCapture(f)));
 }

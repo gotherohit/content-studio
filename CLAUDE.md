@@ -412,16 +412,20 @@ wait. The AI request aborts when the pane closes. Assume a recording is in progr
 - **RNNoise does not recognise a voice recorded through a sound driver's processing.** Its
   voice activity read 9/10 through speech on raw Chromium takes and 1–5 on OBS's and on
   suppressed ones, so a gate driven by it shut on the words, and a "pause" judged by it would
-  have learnt the voice as noise. Words are also found by level (`speechActivity`: 12 dB over
+  have learnt the voice as noise. Words are also found by level (`speechActivity`: 6 dB over
   the resting level counts), and a pause is only ever judged by level (`isPause`). Light does
   not use the model at all.
 - **Static is taken out by its spectrum, ahead of the speech model** (`server/spectral.js`):
-  learnt from the pauses RNNoise finds (`voiceActivity`, `isPause`), subtracted everywhere. Two
+  learnt from quiet stretches of the untouched recording (`pauseFloor`, `isPause`), subtracted everywhere. Two
   things it took to work. The level a frequency is judged by must be an average over frames and
   neighbours, following only a clear onset at once — a peak-follower over-read static by
   several dB and let it through as signal. And the speech model's gate must then be driven by
   `activity` measured on the untouched sound: sound with its static removed no longer looks
   like speech to RNNoise, and its gate shut on the voice.
+- **A quiet frequency is not necessarily noise.** Without a clear resting level, skip spectrum
+  learning and keep the speech gate open. `noiseProfile` also requires enough confirmed quiet
+  frames and excludes the STFT's synthetic padding. Never restore the fallback to per-bin
+  minima across the whole recording: a continuous voice is then learnt and removed as noise.
 - **A level measured during speech stops meaning "the voice" when the noise is as loud as the
   voice.** On takes with static 4–9 dB under the voice, removing the static alone made "voice
   down more than 6 dB" read 60–90 %. Do not tune by it there; say that it cannot be judged
@@ -429,8 +433,8 @@ wait. The AI request aborts when the pane closes. Assume a recording is in progr
 - **The speech model must never have the whole voice.** RNNoise at full strength, on real takes
   in a noisy room (room -27 dB, voice -19), pulled the voice's 3–8 kHz down by more than 6 dB in
   40–69 % of speaking moments — words went dull — and `afftdn` and a level-driven `agate` after
-  it made it worse; both are gone. Its voice-activity output is reliable, so `rnnoiseStream`
-  uses it: while speech is detected (from LOOKAHEAD before to HANGOVER after) only `speech` of
+  it made it worse; both are gone. `rnnoiseStream` follows the original sound's combined level
+  and model activity: while speech is detected (from LOOKAHEAD before to HANGOVER after) only `speech` of
   the output is the model's and the rest is the dry recording, lined up; in a pause it is the
   model's (`pauseMix`) turned down (`pause`). A cap of 0.5 is exactly 6 dB off a word at worst.
   Judge any change to the cleaning on real recordings, measured during speech only — averages
@@ -441,6 +445,12 @@ wait. The AI request aborts when the pane closes. Assume a recording is in progr
   preset does. `custom` uses `settings.cleaning`; a recording stores the tuning it was cleaned
   with, which is how the panel knows to offer cleaning it again. Anything from a request goes
   through `cleanTuning` before it reaches a filter string.
+- **Original bypasses the processing chain.** It only trims the lead-in and stores the capture
+  as FLAC, without filtering, compression, normalisation or limiting. Its tuning is not shown;
+  switching from it to Custom starts with Light. Do not quietly apply the Off preset to it:
+  Off still filters rumble and sets loudness. The PCM regression checks level, bass and timing.
+  DirectShow is the app's Windows capture API; OBS uses WASAPI. Native capture does not by itself
+  guarantee identical driver processing, and no noise reduction can promise to beat OBS on every mic.
 - **Anything in the recorder that can appear and disappear needs a place of its own.** The
   clipping warning was mounted and unmounted as the level moved, and every button under it
   slid up and down under the pointer. It is now one element of fixed height whose text changes,
@@ -459,9 +469,12 @@ wait. The AI request aborts when the pane closes. Assume a recording is in progr
 - **A take's picture file has no sound.** Anything that plays or saves a take must pair
   `take.video` with `take.clean` (`TakePlayer`, `takeGraph`); a bare `<video>` of it looked like
   the take had not recorded the voice, and its download menu saved a silent WebM.
-- **The microphone boost is a Web Audio gain in front of everything** (`boostedMic`): meter,
-  voice and take all record its output, so the meter shows what is recorded. Its
-  `AudioContext` must be resumed before recording, or the destination stream is silent.
+- **Calibration must use the recording path.** `measurementArgs` shares the Windows capture's
+  device, format and boost; ffmpeg sends only levels to its log and sound to the null sink.
+  Checks are bounded, mutually exclusive, and aborted when the panel closes. Only an unavailable
+  DirectShow device falls back to browser measurement; an actual measurement error must be shown.
+  The Web Audio meter (`boostedMic`) remains a browser preview, not a measurement of the native
+  capture. Its `AudioContext` must be resumed before fallback recording, or that stream is silent.
 - **Never normalise a voice with single-pass `loudnorm`.** In its dynamic mode it lifts the
   pauses, and brought the noise back up by as much as the denoiser had taken out. Loudness is
   measured once (`ebur128`) and applied as one fixed gain; the expander's threshold is then set
@@ -488,6 +501,9 @@ wait. The AI request aborts when the pane closes. Assume a recording is in progr
   one screen — sizes and pixel ratio are measured at record time; the tests cover 16:10, 21:9,
   portrait, 16:9 and scaled displays. A re-clean keeps the picture it has. `getDisplayMedia` needs the click's user activation, so it is requested
   straight after the click, before the countdown.
+- **A take's bitrate follows its captured pixels**, through `takeVideoBitrate(track.getSettings())`,
+  never the export quality. Otherwise a 4K capture is restricted to the 1080p budget just because
+  the eventual export is smaller. Keep the minimum budget and a finite upper bound.
 - **Chromium's fake media devices fake the screen too.** `--use-fake-device-for-media-stream`
   gives a test microphone, and also replaces tab capture with a test pattern — test voice with
   it, and takes without it, muted.

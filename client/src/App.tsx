@@ -40,9 +40,9 @@ import { FilesPane } from "./components/FilesPane";
 import { NewProjectDialog } from "./components/NewProjectDialog";
 import { ExportDialog, defaultExportFolder, type ExportRun } from "./components/ExportDialog";
 import { ExportFramer } from "./components/ExportFramer";
-import { beatTimings, captureZoom, capturedVideoTime, takeCrop, centredFrame, clampFrame, containedBox, exportSettings, exportViewport, outputSize } from "./exportPlan";
+import { beatTimings, captureZoom, capturedVideoTime, takeCrop, centredFrame, clampFrame, containedBox, exportSettings, exportViewport } from "./exportPlan";
 import { BeatRecorder } from "./components/BeatRecorder";
-import { LEAD_SECONDS, boostedMic, micConstraints, recordingInUse, recordingName } from "./recording";
+import { LEAD_SECONDS, boostedMic, micConstraints, recordingInUse, recordingName, takeVideoBitrate } from "./recording";
 import { tuningFor } from "../../server/public/cleaning.js";
 import type { ExportPlanBeat, ExportVideo } from "./desktop";
 import type { BeatExport, BeatTake, BeatVoice, ExportSettings, VerticalFrame } from "./types";
@@ -1059,12 +1059,10 @@ export default function App() {
     if (!desktop || !project) return;
     const beat = project.beats[index];
     if (!beat) return;
-    const s = exportSettings(project.settings.export);
     // A take records the whole window as it is, the way a screen recorder records a screen;
     // the picture is fitted into 16:9 afterwards, with bars if the window is another shape.
     const page = { width: window.innerWidth, height: window.innerHeight };
     const pixelRatio = window.devicePixelRatio || 1;
-    const out = outputSize("landscape", s.quality);
     const noise = project.settings.noise ?? "light";
     let crop: { w: number; h: number } | null = null;
     const before = { stage: captureStage(), beat: activeBeatId, present };
@@ -1114,7 +1112,7 @@ export default function App() {
       if (size?.width && size?.height) crop = takeCrop(page, page, { width: size.width, height: size.height }, pixelRatio);
       const tracks = [...screen.getVideoTracks(), ...(boosted?.stream.getAudioTracks() ?? [])];
       const mime = ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"].find((m) => MediaRecorder.isTypeSupported(m)) ?? "video/webm";
-      const rate = out.width >= 3840 ? 40e6 : out.width >= 2560 ? 24e6 : 16e6;
+      const rate = takeVideoBitrate(size);
       const rec = new MediaRecorder(new MediaStream(tracks), { mimeType: mime, videoBitsPerSecond: rate, audioBitsPerSecond: 256000 });
       const chunks: Blob[] = [];
       rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };

@@ -3,7 +3,7 @@
 // The speech model (rnnoise.js) is good at telling a voice from everything else, but it is
 // held back while someone speaks, to keep the voice whole, and so the static stays under the
 // words. Static is steady, though: it has the same spectrum in a pause as under a word. So it
-// is measured where there is nothing else — the pauses, which RNNoise's voice detection finds
+// is measured where there is nothing else — the pauses, judged on the original sound's level
 // — and subtracted, frequency by frequency, everywhere. A frequency where the voice is well
 // above the static is left alone; one where there is only static is turned down. This is what
 // an editor's "reduce noise" effect does.
@@ -94,37 +94,36 @@ function framer(onFrame) {
 
 /**
  * The static's power at each frequency, from a recording's pauses. `quiet(from, to)` says
- * whether the samples in that range are free of speech — the caller knows, from RNNoise.
- * When there is too little pause to learn from, the quietest each frequency ever gets (smoothed
- * over a few frames) stands in: static is what is left when nothing else is sounding.
- * Returns null for an empty recording.
+ * whether the samples in that range are free of speech. Without enough confirmed room sound,
+ * return null: a voice's quietest frequencies are still voice, not a substitute noise profile.
  */
 export async function noiseProfile(file, quiet) {
-  const sum = new Float64Array(BINS), least = new Float64Array(BINS).fill(Infinity), recent = new Float64Array(BINS);
+  const sum = new Float64Array(BINS);
   const re = new Float32Array(SIZE), im = new Float32Array(SIZE);
-  let learnt = 0, frames = 0;
+  let learnt = 0, received = 0;
   const cut = framer((index, frame) => {
+    const start = index * HOP - (SIZE - HOP);
+    // Padding exists only to reconstruct the signal; it was never heard by the microphone.
+    if (start < 0 || start + SIZE > received || !quiet(start, start + SIZE)) return;
     for (let i = 0; i < SIZE; i++) { re[i] = frame[i] * WINDOW[i]; im[i] = 0; }
     fft(re, im);
-    const start = index * HOP - (SIZE - HOP);
-    const pause = quiet(start, start + SIZE);
     for (let k = 0; k < BINS; k++) {
       const power = re[k] * re[k] + im[k] * im[k];
-      if (pause) sum[k] += power;
-      recent[k] = frames ? recent[k] * 0.8 + power * 0.2 : power;
-      if (frames >= 8 && recent[k] < least[k]) least[k] = recent[k];
+      sum[k] += power;
     }
-    if (pause) learnt++;
-    frames++;
+    learnt++;
   });
   const read = sampleReader();
-  for await (const chunk of fs.createReadStream(file)) cut.push(read(chunk));
+  for await (const chunk of fs.createReadStream(file)) {
+    const samples = read(chunk);
+    received += samples.length;
+    cut.push(samples);
+  }
   cut.end();
-  if (!frames) return null;
+  if (learnt < 24) return null;
   const profile = new Float32Array(BINS);
   // A quarter of a second of pause is enough for a steady noise.
-  if (learnt >= 24) for (let k = 0; k < BINS; k++) profile[k] = sum[k] / learnt;
-  else for (let k = 0; k < BINS; k++) profile[k] = Number.isFinite(least[k]) ? least[k] * 1.5 : 0;
+  for (let k = 0; k < BINS; k++) profile[k] = sum[k] / learnt;
   return profile;
 }
 
