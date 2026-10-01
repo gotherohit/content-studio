@@ -2,6 +2,29 @@
 
 What changed in each release, newest first. Versions are the ones the app updates itself to.
 
+## 0.41.0
+
+- **The microphone is recorded through Windows, the way OBS records it.** The app recorded your
+  voice through its built-in browser engine, which opens a Windows microphone in "raw" mode,
+  past the sound driver's own processing. That was why a recording was hissy where OBS, on the
+  same microphone, was clean. 0.40.0 turned the browser's noise suppression on to hide the
+  hiss, and that took about 15 dB of the voice's upper frequencies with it — the voice came out
+  dull. Now the voice is recorded by ffmpeg through Windows itself, which gets the driver's
+  sound: in a test here its background matched an OBS recording's level and spectrum. The
+  level meter still uses the browser; if Windows does not offer a microphone, the browser
+  records it as before and the recorder says so.
+- **A take's sound and picture are recorded side by side and lined up by the clock.** Measured
+  with a flash and a beep at one instant, they agree to within about a twentieth of a second.
+- **Cleaning does much less by default.** With a clean recording to start from, Light no longer
+  uses the speech model at all — it takes a little steady noise out, evens the level slightly
+  and sets the loudness. Strong takes more static out and lets the model have at most half the
+  voice. The model's speech detection proved unreliable on driver-processed sound — it read
+  whole sentences as barely speech, and the gate driven by it turned words down — so words are
+  now also found by their level, and the static is learnt only from stretches at the
+  recording's resting level.
+- The "Reduce microphone noise while recording" switch from 0.40.0 is gone: it only affected
+  the browser's recording, which is no longer how the voice is recorded.
+
 ## 0.40.0
 
 - **Much less static in a recording.** The app was recording the bare microphone. Chromium

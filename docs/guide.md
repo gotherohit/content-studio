@@ -511,14 +511,14 @@ the top (clipping, which nothing can repair afterwards) or when your voice is ve
 also warns when the microphone is a Bluetooth headset: while recording, those fall back to
 telephone quality, and a USB or built-in microphone will sound far better.
 
-**Reduce microphone noise while recording** is on unless you turn it off, and it matters more
-than any setting further down. Without it the app records the bare microphone: its own hiss
-and static, with none of the clean-up a sound driver or a video call applies. A laptop's
-built-in microphone is very noisy that way — static only a few dB under a quiet voice — and
-noise that close to the voice cannot be taken out afterwards without taking some of the voice
-with it. With it on, the static is kept out as the sound is recorded. Turn it off for a good
-USB or studio microphone, to record exactly what it hears. It is part of the recording: it
-cannot be changed on a recording once made, only for the next one.
+**How the voice is recorded.** The app records your microphone through Windows itself, the way
+OBS and other recording programs do, so you get the sound your sound driver gives — on a
+laptop that includes the maker's clean-up for its built-in microphone. (The level bar comes from
+the browser engine inside the app, which hears the microphone without that clean-up, so it can
+look a little noisier than the recording is.) If Windows does not offer the microphone you
+chose, the browser records it instead and the recorder tells you; such a recording can be
+noisier. A microphone close to your mouth — a headset or a USB microphone — still beats any
+built-in one.
 
 **Microphone boost** turns the microphone up or down, from −12 to +24 dB, before anything is
 recorded; the level bar shows the boosted sound, so what you see is what is recorded. Press
@@ -536,18 +536,18 @@ is, then picks the noise reduction to match.
 | | What it does |
 |---|---|
 | Off | Rumble below the voice removed and the loudness set. Nothing else touched. |
-| Light | While you speak, at most half the sound is the speech model's, so it can never take more than 6 dB off a word and your voice keeps its own sound. Between words the noise is taken down, but not to silence, so the background does not come and go with your words. The default. |
-| Strong | The model gets 70 % while you speak — cleaner under the voice, at most about 10 dB off a word — and the pauses are made silent. For noisy rooms; a word can still sound a little dull. |
+| Light | A little steady noise taken out by its spectrum, the level evened slightly, and the loudness set. The voice is otherwise left as it was recorded. The default. |
+| Strong | More steady noise taken out, and a speech model takes out what is not a voice — at most half the sound while you speak, so never more than 6 dB off a word — and turns the pauses down. For noisy rooms; a word can still sound a little dull. |
 | Custom | Your own settings, below. |
 
-The cleaning has two parts. Steady noise is taken out by its spectrum, learnt from your
-pauses. Then comes RNNoise, a small speech model from Xiph that runs inside the app. It takes
-out what is not a voice — fans, hum, keyboards, traffic, hiss — and it says where the words
-are. That second part is what protects your voice: the model is only allowed part of the sound
-while you are speaking, and works at full strength in the gaps, which open a little before each
-word and close a little after it. The more noise there is under your voice, the more any
-cleaning costs the voice itself; if words sound dull, lower **Clean-up while you speak**, and
-if you can, get the microphone closer or the room quieter — nothing done afterwards is as good.
+The cleaning has two parts. Steady noise is taken out by its spectrum, learnt from the
+stretches where the recording is at its quietest. Then, with Strong or your own settings, comes
+RNNoise, a small speech model from Xiph that runs inside the app: it takes out what is not a
+voice — fans, hum, keyboards, traffic — but only part of the sound while you are speaking, and
+at full strength in the gaps, which open a little before each word and close a little after
+it. The more noise there is under your voice, the more any cleaning costs the voice itself; if
+words sound dull, lower **Clean-up while you speak**, and if you can, get the microphone closer
+or the room quieter — nothing done afterwards is as good.
 
 **Fine-tune the cleaning** opens the settings behind the preset you have chosen. Each has an
 **ⓘ** that says what it does. Moving one makes the setting **Custom**:

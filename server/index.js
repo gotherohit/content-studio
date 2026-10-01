@@ -16,6 +16,7 @@ import { createInput } from "./input.js";
 import { TYPES, viewerFor, safeName, uniqueName, removeAsset } from "./assets.js";
 import { derived, parsePicture, processRecording } from "./recordings.js";
 import { cleanTuning, parseTuning } from "./public/cleaning.js";
+import { alignCapture, listMicrophones, matchMicrophone, startCapture, stopAllCaptures, stopCapture } from "./microphone.js";
 import { renderDeck, openSlideshow, hasPowerPoint, findSoffice } from "./slides.js";
 import { pickFolder } from "./picker.js";
 import { FilesError, MAX_BYTES, createEntry, deleteEntry, listDir, readText, renameEntry, statFile, writeText } from "./files.js";
@@ -246,6 +247,7 @@ app.delete("/api/projects/:id", async (req, res) => {
   // sit in it, and Windows will not delete a folder a process is working in — so the app
   // was reliably blocking its own delete.
   const releases = [];
+  await stopAllCaptures(dir);
   if (await jupyter.releaseUnder(dir)) releases.push("JupyterLab");
   const shells = terminals.closeUnder(dir);
   if (shells) releases.push(`${shells} terminal${shells === 1 ? "" : "s"}`);
@@ -422,13 +424,61 @@ app.get("/api/projects/:id/recordings/:name", (req, res) => {
   res.sendFile(path.join(recordingsDir(req.params.id), name), (err) => { if (err && !res.headersSent) res.status(404).end(); });
 });
 
+// The microphone, recorded through Windows rather than by the page (see microphone.js). A
+// voice is the capture itself (`voice-….mka`); a take's is kept beside its picture.
+const captureFile = (id, name) => {
+  const dir = recordingsDir(id);
+  const final = path.join(dir, /\.mka$/i.test(name) ? name : derived(name).sound);
+  return { dir, final, part: `${final}.part` };
+};
+
+/** Start recording the microphone the page names. 409 when Windows does not offer it: the page then records it itself. */
+app.post("/api/projects/:id/recordings/:name/capture", async (req, res) => {
+  if (!safeId(req.params.id) || !config.dirOf(req.params.id)) return res.status(400).json({ error: "bad id" });
+  try {
+    const device = matchMicrophone(req.body?.label, await listMicrophones());
+    if (!device) return res.status(409).json({ error: "Windows does not offer that microphone for direct recording." });
+    const { dir, part } = captureFile(req.params.id, safeName(req.params.name));
+    await fs.mkdir(dir, { recursive: true });
+    await startCapture(device, part, Number(req.body?.gainDb) || 0);
+    res.json({ ok: true, device });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+/**
+ * Stop it. `discard` throws the sound away. `at` is when the page started recording a take's
+ * picture, and the sound is cut to begin there. A voice is cleaned straight away and answered
+ * with what the beat stores; a take is cleaned when its picture arrives.
+ */
+app.post("/api/projects/:id/recordings/:name/capture/stop", async (req, res) => {
+  if (!safeId(req.params.id) || !config.dirOf(req.params.id)) return res.status(400).json({ error: "bad id" });
+  const name = safeName(req.params.name);
+  const { dir, final, part } = captureFile(req.params.id, name);
+  try {
+    await stopCapture(part);
+    if (req.body?.discard) {
+      await fs.rm(part, { force: true });
+      return res.json({ ok: true });
+    }
+    const cut = await alignCapture(part, final, Number(req.body?.at));
+    if (!/\.mka$/i.test(name)) return res.json({ ok: true, cut });
+    res.json(await processRecording(dir, name, String(req.body?.noise || "light"), Number(req.body?.lead) || 0, null,
+      req.body?.tune ? cleanTuning(req.body.tune) : null));
+  } catch (e) {
+    await fs.rm(part, { force: true }).catch(() => {});
+    res.status(500).json({ error: `The recording could not be saved: ${e.message}` });
+  }
+});
+
 /** A recording and everything made from it go to the Recycle Bin together. */
 app.delete("/api/projects/:id/recordings/:name", async (req, res) => {
   if (!safeId(req.params.id) || !config.dirOf(req.params.id)) return res.status(400).end();
   const name = safeName(req.params.name);
   const dir = recordingsDir(req.params.id);
   try {
-    for (const file of [name, derived(name).clean, derived(name).video, derived(name).legacyVideo]) await removeAsset(dir, file);
+    for (const file of [name, derived(name).clean, derived(name).video, derived(name).legacyVideo, derived(name).sound]) await removeAsset(dir, file);
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -675,6 +725,8 @@ async function shutdown() {
   if (leaving) return;
   leaving = true;
   await researchAgent.stopAll();
+  // A microphone still being recorded is closed properly, so its file is whole.
+  try { await stopAllCaptures(); } catch { /* already gone */ }
   try { terminals.closeAll(); } catch { /* already gone */ }
   try { await jupyter.shutdown(); } catch { /* already gone */ }
   process.exit(0);

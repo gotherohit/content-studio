@@ -16,7 +16,7 @@ import path from "node:path";
 import { pipeline } from "node:stream/promises";
 import ffmpegPath from "ffmpeg-static";
 import { parseProbe } from "../electron/export-video.js";
-import { isPause, loadRnnoise, rnnoiseStream, voiceActivity } from "./rnnoise.js";
+import { floorOf, isPause, listen, loadRnnoise, rnnoiseStream, speechActivity } from "./rnnoise.js";
 import { noiseProfile, spectralStream } from "./spectral.js";
 import { LEVELS, PRESETS, tuningFor } from "./public/cleaning.js";
 
@@ -147,8 +147,9 @@ export function modelUse(tuning) {
 /** Names for what is made from an original: `take-x.webm` → `take-x.clean.flac`, `take-x.video.webm`. */
 export function derived(name) {
   const stem = name.replace(/\.[^.]+$/, "");
-  // Takes recorded before 0.36.0 kept their picture as a WebM copy.
-  return { clean: `${stem}.clean.flac`, video: `${stem}.video.mp4`, legacyVideo: `${stem}.video.webm` };
+  // Takes recorded before 0.36.0 kept their picture as a WebM copy. `sound` is a take's
+  // microphone, recorded through Windows beside the picture (see microphone.js).
+  return { clean: `${stem}.clean.flac`, video: `${stem}.video.mp4`, legacyVideo: `${stem}.video.webm`, sound: `${stem}.mic.mka` };
 }
 
 /**
@@ -223,15 +224,18 @@ async function denoiseToFile(file, dest, tuning) {
     await run(["-i", file, "-map", "0:a:0", "-af", decodeFilter(tuning), "-f", "f32le", raw]);
     const stages = [createReadStream(raw)];
     const use = modelUse(tuning);
-    const rn = use || tuning.staticDb > 0 ? await loadRnnoise() : null;
-    // Where the words are, judged once on the sound as it was recorded: the static is learnt
-    // from the pauses between them, and the speech model's gate follows them.
-    const activity = rn ? await voiceActivity(rn, raw) : null;
-    if (tuning.staticDb > 0) {
-      const profile = await noiseProfile(raw, (from, to) => isPause(activity, from, to));
-      if (profile) stages.push(spectralStream(profile, tuning.staticDb));
+    const rn = use ? await loadRnnoise() : null;
+    if (use || tuning.staticDb > 0) {
+      // Where the words and the pauses are, judged once on the sound as it was recorded: the
+      // static is learnt from the pauses, and the speech model's gate follows the words.
+      const heard = await listen(rn, raw);
+      const floor = floorOf(heard.level);
+      if (tuning.staticDb > 0) {
+        const profile = await noiseProfile(raw, (from, to) => isPause(heard.level, floor, from, to));
+        if (profile) stages.push(spectralStream(profile, tuning.staticDb));
+      }
+      if (use) stages.push(rnnoiseStream(rn, { ...use, activity: speechActivity(heard, floor) }));
     }
-    if (use) stages.push(rnnoiseStream(rn, { ...use, activity }));
     const encode = spawn(ffmpegPath, ["-hide_banner", "-loglevel", "error", "-y", "-f", "f32le", "-ar", "48000", "-ac", "1", "-i", "-", "-c:a", "pcm_f32le", dest], { windowsHide: true });
     let log = "";
     encode.stderr.on("data", (b) => { log = (log + b).slice(-4000); });
@@ -259,6 +263,9 @@ export async function processRecording(dir, name, level, lead = 0, picture = nul
   const file = path.join(dir, name);
   const out = derived(name);
   const original = await probe(file);
+  // A take's sound, when it was recorded through Windows, is a file of its own beside the picture.
+  const sound = existsSync(path.join(dir, out.sound)) ? path.join(dir, out.sound) : file;
+  if (sound !== file) original.audio = (await probe(sound)).audio;
   const asked = Math.max(0, Math.min(5, Number(lead) || 0));
   const safe = safeLevel(level);
   const tuning = tuningFor(safe, custom);
@@ -286,7 +293,7 @@ export async function processRecording(dir, name, level, lead = 0, picture = nul
     }
   }
   if (original.audio) {
-    const levels = await analyse(file);
+    const levels = await analyse(sound);
     const span = quietSpan(levels, FRAME, asked);
     const room = levels.length ? roomLevel(levels, FRAME, span) : null;
     // A take's picture is cut by the same amount, and shows the "stay quiet" card until then.
@@ -299,7 +306,7 @@ export async function processRecording(dir, name, level, lead = 0, picture = nul
     const shaped = path.join(dir, `${out.clean}.part.wav`);
     let measured = null;
     try {
-      await denoiseToFile(file, denoised, tuning);
+      await denoiseToFile(sound, denoised, tuning);
       measured = await loudness(denoised, trimFilter(start));
       const gain = Number.isFinite(measured) ? tuning.loudness - measured : 0;
       await run(["-i", denoised, "-af", `${trimFilter(start)},${compressFilter(tuning, gain)}`, "-c:a", "pcm_f32le", shaped]);

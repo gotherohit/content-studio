@@ -157,15 +157,14 @@ export function rnnoiseStream(rn, { speech = 1, pause = 1, pauseMix = 1, activit
 }
 
 /**
- * How likely each 10 ms of a recording is to hold a voice: RNNoise's own judgement, for a file
- * of 32-bit float mono PCM. One number per frame.
+ * A recording heard 10 ms at a time: each frame's level in dB, and how likely RNNoise thinks it
+ * is to hold a voice (zero throughout when no model is given). For a file of 32-bit float mono PCM.
  */
-export async function voiceActivity(rn, file) {
-  const n = rn.frameSize;
-  const state = rn.createDenoiseState();
-  const frame = new Float32Array(n);
-  const activity = [];
-  let filled = 0;
+export async function listen(rn, file, frameSize = 480) {
+  const state = rn ? rn.createDenoiseState() : null;
+  const frame = new Float32Array(frameSize);
+  const vad = [], level = [];
+  let filled = 0, energy = 0;
   let spare = Buffer.alloc(0);
   try {
     for await (const chunk of fs.createReadStream(file)) {
@@ -173,24 +172,49 @@ export async function voiceActivity(rn, file) {
       const whole = bytes.length - (bytes.length % 4);
       spare = Buffer.from(bytes.subarray(whole));
       for (let at = 0; at < whole; at += 4) {
-        frame[filled++] = bytes.readFloatLE(at) * 32768;
-        if (filled === n) { activity.push(state.processFrame(frame)); filled = 0; }
+        const v = bytes.readFloatLE(at);
+        energy += v * v;
+        frame[filled++] = v * 32768;
+        if (filled === frameSize) {
+          vad.push(state ? state.processFrame(frame) : 0);
+          level.push(10 * Math.log10(energy / frameSize + 1e-12));
+          filled = 0; energy = 0;
+        }
       }
     }
   } finally {
-    state.destroy();
+    state?.destroy();
   }
-  return Float32Array.from(activity);
+  return { vad: Float32Array.from(vad), level: Float32Array.from(level) };
+}
+
+/** The level a recording rests at: the quietest tenth of its frames. */
+export function floorOf(level) {
+  if (!level.length) return -100;
+  const sorted = Float32Array.from(level).sort();
+  return sorted[Math.floor(sorted.length * 0.1)];
 }
 
 /**
- * Whether the samples from `from` to `to` are clear of speech: nothing RNNoise half-believes
- * is a voice within them, or within a fifth of a second either side — a word's start and tail
- * are quiet enough to be missed, and must not be learnt as noise.
+ * Where the words are, frame by frame, as a number the gate reads like RNNoise's own. The model
+ * is not trusted alone: it reads a voice recorded through a sound driver's processing as
+ * barely speech at all — 1 to 5 out of 10 through whole sentences — and a gate driven by it
+ * shut on the words. So anything well above the level the recording rests at counts too.
+ * Letting a loud noise through is a small fault; cutting a word is not.
  */
-export function isPause(activity, from, to, frameSize = 480) {
-  const first = Math.max(0, Math.floor(from / frameSize) - 20), last = Math.min(activity.length - 1, Math.ceil(to / frameSize) + 20);
+export function speechActivity({ vad, level }, floor = floorOf(level)) {
+  return Float32Array.from(level, (l, i) => (l > floor + 12 ? 1 : vad[i] ?? 0));
+}
+
+/**
+ * Whether the samples from `from` to `to` are a pause: every frame in them, and for a tenth of
+ * a second either side, within 6 dB of the level the recording rests at. Judged by level, not
+ * by the model — what is learnt here is subtracted from the whole recording, and a voice the
+ * model failed to recognise must never be learnt as noise.
+ */
+export function isPause(level, floor, from, to, frameSize = 480) {
+  const first = Math.max(0, Math.floor(from / frameSize) - 10), last = Math.min(level.length - 1, Math.ceil(to / frameSize) + 10);
   if (last < first) return false;
-  for (let i = first; i <= last; i++) if (activity[i] >= 0.3) return false;
+  for (let i = first; i <= last; i++) if (level[i] > floor + 6) return false;
   return true;
 }

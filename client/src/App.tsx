@@ -1055,7 +1055,7 @@ export default function App() {
     }
   }
 
-  async function startTake(index: number, options: { deviceId?: string; sound: boolean; gainDb: number; suppress: boolean }) {
+  async function startTake(index: number, options: { deviceId?: string; sound: boolean; gainDb: number; label: string }) {
     if (!desktop || !project) return;
     const beat = project.beats[index];
     if (!beat) return;
@@ -1072,6 +1072,9 @@ export default function App() {
     let screen: MediaStream | null = null;
     let mic: MediaStream | null = null;
     let boosted: ReturnType<typeof boostedMic> | null = null;
+    const takeName = recordingName("take", beat.id);
+    let native = false;
+    let pictureStarted = 0;
     let blob: Blob | null = null;
     let lead = 0;
     setRecorderFor(null);
@@ -1087,10 +1090,17 @@ export default function App() {
       // beat is cut away afterwards. Asking for 1920 × 1080 padded a smaller window with black.
       screen = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: { ideal: 30, max: 30 } }, audio: false });
       if (options.sound) {
-        mic = await navigator.mediaDevices.getUserMedia({ audio: micConstraints(options.deviceId, options.suppress) });
-        // The same boost the recorder's meter was set with.
-        boosted = boostedMic(mic, options.gainDb);
-        await boosted.ctx.resume();
+        // The voice is recorded through Windows, beside the picture, for the sound driver's own
+        // clean, full sound; it is started first, and cut afterwards to begin with the picture.
+        try {
+          await api.startCapture(project.id, takeName, options.label, options.gainDb);
+          native = true;
+        } catch {
+          // Windows does not offer this microphone: the page records it with the picture.
+          mic = await navigator.mediaDevices.getUserMedia({ audio: micConstraints(options.deviceId) });
+          boosted = boostedMic(mic, options.gainDb);
+          await boosted.ctx.resume();
+        }
       }
       goToBeat(index);
       // The countdown doubles as the beat's time to load and settle; none of it is recorded.
@@ -1109,6 +1119,11 @@ export default function App() {
       const chunks: Blob[] = [];
       rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
       const stopped = new Promise((resolve) => { rec.onstop = resolve; });
+      // The moment the picture starts, by the clock the microphone's capture is stamped with.
+      // The picture's own timeline runs from this call to the millisecond — a flash 2.727 s
+      // after it was at 2.728 s in the recording — and not from the recorder's `start` event,
+      // which comes anything from 50 to 450 ms later.
+      pictureStarted = Date.now();
       rec.start(1000);
       const started = performance.now();
       // A second of the room for the cleaning to learn. It is recorded, and never played.
@@ -1123,10 +1138,16 @@ export default function App() {
       rec.stop();
       await stopped;
       blob = new Blob(chunks, { type: mime });
+      if (native) {
+        native = false;
+        await api.stopCapture(project.id, takeName, { at: pictureStarted || undefined });
+      }
     } catch (e) {
       if ((e as Error).message !== "cancelled") setError(`The take could not be recorded: ${(e as Error).message}`);
     } finally {
       screen?.getTracks().forEach((t) => t.stop());
+      // Cancelled or failed with the microphone still being recorded: stop it and throw it away.
+      if (native) await api.stopCapture(project.id, takeName, { discard: true }).catch(() => {});
       boosted?.close();
       mic?.getTracks().forEach((t) => t.stop());
       document.title = title;
@@ -1138,7 +1159,7 @@ export default function App() {
     if (!blob) { setTake(null); if (takeCancelled.current) setNotice({ kind: "warn", text: "Take cancelled — nothing was recorded." }); return; }
     setTake({ index, phase: "saving", count: 0 });
     try {
-      const made = await api.uploadRecording(project.id, recordingName("take", beat.id), blob, noise, lead, crop ?? undefined,
+      const made = await api.uploadRecording(project.id, takeName, blob, noise, lead, crop ?? undefined,
         noise === "custom" ? tuningFor("custom", project.settings.cleaning) : undefined);
       if (!made.video || !made.width || !made.height) throw new Error("The recording has no picture.");
       setBeatRecording(beat.id, "take", {

@@ -23,7 +23,7 @@ interface Props {
   framing: TakeFraming;
   onFraming: (framing: TakeFraming) => void;
   /** A take takes over the window, so the app runs it; this panel closes for it. */
-  onStartTake: (options: { deviceId?: string; sound: boolean; gainDb: number; suppress: boolean }) => void;
+  onStartTake: (options: { deviceId?: string; sound: boolean; gainDb: number; label: string }) => void;
   /** Write the take as an MP4 with its sound into the export folder; resolves to the file. */
   onSaveTake?: () => Promise<string | null>;
   onReveal?: (file: string) => void;
@@ -33,8 +33,6 @@ interface Props {
 const lsGet = (k: string) => { try { return localStorage.getItem(k) ?? ""; } catch { return ""; } };
 const lsSet = (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* ignore */ } };
 const NOISE_LABEL: Record<NoiseReduction, string> = { off: "Off", light: "Light", strong: "Strong", custom: "Custom" };
-
-const SUPPRESS_INFO = "Takes the microphone's own hiss and static out as it is recorded, the way a video call does. Leave it on for a laptop's built-in microphone, which is very noisy without it. Turn it off for a good USB or studio microphone, to record exactly what it hears — the cleaning below still applies. It cannot be undone on a recording once made.";
 
 /** The settings behind the cleaning, in the order the sound goes through them. */
 const TUNING: { key: keyof CleanTuning; label: string; min: number; max: number; step: number; show: (v: number) => string; scale?: number; info: string }[] = [
@@ -68,14 +66,15 @@ export function BeatRecorder(p: Props) {
   const [level, setLevel] = useState({ rms: -100, peak: -100 });
   const [loudest, setLoudest] = useState(-100);
   const [room, setRoom] = useState<number | null | "measuring">(null);
-  const [phase, setPhase] = useState<"idle" | "quiet" | "recording" | "saving">("idle");
+  const [phase, setPhase] = useState<"idle" | "starting" | "quiet" | "recording" | "saving">("idle");
   const [elapsed, setElapsed] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [sound, setSound] = useState(true);
   const [gainDb, setGainDb] = useState(() => clampGain(Number(lsGet(gainKey(lsGet("micDevice")))) || 0));
   const [auto, setAuto] = useState(false);
-  // On unless it has been turned off: the bare microphone is far noisier than any other recorder hears it.
-  const [suppress, setSuppress] = useState(lsGet("micSuppress") !== "0");
+  // The voice being recorded through Windows, by name; null while the page records it itself.
+  const capturing = useRef<string | null>(null);
+  const [viaPage, setViaPage] = useState(false);
   const [micLabel, setMicLabel] = useState({ label: "", rate: 0 });
   const [saved, setSaved] = useState<{ state: "saving" } | { state: "done"; file: string } | null>(null);
   const [info, setInfo] = useState<string | null>(null);
@@ -96,7 +95,7 @@ export function BeatRecorder(p: Props) {
     let boosted: ReturnType<typeof boostedMic> | null = null;
     (async () => {
       try {
-        opened = await navigator.mediaDevices.getUserMedia({ audio: micConstraints(deviceId || undefined, suppress) });
+        opened = await navigator.mediaDevices.getUserMedia({ audio: micConstraints(deviceId || undefined) });
         if (!live) { opened.getTracks().forEach((t) => t.stop()); return; }
         const track = opened.getAudioTracks()[0];
         setMicLabel({ label: track?.label ?? "", rate: track?.getSettings().sampleRate ?? 0 });
@@ -138,7 +137,12 @@ export function BeatRecorder(p: Props) {
       opened?.getTracks().forEach((t) => t.stop());
       setStream(null);
     };
-  }, [deviceId, suppress]);
+  }, [deviceId]);
+
+  // Leaving with a recording running: stop it and throw it away, or the microphone stays open.
+  useEffect(() => () => {
+    if (capturing.current) void api.stopCapture(p.projectId, capturing.current, { discard: true }).catch(() => {});
+  }, [p.projectId]);
 
   function changeGain(db: number) {
     const next = clampGain(db);
@@ -197,9 +201,31 @@ export function BeatRecorder(p: Props) {
     p.onNoise(roomVerdict(median).noise);
   }
 
-  function startVoice() {
+  /**
+   * The voice is recorded through Windows, which gives the sound driver's own clean, full
+   * sound; the page's stream is only the meter. Where Windows does not offer the microphone,
+   * the page records it, as it used to.
+   */
+  async function startVoice() {
     if (!stream) return;
     setError(null);
+    setViaPage(false);
+    setPhase("starting");
+    const name = recordingName("voice", p.beat.id, Date.now(), "mka");
+    try {
+      await api.startCapture(p.projectId, name, micLabel.label, gainDb);
+      capturing.current = name;
+      setElapsed(0);
+      setPhase("quiet");
+      window.setTimeout(() => setPhase((ph) => (ph === "quiet" ? "recording" : ph)), LEAD_SECONDS * 1000);
+    } catch {
+      setViaPage(true);
+      startVoiceInPage();
+    }
+  }
+
+  function startVoiceInPage() {
+    if (!stream) return;
     const mime = MediaRecorder.isTypeSupported("audio/webm;codecs=opus") ? "audio/webm;codecs=opus" : "audio/webm";
     const rec = new MediaRecorder(stream, { mimeType: mime, audioBitsPerSecond: 256000 });
     const chunks: Blob[] = [];
@@ -212,7 +238,21 @@ export function BeatRecorder(p: Props) {
     window.setTimeout(() => setPhase((ph) => (ph === "quiet" ? "recording" : ph)), LEAD_SECONDS * 1000);
   }
 
-  const stopVoice = () => { setPhase("saving"); recorder.current?.stop(); };
+  async function stopVoice() {
+    setPhase("saving");
+    const name = capturing.current;
+    if (!name) { recorder.current?.stop(); return; }
+    capturing.current = null;
+    try {
+      const made = await api.stopCapture(p.projectId, name, { noise: p.noise, lead: LEAD_SECONDS, tune: p.noise === "custom" ? current : undefined });
+      if (!made.clean) throw new Error("No sound was recorded. Check the microphone's level.");
+      p.onVoice({ file: made.file, clean: made.clean, seconds: made.seconds, noise: made.noise, tuning: made.tuning, lead: made.lead, loudness: made.loudness, recordedAt: new Date().toISOString() });
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setPhase("idle");
+    }
+  }
 
   async function saveVoice(blob: Blob) {
     try {
@@ -303,13 +343,7 @@ export function BeatRecorder(p: Props) {
           </button>
         </div>
       </label>
-      <div className="rec-suppress">
-        <label className="check"><input type="checkbox" checked={suppress} disabled={busy || auto}
-          onChange={(e) => { setSuppress(e.target.checked); lsSet("micSuppress", e.target.checked ? "1" : "0"); setRoom(null); clippedAt.current = 0; }} /> Reduce microphone noise while recording</label>
-        <button className={`icon-btn rec-info ${info === "suppress" ? "active" : ""}`} aria-label="What reducing microphone noise does" aria-expanded={info === "suppress"}
-          title={SUPPRESS_INFO} onClick={() => setInfo(info === "suppress" ? null : "suppress")}><Info size={12} /></button>
-      </div>
-      {info === "suppress" && <p className="muted small rec-info-text">{SUPPRESS_INFO}</p>}
+      {viaPage && <p className="rec-warn">Windows did not offer this microphone for direct recording, so the browser recorded it. It may sound noisier than in other apps.</p>}
       <div className="muted small rec-facts">
         {label && <span className="ellipsis">{label}</span>}
         {rate && <span>{rate / 1000} kHz</span>}
@@ -371,6 +405,7 @@ export function BeatRecorder(p: Props) {
 
       <div className="rec-block">
         <div className="rec-title"><Mic size={13} /> Voice over this beat</div>
+        {phase === "starting" && <p className="muted small">Opening the microphone…</p>}
         {phase === "quiet" && <p className="rec-live quiet">● Stay quiet — listening to the room</p>}
         {phase === "recording" && <p className="rec-live">● Speak now — {formatSeconds(elapsed - LEAD_SECONDS)}</p>}
         {phase === "saving" && <p className="muted small">Cleaning the sound…</p>}
@@ -382,8 +417,8 @@ export function BeatRecorder(p: Props) {
         )}
         <div className="row">
           {phase === "quiet" || phase === "recording"
-            ? <button className="primary small rec-stop" onClick={stopVoice}><Square size={12} /> Stop</button>
-            : <button className="primary small" disabled={!stream || busy} onClick={startVoice}><Circle size={12} /> {p.beat.voice ? "Record again" : "Record voice"}</button>}
+            ? <button className="primary small rec-stop" onClick={() => void stopVoice()}><Square size={12} /> Stop</button>
+            : <button className="primary small" disabled={!stream || busy} onClick={() => void startVoice()}><Circle size={12} /> {p.beat.voice ? "Record again" : "Record voice"}</button>}
           {p.beat.voice && phase === "idle" && <button className="ghost small danger" onClick={() => p.onVoice(undefined)} title="Remove this recording (its files go to the Recycle Bin)"><Trash2 size={12} /> Remove</button>}
         </div>
       </div>
@@ -414,7 +449,7 @@ export function BeatRecorder(p: Props) {
         <div className="row">
           <label className="check"><input type="checkbox" checked={sound} disabled={busy} onChange={(e) => setSound(e.target.checked)} /> Record my voice with it</label>
           <span className="grow" />
-          <button className="primary small" disabled={busy || auto || !!error && !stream} onClick={() => p.onStartTake({ deviceId: deviceId || undefined, sound, gainDb, suppress })}>
+          <button className="primary small" disabled={busy || auto || !!error && !stream} onClick={() => p.onStartTake({ deviceId: deviceId || undefined, sound, gainDb, label: micLabel.label })}>
             <Circle size={12} /> {p.beat.take ? "New take" : "Record a take"}
           </button>
         </div>

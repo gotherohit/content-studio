@@ -23,19 +23,17 @@ const voice = (seconds: number, file = "voice-a.webm"): BeatVoice => ({ file, cl
 const take = (seconds: number, file = "take-a.webm"): BeatTake => ({ file, video: "take-a.video.webm", seconds, noise: "light", lead: 1, width: 1920, height: 1080, muted: false, recordedAt: "" });
 const beat = (extra: Partial<Beat> = {}): Beat => ({ id: Math.random().toString(36).slice(2), point: "", stage, createdAt: "", ...extra });
 
-// Chromium opens a Windows microphone raw, past the driver's clean-up; with its own suppression
-// off too, a laptop microphone recorded static at -35 dB in a silent room.
-test("the microphone's static is kept out as it is recorded, unless asked for raw; nothing pumps the level", () => {
+// The page's stream is the level meter's. Its noise suppression took 15 dB of a voice's upper
+// frequencies with the hiss; the recording itself is made through Windows (microphone.js).
+test("the page's microphone stream has none of the browser's call processing", () => {
   const c = micConstraints("usb-mic");
   assert.deepEqual(c.deviceId, { exact: "usb-mic" });
-  assert.equal(c.noiseSuppression, true);
+  assert.equal(c.noiseSuppression, false);
   assert.equal(c.echoCancellation, false);
   assert.equal(c.autoGainControl, false);
   assert.equal(c.sampleRate, 48000);
   assert.equal(micConstraints().deviceId, undefined);
-  const raw = micConstraints("usb-mic", false);
-  assert.equal(raw.noiseSuppression, false);
-  assert.equal(raw.autoGainControl, false);
+  assert.equal(recordingName("voice", "b/1", 36 ** 3, "mka"), "voice-b1-1000.mka");
 });
 
 test("levels are measured in dB below full scale", () => {
@@ -112,11 +110,12 @@ test("a voice's lead-in is cut only up to the first word said in it", () => {
   assert.equal(voiceStart(early, f, 0), 0);
 });
 
-test("cleaning favours the voice: the model is capped while speaking, and nothing else touches it", () => {
-  // While someone speaks the model gets at most this share, so it can never take more than
-  // 6 dB (light) or about 10 dB (strong) off a word.
-  assert.ok(PRESETS.light.speech <= 0.5 && PRESETS.strong.speech <= 0.7, JSON.stringify(PRESETS));
-  assert.ok(PRESETS.strong.pauseDb <= -25 && PRESETS.light.pauseDb >= -12, "strong silences pauses, light only lowers them");
+test("cleaning favours the voice: Light never uses the speech model, and Strong caps it", () => {
+  // At any strength, on real takes, the model took something from the voice: the default does
+  // without it, and Strong gives it at most half — never more than 6 dB off a word.
+  assert.equal(modelUse(PRESETS.light), null, "Light does not run the speech model");
+  assert.ok(PRESETS.strong.speech <= 0.5, JSON.stringify(PRESETS));
+  assert.ok(PRESETS.light.pauseDb === 0 && PRESETS.strong.pauseDb >= -15, "pauses are lowered, never silenced");
   assert.equal(TARGET_LUFS, -16);
   assert.deepEqual(NOISE, ["off", "light", "strong", "custom"]);
   assert.equal(decodeFilter(PRESETS.light), DECODE);
@@ -130,7 +129,7 @@ test("cleaning favours the voice: the model is capped while speaking, and nothin
   assert.match(finishFilter(2), /^volume=2dB,alimiter/);
   assert.doesNotMatch(cleanFilter(PRESETS.off, 1, 0, 0), /acompressor/);
   assert.equal(modelUse(PRESETS.off), null, "Off never runs the speech model");
-  assert.deepEqual(modelUse(PRESETS.light), { speech: 0.5, pauseMix: 0.8, pause: 10 ** (-6 / 20) });
+  assert.deepEqual(modelUse(PRESETS.strong), { speech: 0.5, pauseMix: 1, pause: 10 ** (-12 / 20) });
   assert.equal(parseLoudness("Summary:\n  Integrated loudness:\n    I:         -23.4 LUFS\n"), -23.4);
 });
 
@@ -328,7 +327,7 @@ test("a take's picture instructions are checked, and the window is kept at its o
   assert.equal(pictureFilter({ w: 0.996354, h: 0.935185 }),
     String.raw`crop=min(iw\,round(iw*0.996354)):min(ih\,round(ih*0.935185)):0:0,` +
     "scale=trunc((iw+1)/2)*2:trunc((ih+1)/2)*2:flags=lanczos,setsar=1,format=yuv420p");
-  assert.deepEqual(derived("take-a.webm"), { clean: "take-a.clean.flac", video: "take-a.video.mp4", legacyVideo: "take-a.video.webm" });
+  assert.deepEqual(derived("take-a.webm"), { clean: "take-a.clean.flac", video: "take-a.video.mp4", legacyVideo: "take-a.video.webm", sound: "take-a.mic.mka" });
 });
 
 test("fit keeps all of a take with bars, fill has no bars; neither stretches", () => {
@@ -533,7 +532,7 @@ test("steady static is learnt from the pauses and taken out, leaving a tone abov
 // Sound with its static already taken out no longer looks like speech to the model, which then
 // shut its gate on the voice.
 test("the speech gate follows the recording as it was, not the cleaned sound it is given", async () => {
-  const { rnnoiseStream, isPause } = await import("../server/rnnoise.js");
+  const { rnnoiseStream, isPause, floorOf, speechActivity } = await import("../server/rnnoise.js");
   const n = 480, frames = 300;
   const x = new Float32Array(frames * n).fill(0.25);
   // A model that hears no voice at all in what it is given, and removes everything.
@@ -551,8 +550,86 @@ test("the speech gate follows the recording as it was, not the cleaned sound it 
   const at = (y: Float32Array, frame: number) => 20 * Math.log10(Math.max(1e-9, Math.abs(y[frame * n + n - 1]) / 0.25));
   assert.ok(Math.abs(at(await run(activity), 150) + 6.02) < 0.05, "open where the recording had speech");
   assert.ok(at(await run(null), 150) < -100, "left to itself the deaf model shuts the gate");
-  // A pause is only a pause well clear of any speech.
-  assert.equal(isPause(activity, 10 * n, 60 * n), true);
-  assert.equal(isPause(activity, 70 * n, 85 * n), false, "within a fifth of a second of a word");
-  assert.equal(isPause(activity, 120 * n, 140 * n), false);
+  // The model read a voice recorded through a sound driver as 1 to 5 out of 10 through whole
+  // sentences, and a gate driven by it alone shut on the words. Level counts as well.
+  const level = Float32Array.from({ length: frames }, (_, i) => (i >= 100 && i < 200 ? -22 : -50));
+  const unsure = Float32Array.from({ length: frames }, (_, i) => (i >= 100 && i < 200 ? 0.3 : 0.02));
+  const floor = floorOf(level);
+  assert.equal(floor, -50);
+  const heard = speechActivity({ vad: unsure, level }, floor);
+  assert.ok(heard[150] === 1 && heard[50] < 0.1, "what is well above the resting level is speech, whatever the model says");
+  assert.ok(Math.abs(at(await run(heard), 150) + 6.02) < 0.05, "and the gate opens for it");
+  // A pause is judged by level, and only well clear of anything louder: what is learnt there
+  // is subtracted everywhere, and a voice the model missed must never be learnt as noise.
+  assert.equal(isPause(level, floor, 10 * n, 60 * n), true);
+  assert.equal(isPause(level, floor, 80 * n, 92 * n), false, "within a tenth of a second of a word");
+  assert.equal(isPause(level, floor, 120 * n, 140 * n), false);
+});
+
+// Chromium opens a Windows microphone raw, past the sound driver's processing; recorded through
+// DirectShow it is what OBS records.
+test("the microphone is recorded through Windows: devices are matched, and the capture is stamped and lined up", async () => {
+  const { alignCapture, captureArgs, matchMicrophone, parseDevices, parseStart, startCapture } = await import("../server/microphone.js");
+  const listing = `[dshow @ 000001] "Integrated Webcam" (video)
+[dshow @ 000001]   Alternative name "@device_pnp_x"
+[dshow @ 000001] "Microphone (Razer BlackShark V2 X USB)" (audio)
+[dshow @ 000001]   Alternative name "@device_cm_{33D9A762}\\wave_{B03B}"
+[dshow @ 000001] "Microphone (Realtek(R) Audio)" (audio)`;
+  const devices = parseDevices(listing);
+  assert.deepEqual(devices, ["Microphone (Razer BlackShark V2 X USB)", "Microphone (Realtek(R) Audio)"]);
+  // The page decorates Windows' names; a camera is never a microphone.
+  assert.equal(matchMicrophone("Default - Microphone (Realtek(R) Audio)", devices), "Microphone (Realtek(R) Audio)");
+  assert.equal(matchMicrophone("Communications - Microphone (Realtek(R) Audio)", devices), "Microphone (Realtek(R) Audio)");
+  assert.equal(matchMicrophone("Microphone (Razer BlackShark V2 X USB) (1532:0526)", devices), "Microphone (Razer BlackShark V2 X USB)");
+  assert.equal(matchMicrophone("Microphone (Some Other Device)", devices), null);
+  assert.equal(matchMicrophone("", devices), null);
+  assert.equal(matchMicrophone("Integrated Webcam", devices), null);
+  // Float samples so a boost cannot clip, and the wall clock kept in the file.
+  const args = captureArgs("Microphone (Realtek(R) Audio)", "out.mka", 6);
+  assert.deepEqual(args.slice(0, 9), ["-y", "-f", "dshow", "-audio_buffer_size", "50", "-use_wallclock_as_timestamps", "1", "-i", "audio=Microphone (Realtek(R) Audio)"]);
+  assert.ok(args.join(" ").includes("-af volume=6dB") && args.includes("pcm_f32le") && args.includes("-copyts"));
+  assert.ok(!captureArgs("m", "o.mka", 0).includes("-af"));
+  assert.equal(parseStart("  Duration: 497459:55:22.79, start: 1790855718.038000, bitrate: N/A"), 1790855718.038);
+  assert.equal(parseStart("nothing"), null);
+  if (!ffmpegPath || !fs.existsSync(ffmpegPath)) return;
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cs-mic-"));
+  try {
+    // A capture stamped as a real one is: silence, then a tone from two seconds in.
+    const stamp = 1790855718.038;
+    const part = path.join(dir, "take-a.mic.mka.part"), final = path.join(dir, "take-a.mic.mka");
+    const made = spawnSync(ffmpegPath as unknown as string, ["-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i",
+      `sine=f=440:d=5,volume='if(gte(t,2),1,0)':eval=frame,asetpts=PTS+${stamp}/TB`, "-ac", "1", "-ar", "48000", "-c:a", "pcm_f32le", "-copyts", "-f", "matroska", part], { encoding: "utf8" });
+    assert.equal(made.status, 0, made.stderr);
+    // The picture started 1.5 s after the capture: the tone must now begin half a second in.
+    const cut = await alignCapture(part, final, (stamp + 1.5) * 1000);
+    assert.ok(Math.abs(cut - 1.5) < 0.001, `cut ${cut}`);
+    assert.ok(!fs.existsSync(part) && fs.existsSync(final));
+    const heard = spawnSync(ffmpegPath as unknown as string, ["-hide_banner", "-i", final, "-af", "silencedetect=n=-50dB:d=0.1", "-f", "null", "-"], { encoding: "utf8" }).stderr;
+    const begins = Number(/silence_end: ([\d.]+)/.exec(heard)?.[1]);
+    assert.ok(Math.abs(begins - 0.5) < 0.03, `the tone begins at ${begins} s`);
+    assert.ok(Math.abs((parseProbe(heard).duration ?? 0) - 3.5) < 0.05, "and the file has its own length, not the clock's");
+    // A microphone that is not there is an error the recorder can act on, not a hang.
+    if (process.platform === "win32") await assert.rejects(startCapture("No Such Microphone 12345", path.join(dir, "x.mka.part")), /could not be opened/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("a take's voice recorded through Windows is what gets cleaned, beside its silent picture", { skip: !ffmpegPath || !fs.existsSync(ffmpegPath) }, async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cs-takemic-"));
+  try {
+    const ff = (args: string[]) => spawnSync(ffmpegPath as unknown as string, ["-hide_banner", "-loglevel", "error", "-y", ...args], { encoding: "utf8" });
+    // The picture, with no sound of its own, and the microphone beside it.
+    ff(["-f", "lavfi", "-i", "color=c=red:s=320x180:r=30:d=4", "-c:v", "libvpx-vp9", "-b:v", "500k", path.join(dir, "take-m.webm")]);
+    ff(["-f", "lavfi", "-i", "sine=f=140:d=4,aeval='val(0)*(0.5+0.5*sin(2*PI*4*t))*(0.6*sin(2*PI*280*t)+0.4*sin(2*PI*420*t)+1)/2':c=same,volume='if(gte(t,1.5),0.5,0)':eval=frame",
+      "-f", "lavfi", "-i", "anoisesrc=d=4:c=pink:a=0.005:seed=3", "-filter_complex", "[0][1]amix=inputs=2:normalize=0", "-ac", "1", "-c:a", "pcm_f32le", "-f", "matroska", path.join(dir, "take-m.mic.mka")]);
+    const made = await processRecording(dir, "take-m.webm", "light", 1, parsePicture("1,1"));
+    assert.equal(made.clean, "take-m.clean.flac", "the take has sound though its picture file has none");
+    assert.equal(made.video, "take-m.video.mp4");
+    assert.ok(Math.abs(made.seconds - 3) < 0.1, `seconds ${made.seconds}`);
+    const loud = parseLoudness(spawnSync(ffmpegPath as unknown as string, ["-hide_banner", "-i", path.join(dir, made.clean!), "-af", "ebur128", "-f", "null", "-"], { encoding: "utf8" }).stderr);
+    assert.ok(Math.abs((loud ?? 0) - TARGET_LUFS) < 1, `loudness ${loud}`);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });

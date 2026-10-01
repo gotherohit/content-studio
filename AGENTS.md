@@ -81,6 +81,11 @@ committing.
   Reading the real microphone's *level* — a noise floor, through ffmpeg to `-f null` or a Web
   Audio analyser — is not recording it, as long as nothing is written anywhere; say that you
   did it and what you read.
+  The voice is now recorded through Windows (DirectShow), which Chromium's fake devices do not
+  reach: with the fake-device switches the recorder still opens the *real* microphone. A test
+  that records needs the creator's say-so first; keep it to a few seconds of room sound, in the
+  scratch project, and delete it. The pure parts — device matching, lining up, cleaning — are
+  tested with generated sound and need no microphone.
 - **Tune the cleaning on copies.** When a real recording of the creator's is the best test of
   the noise removal, copy it into the scratchpad and work on the copy; never process, restore
   or rewrite it where it is, including in the Recycle Bin.

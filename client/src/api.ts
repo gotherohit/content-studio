@@ -160,6 +160,14 @@ export const api = {
   recleanRecording: (projectId: string, name: string, noise: NoiseReduction, lead: number, tune?: CleanTuning) =>
     fetch(`/api/projects/${projectId}/recordings/${encodeURIComponent(name)}/clean`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ noise, lead, tune }) })
       .then((r) => j<RecordingResult>(r)),
+  /** Record the microphone through Windows; rejects when Windows does not offer it, and the page records it itself. */
+  startCapture: (projectId: string, name: string, label: string, gainDb: number) =>
+    fetch(`/api/projects/${projectId}/recordings/${encodeURIComponent(name)}/capture`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ label, gainDb }) })
+      .then((r) => j<{ ok: true; device: string }>(r)),
+  /** Stop it: a voice comes back cleaned; a take's sound is cut to start with its picture (`at`) and waits for it. */
+  stopCapture: (projectId: string, name: string, body: { discard?: boolean; at?: number; noise?: NoiseReduction; lead?: number; tune?: CleanTuning }) =>
+    fetch(`/api/projects/${projectId}/recordings/${encodeURIComponent(name)}/capture/stop`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) })
+      .then((r) => j<RecordingResult & { ok?: true; cut?: number }>(r)),
   deleteRecording: (projectId: string, name: string) =>
     fetch(`/api/projects/${projectId}/recordings/${encodeURIComponent(name)}`, { method: "DELETE" }).then((r) => j<{ ok: true }>(r)),
   recordingUrl: (projectId: string, name: string) => `/api/projects/${projectId}/recordings/${encodeURIComponent(name)}`,

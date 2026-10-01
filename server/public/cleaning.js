@@ -16,16 +16,17 @@
 export const LEVELS = ["off", "light", "strong", "custom"];
 
 /**
- * These favour the voice on purpose. At full strength, on real takes in a noisy room, the
- * speech model pulled the voice's 3–8 kHz down by more than 6 dB in half of all speaking
- * moments — heard as words going dull. Light caps it at half (never more than 6 dB off a
- * word) and keeps a little of the room in the pauses, so the noise does not switch on and off
- * with the words; Strong gives the model 70 % and makes the pauses silent.
+ * These favour the voice on purpose: the microphone is recorded through the sound driver, which
+ * gives a clean enough sound that the less done to it the better. Light takes a little of the
+ * steady noise out and evens the level slightly, and does not use the speech model at all — at
+ * any strength, on real takes, the model took something from the voice. Strong takes more
+ * static out, lets the model have half the voice (never more than 6 dB off a word) and turns
+ * the pauses down.
  */
 export const PRESETS = {
   off: { rumble: 85, staticDb: 0, speech: 0, pauseMix: 0, pauseDb: 0, compress: 1, loudness: -16 },
-  light: { rumble: 85, staticDb: 10, speech: 0.5, pauseMix: 0.8, pauseDb: -6, compress: 2.5, loudness: -16 },
-  strong: { rumble: 85, staticDb: 18, speech: 0.7, pauseMix: 1, pauseDb: -30, compress: 2.5, loudness: -16 },
+  light: { rumble: 85, staticDb: 8, speech: 0, pauseMix: 0, pauseDb: 0, compress: 1.5, loudness: -16 },
+  strong: { rumble: 85, staticDb: 15, speech: 0.5, pauseMix: 1, pauseDb: -12, compress: 2.5, loudness: -16 },
 };
 
 /** What a new custom tuning starts from, and what anything missing falls back to. */

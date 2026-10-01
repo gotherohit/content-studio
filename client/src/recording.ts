@@ -4,23 +4,20 @@ import type { Beat, NoiseReduction } from "./types";
 export const LEAD_SECONDS = 1;
 
 /**
- * What the microphone is asked for. Echo cancelling and automatic gain are off: they are built
- * for calls, and pump the level and smear the voice.
- *
- * Noise suppression is on unless `suppress` is false. Chromium opens a Windows microphone in
- * raw mode — it bypasses the sound driver's own clean-up, which every native recorder gets —
- * so with all of its own processing off as well, the recording was the bare microphone: a
- * laptop's built-in one gave static at -35 dB in a silent room, where the same microphone read
- * -40 dB through the driver and -53 dB with Chromium's suppression. Static that loud cannot
- * be taken out afterwards without taking the voice with it; it has to be kept out here.
+ * What the page asks the microphone for. This stream is the level meter's, and the recording
+ * itself only where Windows cannot make it (see `server/microphone.js`): Chromium opens a
+ * Windows microphone in raw mode, past the sound driver's processing, and it is hissy and dull
+ * beside the same microphone recorded natively. Its own echo cancelling, noise suppression and
+ * automatic gain are all off — the suppression takes the hiss out and 15 dB of the voice's
+ * upper frequencies with it, and the others pump the level.
  */
-export function micConstraints(deviceId?: string, suppress = true): MediaTrackConstraints {
+export function micConstraints(deviceId?: string): MediaTrackConstraints {
   return {
     ...(deviceId ? { deviceId: { exact: deviceId } } : {}),
     channelCount: 1,
     sampleRate: 48000,
     echoCancellation: false,
-    noiseSuppression: suppress,
+    noiseSuppression: false,
     autoGainControl: false,
   };
 }
@@ -60,8 +57,8 @@ export const CLIP_DB = -1;
 export const QUIET_DB = -30;
 
 /** A name no other recording has: the kind, the beat and the moment. */
-export const recordingName = (kind: "voice" | "take", beatId: string, now = Date.now()) =>
-  `${kind}-${beatId.replace(/[^\w-]/g, "")}-${now.toString(36)}.webm`;
+export const recordingName = (kind: "voice" | "take", beatId: string, now = Date.now(), ext = "webm") =>
+  `${kind}-${beatId.replace(/[^\w-]/g, "")}-${now.toString(36)}.${ext}`;
 
 /**
  * Whether another beat still plays a recording — a duplicated beat shares its files, so taking

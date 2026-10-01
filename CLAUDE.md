@@ -83,6 +83,7 @@ than `file://`. That is why websockets, cookies and the `<sub>.localhost` proxy 
 | `server/rnnoise.js` | RNNoise as WebAssembly: a stream of float PCM in, denoised and back in time out, gated by its own voice detection |
 | `server/public/cleaning.js` | the cleaning presets and the tuning behind them — shared by the server and the recorder panel |
 | `server/spectral.js` | steady noise learnt from the pauses and subtracted by its spectrum: a streamed STFT, pure and tested |
+| `server/microphone.js` | the microphone recorded through Windows (ffmpeg, DirectShow), and a take's sound lined up with its picture |
 | `client/src/components/BeatRecorder.tsx` | the recorder panel: microphone, level, room check, voice, take controls |
 | `client/src/App.tsx` | project state, layout, beats, the presenter bridge |
 | `client/src/Presenter.tsx` | the second window; holds no project state |
@@ -389,15 +390,31 @@ wait. The AI request aborts when the pane closes. Assume a recording is in progr
   keeps its full lead — its picture shows the "stay quiet" card until then — and its picture
   file keeps the lead in it (a copy cannot cut between keyframes); the export and Save as MP4
   skip it with `-ss lead`, so picture and sound agree.
-- **Chromium records a Windows microphone raw.** It opens it with `AUDCLNT_STREAMOPTIONS_RAW`,
-  which bypasses the sound driver's processing — what OBS and every native recorder gets — and
-  Electron 44 has no switch for it. With `noiseSuppression` off as well (it was, to keep the
-  voice natural) the recording is the bare microphone. Measured in a silent room on a laptop's
-  Realtek microphone: -35 dB raw, -40 dB through DirectShow (the driver's mode), -53 dB with
-  Chromium's suppression on. A voice 8 dB over its static cannot be cleaned afterwards. So
-  `micConstraints` suppresses unless told not to; echo cancelling and automatic gain stay off.
-  "It sounds worse than OBS" is a capture problem before it is a cleaning problem — measure
-  the floor each way before touching the chain.
+- **The voice is not recorded by the page.** Chromium opens a Windows microphone with
+  `AUDCLNT_STREAMOPTIONS_RAW`, which bypasses the sound driver's processing — what OBS and every
+  native recorder gets — and Electron 44 has no switch for it. The bare microphone is hissy
+  (-35 dB in a silent room on a laptop's Realtek one, -40 dB through the driver), and Chromium's
+  own `noiseSuppression` (0.40.0) hid the hiss by taking about 15 dB of the voice's 2–8 kHz
+  with it: dull beside the same microphone in OBS. So ffmpeg records it through DirectShow
+  (`server/microphone.js`), float samples stamped with the wall clock, and the page's stream is
+  only the level meter. A recording's pauses then match OBS's in level and spectrum. Where
+  DirectShow does not offer the device (`matchMicrophone` finds nothing) the page records it
+  and says so. "It sounds worse than OBS" is a capture problem before it is a cleaning problem:
+  compare the two recordings band by band before touching the chain.
+- **A take's sound is lined up with its picture by the clock, and the picture's zero is the
+  `MediaRecorder.start()` call.** A flash 2.727 s after that call was at 2.728 s in the
+  recording; the recorder's `start` event comes 50–450 ms later and is not it. The capture is
+  started first (during the countdown) and `alignCapture` cuts it to begin at that moment; with
+  that, a beep and a flash at one instant land within about 50 ms. Recording both in one ffmpeg
+  (`ddagrab` + dshow) was tried: it is not in sync by itself either — the sound came 0.18 s
+  late — and it records whatever is on that part of the screen. Measure sync with a flash and
+  a beep and the logged clock; a beep alone, in a room with someone talking, misleads.
+- **RNNoise does not recognise a voice recorded through a sound driver's processing.** Its
+  voice activity read 9/10 through speech on raw Chromium takes and 1–5 on OBS's and on
+  suppressed ones, so a gate driven by it shut on the words, and a "pause" judged by it would
+  have learnt the voice as noise. Words are also found by level (`speechActivity`: 12 dB over
+  the resting level counts), and a pause is only ever judged by level (`isPause`). Light does
+  not use the model at all.
 - **Static is taken out by its spectrum, ahead of the speech model** (`server/spectral.js`):
   learnt from the pauses RNNoise finds (`voiceActivity`, `isPause`), subtracted everywhere. Two
   things it took to work. The level a frequency is judged by must be an average over frames and
